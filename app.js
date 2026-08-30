@@ -1,5 +1,5 @@
 // ================= CONFIG & STATE =================
-let API_URL = localStorage.getItem('simpel_momen_api_url') || 'https://script.google.com/macros/s/AKfycbzmuF_K90f4j262ECYc9wuifbHc_8u3bnXI6GzvUgPiZeL1wWzVgBNCXbo_sKfyzifeRw/exec'; // Default ke local untuk kemudahan pengujian luring
+let API_URL = 'https://script.google.com/macros/s/AKfycbzmuF_K90f4j262ECYc9wuifbHc_8u3bnXI6GzvUgPiZeL1wWzVgBNCXbo_sKfyzifeRw/exec';
 let currentUser = null;
 let allData = [];
 
