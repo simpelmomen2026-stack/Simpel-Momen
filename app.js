@@ -1,5 +1,5 @@
 // ================= CONFIG & STATE =================
-let API_URL = localStorage.getItem('simpel_momen_api_url') || 'https://script.google.com/macros/s/AKfycbwstquPUdLOa4HCuZ9nW828sLGWfyjprbxWdbRAnksrenggZLeNNdcVWY4TgTqC1Mjc_Q/exec'; // Default ke local untuk kemudahan pengujian luring
+let API_URL = localStorage.getItem('simpel_momen_api_url') || 'https://script.google.com/macros/s/AKfycbzmuF_K90f4j262ECYc9wuifbHc_8u3bnXI6GzvUgPiZeL1wWzVgBNCXbo_sKfyzifeRw/exec'; // Default ke local untuk kemudahan pengujian luring
 let currentUser = null;
 let allData = [];
 
@@ -158,9 +158,8 @@ function saveLocalDB(data) {
 const loginWrapper = document.getElementById('loginWrapper');
 const appWrapper = document.getElementById('appWrapper');
 const loginForm = document.getElementById('loginForm');
-const loginRole = document.getElementById('loginRole');
-const loginUptGroup = document.getElementById('loginUptGroup');
-const loginUptSelect = document.getElementById('loginUptSelect');
+const loginUsername = document.getElementById('loginUsername');
+const loginPassword = document.getElementById('loginPassword');
 const logoutBtn = document.getElementById('logoutBtn');
 
 // Nav links
@@ -318,31 +317,80 @@ if (savedUser) {
   setupLoggedInUI();
 }
 
-// Event: Login Role Change to toggle UPT group
-loginRole.addEventListener('change', () => {
-  const roleVal = loginRole.value;
-  if (roleVal.includes('_upt') || roleVal === 'kepala_upt') {
-    loginUptGroup.style.display = 'block';
-  } else {
-    loginUptGroup.style.display = 'none';
-  }
-});
+const MOCK_PETUGAS = [
+  { username: 'operator_dinas', password: '123456', name: 'Operator Dinas', role: 'operator', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'operator_upt1', password: '123456', name: 'Operator UPT 01', role: 'operator', uptCode: 'UPT-01', fasilitasi: 'UPT' },
+  { username: 'scan_dinas', password: '123456', name: 'Petugas Scan Dinas', role: 'petugas_scan', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'scan_upt1', password: '123456', name: 'Petugas Scan UPT 01', role: 'petugas_scan', uptCode: 'UPT-01', fasilitasi: 'UPT' },
+  { username: 'kepala_upt1', password: '123456', name: 'Kepala UPT 01', role: 'kepala_upt', uptCode: 'UPT-01', fasilitasi: 'UPT' },
+  { username: 'kasie_dafduk', password: '123456', name: 'Kasie Dafduk', role: 'kasie_dafduk', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'kasie_capil', password: '123456', name: 'Kasie Capil', role: 'kasie_capil', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'kabid_dafduk', password: '123456', name: 'Kabid Dafduk', role: 'kabid_dafduk', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'kabid_capil', password: '123456', name: 'Kabid Capil', role: 'kabid_capil', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'kadis', password: '123456', name: 'Kepala Dinas', role: 'kadis', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'tte_dinas', password: '123456', name: 'Petugas TTE', role: 'petugas_tte', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'print_dinas', password: '123456', name: 'Petugas Cetak Dinas', role: 'petugas_pencetakan', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'print_upt1', password: '123456', name: 'Petugas Cetak UPT 01', role: 'petugas_pencetakan', uptCode: 'UPT-01', fasilitasi: 'UPT' }
+];
 
 // Event: Login Submit
-loginForm.addEventListener('submit', (e) => {
+loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const selectedRoleKey = loginRole.value;
-  currentUser = Object.assign({}, ROLES_CONFIG[selectedRoleKey]);
+  const usernameVal = loginUsername.value.trim().toLowerCase();
+  const passwordVal = loginPassword.value.trim();
   
-  if (selectedRoleKey.includes('_upt') || selectedRoleKey === 'kepala_upt') {
-    currentUser.uptCode = loginUptSelect.value;
-  } else {
-    currentUser.uptCode = null;
+  const submitBtn = loginForm.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Memverifikasi...';
+  
+  try {
+    if (API_URL === 'local') {
+      // Login offline / simulasi lokal
+      const user = MOCK_PETUGAS.find(u => u.username.toLowerCase() === usernameVal && u.password === passwordVal);
+      if (user) {
+        currentUser = {
+          name: user.name,
+          role: user.role,
+          uptCode: user.uptCode,
+          fasilitasi: user.fasilitasi
+        };
+        sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+        setupLoggedInUI();
+        showToast(`Selamat datang, ${currentUser.name}!`, 'success');
+      } else {
+        showToast('Username atau password salah!', 'error');
+      }
+    } else {
+      // Login online via Google Sheets API
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        body: JSON.stringify({
+          action: 'login',
+          username: usernameVal,
+          password: passwordVal
+        })
+      });
+      const result = await response.json();
+      if (result.status === 'success') {
+        currentUser = result.data;
+        sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+        setupLoggedInUI();
+        showToast(`Selamat datang, ${currentUser.name}!`, 'success');
+      } else {
+        showToast(result.message || 'Username atau password salah!', 'error');
+      }
+    }
+  } catch (error) {
+    console.error('Error saat login:', error);
+    showToast('Terjadi kesalahan koneksi saat login!', 'error');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
   }
-  
-  sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
-  setupLoggedInUI();
-  showToast(`Selamat datang, ${currentUser.name}!`, 'success');
 });
 
 // Event: Logout
