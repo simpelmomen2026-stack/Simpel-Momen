@@ -112,7 +112,6 @@
           <p id="pageSubtitle">Daftar antrean dokumen yang menunggu eksekusi di meja Anda</p>
         </div>
         <div class="header-actions">
-          <button class="btn btn-secondary" id="toggleConfigBtn">⚙️ Database Sheets</button>
           <button class="btn btn-primary" id="refreshBtn">🔄 Segarkan Data</button>
         </div>
       </header>
@@ -218,9 +217,7 @@
 
               <div class="form-group">
                 <label for="formOperator">Nama Operator *</label>
-                <select id="formOperator" required>
-                  <!-- Will be loaded dynamically depending on Dinas or UPT -->
-                </select>
+                <input type="text" id="formOperator" readonly style="width: 100%; padding: 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.9rem;" required>
               </div>
             </div>
 

@@ -1,5 +1,5 @@
 // ================= CONFIG & STATE =================
-let API_URL = 'https://script.google.com/macros/s/AKfycbx4ygLJbb8a5uP-05xjo80tQIW8x7uXWni6bp7SzThGNq_PgLcSDxVTnT7ExAM0UtDcMQ/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbzIcC01UXY6deqv4nnG8oJGgpEqRVjBwSrYclgipTTuQBZxQWr1zY373a4WI3v_6sV1Xw/exec';
 let currentUser = null;
 let allData = [];
 
@@ -353,10 +353,12 @@ loginForm.addEventListener('submit', async (e) => {
       const user = MOCK_PETUGAS.find(u => u.username.toLowerCase() === usernameVal && u.password === passwordVal);
       if (user) {
         currentUser = {
+          username: user.username,
           name: user.name,
           role: user.role,
           uptCode: user.uptCode,
-          fasilitasi: user.fasilitasi
+          fasilitasi: user.fasilitasi,
+          sessionToken: 'local_token'
         };
         sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
         setupLoggedInUI();
@@ -479,38 +481,46 @@ navLinks.forEach(link => {
 });
 
 // ================= API CONFIG PANEL =================
-toggleConfigBtn.addEventListener('click', () => {
-  const isHidden = configPanel.style.display === 'none';
-  configPanel.style.display = isHidden ? 'flex' : 'none';
-});
+if (toggleConfigBtn) {
+  toggleConfigBtn.addEventListener('click', () => {
+    const isHidden = configPanel.style.display === 'none';
+    configPanel.style.display = isHidden ? 'flex' : 'none';
+  });
+}
 
-closeConfigBtn.addEventListener('click', () => {
-  configPanel.style.display = 'none';
-});
+if (closeConfigBtn) {
+  closeConfigBtn.addEventListener('click', () => {
+    configPanel.style.display = 'none';
+  });
+}
 
-saveConfigBtn.addEventListener('click', () => {
-  const url = apiUrlInput.value.trim();
-  if (!url) {
-    showToast('Masukkan URL database yang valid!', 'error');
-    return;
-  }
-  localStorage.setItem('simpel_momen_api_url', url);
-  API_URL = url;
-  updateConnectionIndicator();
-  showToast('Database berhasil dikonfigurasi!', 'success');
-  configPanel.style.display = 'none';
-  loadData();
-});
+if (saveConfigBtn) {
+  saveConfigBtn.addEventListener('click', () => {
+    const url = apiUrlInput.value.trim();
+    if (!url) {
+      showToast('Masukkan URL database yang valid!', 'error');
+      return;
+    }
+    localStorage.setItem('simpel_momen_api_url', url);
+    API_URL = url;
+    updateConnectionIndicator();
+    showToast('Database berhasil dikonfigurasi!', 'success');
+    configPanel.style.display = 'none';
+    loadData();
+  });
+}
 
-useLocalSimBtn.addEventListener('click', () => {
-  localStorage.setItem('simpel_momen_api_url', 'local');
-  API_URL = 'local';
-  apiUrlInput.value = 'local';
-  updateConnectionIndicator();
-  showToast('Mode simulasi browser diaktifkan!', 'success');
-  configPanel.style.display = 'none';
-  loadData();
-});
+if (useLocalSimBtn) {
+  useLocalSimBtn.addEventListener('click', () => {
+    localStorage.setItem('simpel_momen_api_url', 'local');
+    API_URL = 'local';
+    apiUrlInput.value = 'local';
+    updateConnectionIndicator();
+    showToast('Mode simulasi browser diaktifkan!', 'success');
+    configPanel.style.display = 'none';
+    loadData();
+  });
+}
 
 refreshBtn.addEventListener('click', () => {
   loadData();
@@ -550,22 +560,8 @@ function setupFormOptions() {
   // Set Default Date to Today
   formTanggal.value = new Date().toISOString().slice(0, 10);
   
-  // Populate Operator Names
-  formOperator.innerHTML = '';
-  const listOps = currentUser.fasilitasi === 'Dinas' ? OPERATORS_DINAS : OPERATORS_UPT;
-  listOps.forEach(op => {
-    const opt = document.createElement('option');
-    opt.value = op;
-    opt.textContent = op;
-    formOperator.appendChild(opt);
-  });
-
-  if (currentUser.uptCode) {
-    formOperator.value = currentUser.uptCode;
-    formOperator.disabled = true;
-  } else {
-    formOperator.disabled = false;
-  }
+  // Bind Operator Name to logged-in user's name
+  formOperator.value = currentUser.name;
 
   // Event Jenis Layanan Change
   formJenisLayanan.addEventListener('change', populateSubLayanan);
@@ -708,8 +704,46 @@ resetFormBtn.addEventListener('click', () => {
   switchPage('dashboard');
 });
 
+// Memverifikasi apakah token sesi login masih valid di database Google Sheets
+async function checkSessionTokenOnline() {
+  if (!currentUser || API_URL === 'local' || !currentUser.sessionToken || !currentUser.username) {
+    return true; // Lewati jika offline atau belum login
+  }
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      body: JSON.stringify({
+        action: 'check_session',
+        username: currentUser.username,
+        sessionToken: currentUser.sessionToken
+      })
+    });
+    const result = await response.json();
+    if (result.status === 'expired') {
+      showToast('Akun Anda telah masuk di perangkat lain! Menutup sesi...', 'error');
+      setTimeout(() => {
+        sessionStorage.removeItem('simpel_momen_user');
+        currentUser = null;
+        appWrapper.style.display = 'none';
+        loginWrapper.style.display = 'flex';
+      }, 2500);
+      return false;
+    }
+  } catch (error) {
+    console.warn('Gagal memverifikasi token sesi login:', error);
+  }
+  return true;
+}
+
 // ================= DATA FETCHER & RENDERING =================
 async function loadData() {
+  // Verifikasi sesi login (Mencegah multi device login)
+  const isSessionValid = await checkSessionTokenOnline();
+  if (!isSessionValid) return;
+
   // Show skeletons in counter desk table
   counterTableBody.innerHTML = Array(3).fill(0).map(() => `
     <tr>
@@ -1220,7 +1254,12 @@ async function sendTindakLanjutRequest(payload) {
         else if (role === 'kabid_dafduk' || role === 'kabid_capil') {
           item.catatan_kabid = notes;
           item.tgl_kabid = timeStr;
-          item.status_alur = "4_SERTIFIKASI_KADIS";
+          const tteNormalized = String(item.status_tte).trim().toLowerCase();
+          if (tteNormalized === "belum diajukan siak" || tteNormalized === "belum verifikasi siak") {
+            item.status_alur = "5_TTE";
+          } else {
+            item.status_alur = "4_SERTIFIKASI_KADIS";
+          }
         } 
         else if (role === 'kadis') {
           item.catatan_kadis = notes;
