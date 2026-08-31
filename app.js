@@ -761,7 +761,7 @@ function renderCounterDesk() {
   let filtered = allData.filter(item => {
     const status = item.status_alur;
     const fasilitasi = item.fasilitasi;
-    const layanan = item.jenis_layanan;
+    const layanan = item.jenis_layanan ? String(item.jenis_layanan).trim().toLowerCase() : "";
     
     // Peran: Operator Dinas / UPT (Hanya melihat berkas PENDING yang perlu diperbaiki)
     if (currentUser.role === 'operator') {
@@ -775,12 +775,12 @@ function renderCounterDesk() {
     
     // Peran: Kasie Dafduk (Hanya verifikasi Dafduk Dinas)
     if (currentUser.role === 'kasie_dafduk') {
-      return status === '2_VERIFIKASI_KASIE' && layanan === 'Pendaftaran Penduduk' && fasilitasi === 'Dinas';
+      return status === '2_VERIFIKASI_KASIE' && layanan === 'pendaftaran penduduk' && fasilitasi === 'Dinas';
     }
     
     // Peran: Kasie Capil (Hanya verifikasi Capil Dinas)
     if (currentUser.role === 'kasie_capil') {
-      return status === '2_VERIFIKASI_KASIE' && layanan === 'Pencatatan Sipil' && fasilitasi === 'Dinas';
+      return status === '2_VERIFIKASI_KASIE' && layanan === 'pencatatan sipil' && fasilitasi === 'Dinas';
     }
     
     // Peran: Kepala UPT (Verifikasi semua berkas UPT unitnya)
@@ -790,12 +790,12 @@ function renderCounterDesk() {
     
     // Peran: Kabid Dafduk (Validasi Dafduk Dinas & UPT)
     if (currentUser.role === 'kabid_dafduk') {
-      return status === '3_VALIDASI_KABID' && layanan === 'Pendaftaran Penduduk';
+      return status === '3_VALIDASI_KABID' && layanan === 'pendaftaran penduduk';
     }
     
     // Peran: Kabid Capil (Validasi Capil Dinas saja, Capil UPT langsung cetak)
     if (currentUser.role === 'kabid_capil') {
-      return status === '3_VALIDASI_KABID' && layanan === 'Pencatatan Sipil' && fasilitasi === 'Dinas';
+      return status === '3_VALIDASI_KABID' && layanan === 'pencatatan sipil' && fasilitasi === 'Dinas';
     }
     
     // Peran: Kepala Dinas (Sertifikasi semua yang disetujui Kabid)
@@ -1317,7 +1317,8 @@ function renderMonitoringTable() {
                         String(item.alamat).toLowerCase().includes(searchVal);
                         
     const matchFas = fasVal === 'ALL' || item.fasilitasi === fasVal;
-    const matchLay = layVal === 'ALL' || item.jenis_layanan === layVal;
+    const matchLay = layVal === 'ALL' || 
+                     (item.jenis_layanan ? String(item.jenis_layanan).trim().toLowerCase() === layVal.trim().toLowerCase() : false);
     
     let matchStatus = true;
     if (wfStatusVal !== 'ALL') {
@@ -1395,7 +1396,7 @@ window.openDetailModal = function(key) {
       : "Menunggu verifikasi Kepala UPT.";
     timelineHtml += createTimelineItem("3. Kepala UPT", uptDetail, item.catatan_upt, hasUpt);
   } else {
-    const isDafduk = item.jenis_layanan === "Pendaftaran Penduduk";
+    const isDafduk = item.jenis_layanan ? String(item.jenis_layanan).trim().toLowerCase() === "pendaftaran penduduk" : false;
     const titleKasie = isDafduk ? "3. Kasie Dafduk" : "3. Kasie Capil";
     const hasKasie = !!item.catatan_kasie;
     let kasieDetail = hasKasie 
@@ -1406,9 +1407,9 @@ window.openDetailModal = function(key) {
 
   // 4. Langkah Kabid (Dafduk / Capil)
   // Catatan: Capil UPT langsung cetak dari UPT, tidak lewat kabid
-  const isCapilUPT = isUPT && item.jenis_layanan === "Pencatatan Sipil";
+  const isCapilUPT = isUPT && (item.jenis_layanan ? String(item.jenis_layanan).trim().toLowerCase() === "pencatatan sipil" : false);
   if (!isCapilUPT) {
-    const isDafduk = item.jenis_layanan === "Pendaftaran Penduduk";
+    const isDafduk = item.jenis_layanan ? String(item.jenis_layanan).trim().toLowerCase() === "pendaftaran penduduk" : false;
     const titleKabid = isDafduk ? "4. Kabid Dafduk" : "4. Kabid Capil";
     const hasKabid = !!item.catatan_kabid;
     let kabidDetail = hasKabid 
