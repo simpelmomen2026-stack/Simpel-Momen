@@ -314,6 +314,9 @@ updateConnectionIndicator();
 const savedUser = sessionStorage.getItem('simpel_momen_user');
 if (savedUser) {
   currentUser = JSON.parse(savedUser);
+  if (currentUser && currentUser.role) {
+    currentUser.role = currentUser.role.trim().toLowerCase().replace(/\s+/g, '_');
+  }
   setupLoggedInUI();
 }
 
@@ -377,6 +380,9 @@ loginForm.addEventListener('submit', async (e) => {
       const result = await response.json();
       if (result.status === 'success') {
         currentUser = result.data;
+        if (currentUser && currentUser.role) {
+          currentUser.role = currentUser.role.trim().toLowerCase().replace(/\s+/g, '_');
+        }
         sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
         setupLoggedInUI();
         showToast(`Selamat datang, ${currentUser.name}!`, 'success');
