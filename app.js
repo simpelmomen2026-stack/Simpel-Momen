@@ -1,5 +1,9 @@
-// ================= CONFIG & STATE =================
-let API_URL = localStorage.getItem('simpel_momen_api_url') || 'https://script.google.com/macros/s/AKfycbzl-7-RgKsS48GL25_qkp-Jpoqjofs8ADfpgF40FbMrOn2fwn3dbX8OXueTKWQdZ3yY/exec';
+// Hapus cache 'local' lama dari browser agar selalu terhubung online ke Google Sheets
+if (localStorage.getItem('simpel_momen_api_url') === 'local') {
+  localStorage.removeItem('simpel_momen_api_url');
+}
+
+let API_URL = 'https://script.google.com/macros/s/AKfycbzmuF_K90f4j262ECYc9wuifbHc_8u3bnXI6GzvUgPiZeL1wWzVgBNCXbo_sKfyzifeRw/exec';
 let currentUser = null;
 let allData = [];
 
