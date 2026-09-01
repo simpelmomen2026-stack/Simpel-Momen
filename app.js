@@ -1,5 +1,5 @@
 // ================= CONFIG & STATE =================
-let API_URL = 'https://script.google.com/macros/s/AKfycbzIcC01UXY6deqv4nnG8oJGgpEqRVjBwSrYclgipTTuQBZxQWr1zY373a4WI3v_6sV1Xw/exec';
+let API_URL = localStorage.getItem('simpel_momen_api_url') || 'https://script.google.com/macros/s/AKfycbwstquPUdLOa4HCuZ9nW828sLGWfyjprbxWdbRAnksrenggZLeNNdcVWY4TgTqC1Mjc_Q/exec'; // Default ke local untuk kemudahan pengujian luring
 let currentUser = null;
 let allData = [];
 
@@ -158,8 +158,9 @@ function saveLocalDB(data) {
 const loginWrapper = document.getElementById('loginWrapper');
 const appWrapper = document.getElementById('appWrapper');
 const loginForm = document.getElementById('loginForm');
-const loginUsername = document.getElementById('loginUsername');
-const loginPassword = document.getElementById('loginPassword');
+const loginRole = document.getElementById('loginRole');
+const loginUptGroup = document.getElementById('loginUptGroup');
+const loginUptSelect = document.getElementById('loginUptSelect');
 const logoutBtn = document.getElementById('logoutBtn');
 
 // Nav links
@@ -314,91 +315,34 @@ updateConnectionIndicator();
 const savedUser = sessionStorage.getItem('simpel_momen_user');
 if (savedUser) {
   currentUser = JSON.parse(savedUser);
-  if (currentUser && currentUser.role) {
-    currentUser.role = currentUser.role.trim().toLowerCase().replace(/\s+/g, '_');
-  }
   setupLoggedInUI();
 }
 
-const MOCK_PETUGAS = [
-  { username: 'operator_dinas', password: '123456', name: 'Operator Dinas', role: 'operator', uptCode: null, fasilitasi: 'Dinas' },
-  { username: 'operator_upt1', password: '123456', name: 'Operator UPT 01', role: 'operator', uptCode: 'UPT-01', fasilitasi: 'UPT' },
-  { username: 'scan_dinas', password: '123456', name: 'Petugas Scan Dinas', role: 'petugas_scan', uptCode: null, fasilitasi: 'Dinas' },
-  { username: 'scan_upt1', password: '123456', name: 'Petugas Scan UPT 01', role: 'petugas_scan', uptCode: 'UPT-01', fasilitasi: 'UPT' },
-  { username: 'kepala_upt1', password: '123456', name: 'Kepala UPT 01', role: 'kepala_upt', uptCode: 'UPT-01', fasilitasi: 'UPT' },
-  { username: 'kasie_dafduk', password: '123456', name: 'Kasie Dafduk', role: 'kasie_dafduk', uptCode: null, fasilitasi: 'Dinas' },
-  { username: 'kasie_capil', password: '123456', name: 'Kasie Capil', role: 'kasie_capil', uptCode: null, fasilitasi: 'Dinas' },
-  { username: 'kabid_dafduk', password: '123456', name: 'Kabid Dafduk', role: 'kabid_dafduk', uptCode: null, fasilitasi: 'Dinas' },
-  { username: 'kabid_capil', password: '123456', name: 'Kabid Capil', role: 'kabid_capil', uptCode: null, fasilitasi: 'Dinas' },
-  { username: 'kadis', password: '123456', name: 'Kepala Dinas', role: 'kadis', uptCode: null, fasilitasi: 'Dinas' },
-  { username: 'tte_dinas', password: '123456', name: 'Petugas TTE', role: 'petugas_tte', uptCode: null, fasilitasi: 'Dinas' },
-  { username: 'print_dinas', password: '123456', name: 'Petugas Cetak Dinas', role: 'petugas_pencetakan', uptCode: null, fasilitasi: 'Dinas' },
-  { username: 'print_upt1', password: '123456', name: 'Petugas Cetak UPT 01', role: 'petugas_pencetakan', uptCode: 'UPT-01', fasilitasi: 'UPT' }
-];
+// Event: Login Role Change to toggle UPT group
+loginRole.addEventListener('change', () => {
+  const roleVal = loginRole.value;
+  if (roleVal.includes('_upt') || roleVal === 'kepala_upt') {
+    loginUptGroup.style.display = 'block';
+  } else {
+    loginUptGroup.style.display = 'none';
+  }
+});
 
 // Event: Login Submit
-loginForm.addEventListener('submit', async (e) => {
+loginForm.addEventListener('submit', (e) => {
   e.preventDefault();
-  const usernameVal = loginUsername.value.trim().toLowerCase();
-  const passwordVal = loginPassword.value.trim();
+  const selectedRoleKey = loginRole.value;
+  currentUser = Object.assign({}, ROLES_CONFIG[selectedRoleKey]);
   
-  const submitBtn = loginForm.querySelector('button[type="submit"]');
-  const originalText = submitBtn.textContent;
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Memverifikasi...';
-  
-  try {
-    if (API_URL === 'local') {
-      // Login offline / simulasi lokal
-      const user = MOCK_PETUGAS.find(u => u.username.toLowerCase() === usernameVal && u.password === passwordVal);
-      if (user) {
-        currentUser = {
-          username: user.username,
-          name: user.name,
-          role: user.role,
-          uptCode: user.uptCode,
-          fasilitasi: user.fasilitasi,
-          sessionToken: 'local_token'
-        };
-        sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
-        setupLoggedInUI();
-        showToast(`Selamat datang, ${currentUser.name}!`, 'success');
-      } else {
-        showToast('Username atau password salah!', 'error');
-      }
-    } else {
-      // Login online via Google Sheets API
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8'
-        },
-        body: JSON.stringify({
-          action: 'login',
-          username: usernameVal,
-          password: passwordVal
-        })
-      });
-      const result = await response.json();
-      if (result.status === 'success') {
-        currentUser = result.data;
-        if (currentUser && currentUser.role) {
-          currentUser.role = currentUser.role.trim().toLowerCase().replace(/\s+/g, '_');
-        }
-        sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
-        setupLoggedInUI();
-        showToast(`Selamat datang, ${currentUser.name}!`, 'success');
-      } else {
-        showToast(result.message || 'Username atau password salah!', 'error');
-      }
-    }
-  } catch (error) {
-    console.error('Error saat login:', error);
-    showToast('Terjadi kesalahan koneksi saat login!', 'error');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = originalText;
+  if (selectedRoleKey.includes('_upt') || selectedRoleKey === 'kepala_upt') {
+    currentUser.uptCode = loginUptSelect.value;
+  } else {
+    currentUser.uptCode = null;
   }
+  
+  sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+  setupLoggedInUI();
+  showToast(`Selamat datang, ${currentUser.name}!`, 'success');
 });
 
 // Event: Logout
@@ -481,46 +425,38 @@ navLinks.forEach(link => {
 });
 
 // ================= API CONFIG PANEL =================
-if (toggleConfigBtn) {
-  toggleConfigBtn.addEventListener('click', () => {
-    const isHidden = configPanel.style.display === 'none';
-    configPanel.style.display = isHidden ? 'flex' : 'none';
-  });
-}
+toggleConfigBtn.addEventListener('click', () => {
+  const isHidden = configPanel.style.display === 'none';
+  configPanel.style.display = isHidden ? 'flex' : 'none';
+});
 
-if (closeConfigBtn) {
-  closeConfigBtn.addEventListener('click', () => {
-    configPanel.style.display = 'none';
-  });
-}
+closeConfigBtn.addEventListener('click', () => {
+  configPanel.style.display = 'none';
+});
 
-if (saveConfigBtn) {
-  saveConfigBtn.addEventListener('click', () => {
-    const url = apiUrlInput.value.trim();
-    if (!url) {
-      showToast('Masukkan URL database yang valid!', 'error');
-      return;
-    }
-    localStorage.setItem('simpel_momen_api_url', url);
-    API_URL = url;
-    updateConnectionIndicator();
-    showToast('Database berhasil dikonfigurasi!', 'success');
-    configPanel.style.display = 'none';
-    loadData();
-  });
-}
+saveConfigBtn.addEventListener('click', () => {
+  const url = apiUrlInput.value.trim();
+  if (!url) {
+    showToast('Masukkan URL database yang valid!', 'error');
+    return;
+  }
+  localStorage.setItem('simpel_momen_api_url', url);
+  API_URL = url;
+  updateConnectionIndicator();
+  showToast('Database berhasil dikonfigurasi!', 'success');
+  configPanel.style.display = 'none';
+  loadData();
+});
 
-if (useLocalSimBtn) {
-  useLocalSimBtn.addEventListener('click', () => {
-    localStorage.setItem('simpel_momen_api_url', 'local');
-    API_URL = 'local';
-    apiUrlInput.value = 'local';
-    updateConnectionIndicator();
-    showToast('Mode simulasi browser diaktifkan!', 'success');
-    configPanel.style.display = 'none';
-    loadData();
-  });
-}
+useLocalSimBtn.addEventListener('click', () => {
+  localStorage.setItem('simpel_momen_api_url', 'local');
+  API_URL = 'local';
+  apiUrlInput.value = 'local';
+  updateConnectionIndicator();
+  showToast('Mode simulasi browser diaktifkan!', 'success');
+  configPanel.style.display = 'none';
+  loadData();
+});
 
 refreshBtn.addEventListener('click', () => {
   loadData();
@@ -560,8 +496,22 @@ function setupFormOptions() {
   // Set Default Date to Today
   formTanggal.value = new Date().toISOString().slice(0, 10);
   
-  // Bind Operator Name to logged-in user's name
-  formOperator.value = currentUser.name;
+  // Populate Operator Names
+  formOperator.innerHTML = '';
+  const listOps = currentUser.fasilitasi === 'Dinas' ? OPERATORS_DINAS : OPERATORS_UPT;
+  listOps.forEach(op => {
+    const opt = document.createElement('option');
+    opt.value = op;
+    opt.textContent = op;
+    formOperator.appendChild(opt);
+  });
+
+  if (currentUser.uptCode) {
+    formOperator.value = currentUser.uptCode;
+    formOperator.disabled = true;
+  } else {
+    formOperator.disabled = false;
+  }
 
   // Event Jenis Layanan Change
   formJenisLayanan.addEventListener('change', populateSubLayanan);
@@ -704,46 +654,8 @@ resetFormBtn.addEventListener('click', () => {
   switchPage('dashboard');
 });
 
-// Memverifikasi apakah token sesi login masih valid di database Google Sheets
-async function checkSessionTokenOnline() {
-  if (!currentUser || API_URL === 'local' || !currentUser.sessionToken || !currentUser.username) {
-    return true; // Lewati jika offline atau belum login
-  }
-  try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8'
-      },
-      body: JSON.stringify({
-        action: 'check_session',
-        username: currentUser.username,
-        sessionToken: currentUser.sessionToken
-      })
-    });
-    const result = await response.json();
-    if (result.status === 'expired') {
-      showToast('Akun Anda telah masuk di perangkat lain! Menutup sesi...', 'error');
-      setTimeout(() => {
-        sessionStorage.removeItem('simpel_momen_user');
-        currentUser = null;
-        appWrapper.style.display = 'none';
-        loginWrapper.style.display = 'flex';
-      }, 2500);
-      return false;
-    }
-  } catch (error) {
-    console.warn('Gagal memverifikasi token sesi login:', error);
-  }
-  return true;
-}
-
 // ================= DATA FETCHER & RENDERING =================
 async function loadData() {
-  // Verifikasi sesi login (Mencegah multi device login)
-  const isSessionValid = await checkSessionTokenOnline();
-  if (!isSessionValid) return;
-
   // Show skeletons in counter desk table
   counterTableBody.innerHTML = Array(3).fill(0).map(() => `
     <tr>
@@ -801,7 +713,7 @@ function renderCounterDesk() {
   let filtered = allData.filter(item => {
     const status = item.status_alur;
     const fasilitasi = item.fasilitasi;
-    const layanan = item.jenis_layanan ? String(item.jenis_layanan).trim().toLowerCase() : "";
+    const layanan = item.jenis_layanan;
     
     // Peran: Operator Dinas / UPT (Hanya melihat berkas PENDING yang perlu diperbaiki)
     if (currentUser.role === 'operator') {
@@ -815,12 +727,12 @@ function renderCounterDesk() {
     
     // Peran: Kasie Dafduk (Hanya verifikasi Dafduk Dinas)
     if (currentUser.role === 'kasie_dafduk') {
-      return status === '2_VERIFIKASI_KASIE' && layanan === 'pendaftaran penduduk' && fasilitasi === 'Dinas';
+      return status === '2_VERIFIKASI_KASIE' && layanan === 'Pendaftaran Penduduk' && fasilitasi === 'Dinas';
     }
     
     // Peran: Kasie Capil (Hanya verifikasi Capil Dinas)
     if (currentUser.role === 'kasie_capil') {
-      return status === '2_VERIFIKASI_KASIE' && layanan === 'pencatatan sipil' && fasilitasi === 'Dinas';
+      return status === '2_VERIFIKASI_KASIE' && layanan === 'Pencatatan Sipil' && fasilitasi === 'Dinas';
     }
     
     // Peran: Kepala UPT (Verifikasi semua berkas UPT unitnya)
@@ -830,12 +742,12 @@ function renderCounterDesk() {
     
     // Peran: Kabid Dafduk (Validasi Dafduk Dinas & UPT)
     if (currentUser.role === 'kabid_dafduk') {
-      return status === '3_VALIDASI_KABID' && layanan === 'pendaftaran penduduk';
+      return status === '3_VALIDASI_KABID' && layanan === 'Pendaftaran Penduduk';
     }
     
     // Peran: Kabid Capil (Validasi Capil Dinas saja, Capil UPT langsung cetak)
     if (currentUser.role === 'kabid_capil') {
-      return status === '3_VALIDASI_KABID' && layanan === 'pencatatan sipil' && fasilitasi === 'Dinas';
+      return status === '3_VALIDASI_KABID' && layanan === 'Pencatatan Sipil' && fasilitasi === 'Dinas';
     }
     
     // Peran: Kepala Dinas (Sertifikasi semua yang disetujui Kabid)
@@ -1254,12 +1166,7 @@ async function sendTindakLanjutRequest(payload) {
         else if (role === 'kabid_dafduk' || role === 'kabid_capil') {
           item.catatan_kabid = notes;
           item.tgl_kabid = timeStr;
-          const tteNormalized = String(item.status_tte).trim().toLowerCase();
-          if (tteNormalized === "belum diajukan siak" || tteNormalized === "belum verifikasi siak") {
-            item.status_alur = "5_TTE";
-          } else {
-            item.status_alur = "4_SERTIFIKASI_KADIS";
-          }
+          item.status_alur = "4_SERTIFIKASI_KADIS";
         } 
         else if (role === 'kadis') {
           item.catatan_kadis = notes;
@@ -1362,8 +1269,7 @@ function renderMonitoringTable() {
                         String(item.alamat).toLowerCase().includes(searchVal);
                         
     const matchFas = fasVal === 'ALL' || item.fasilitasi === fasVal;
-    const matchLay = layVal === 'ALL' || 
-                     (item.jenis_layanan ? String(item.jenis_layanan).trim().toLowerCase() === layVal.trim().toLowerCase() : false);
+    const matchLay = layVal === 'ALL' || item.jenis_layanan === layVal;
     
     let matchStatus = true;
     if (wfStatusVal !== 'ALL') {
@@ -1441,7 +1347,7 @@ window.openDetailModal = function(key) {
       : "Menunggu verifikasi Kepala UPT.";
     timelineHtml += createTimelineItem("3. Kepala UPT", uptDetail, item.catatan_upt, hasUpt);
   } else {
-    const isDafduk = item.jenis_layanan ? String(item.jenis_layanan).trim().toLowerCase() === "pendaftaran penduduk" : false;
+    const isDafduk = item.jenis_layanan === "Pendaftaran Penduduk";
     const titleKasie = isDafduk ? "3. Kasie Dafduk" : "3. Kasie Capil";
     const hasKasie = !!item.catatan_kasie;
     let kasieDetail = hasKasie 
@@ -1452,9 +1358,9 @@ window.openDetailModal = function(key) {
 
   // 4. Langkah Kabid (Dafduk / Capil)
   // Catatan: Capil UPT langsung cetak dari UPT, tidak lewat kabid
-  const isCapilUPT = isUPT && (item.jenis_layanan ? String(item.jenis_layanan).trim().toLowerCase() === "pencatatan sipil" : false);
+  const isCapilUPT = isUPT && item.jenis_layanan === "Pencatatan Sipil";
   if (!isCapilUPT) {
-    const isDafduk = item.jenis_layanan ? String(item.jenis_layanan).trim().toLowerCase() === "pendaftaran penduduk" : false;
+    const isDafduk = item.jenis_layanan === "Pendaftaran Penduduk";
     const titleKabid = isDafduk ? "4. Kabid Dafduk" : "4. Kabid Capil";
     const hasKabid = !!item.catatan_kabid;
     let kabidDetail = hasKabid 
