@@ -1,5 +1,5 @@
 // ================= CONFIG & STATE =================
-let API_URL = localStorage.getItem('simpel_momen_api_url') || 'https://script.google.com/macros/s/AKfycbzmuF_K90f4j262ECYc9wuifbHc_8u3bnXI6GzvUgPiZeL1wWzVgBNCXbo_sKfyzifeRw/exec';
+let API_URL = localStorage.getItem('simpel_momen_api_url') || 'https://script.google.com/macros/s/AKfycbzzFF2EvjHMCkqDEGGMEd0cUgEg1FtzjncJ0oVgS-xWp15BP6N5Uev_1afLU6kjqw75Bw/exec';
 let currentUser = null;
 let allData = [];
 
@@ -310,12 +310,38 @@ const ROLES_CONFIG = {
 apiUrlInput.value = API_URL;
 updateConnectionIndicator();
 
+function normalizeUserRole(rawRole) {
+  if (!rawRole) return 'operator';
+  const str = String(rawRole).trim().toLowerCase();
+  
+  if (str.includes('scan')) return 'petugas_scan';
+  if (str.includes('tte')) return 'petugas_tte';
+  if (str.includes('print') || str.includes('cetak')) return 'petugas_pencetakan';
+  if (str.includes('kadis') || str.includes('kepala dinas')) return 'kadis';
+  if (str.includes('kepala upt') || str.includes('kepala_upt') || str.includes('ka upt') || str.includes('kaupt')) return 'kepala_upt';
+  
+  if (str.includes('kasie') || str.includes('kasi') || str.includes('seksi')) {
+    if (str.includes('capil') || str.includes('sipil')) return 'kasie_capil';
+    return 'kasie_dafduk';
+  }
+  
+  if (str.includes('kabid') || str.includes('bidang')) {
+    if (str.includes('capil') || str.includes('sipil')) return 'kabid_capil';
+    return 'kabid_dafduk';
+  }
+  
+  if (str.includes('operator')) return 'operator';
+  if (str.includes('monitor') || str.includes('pengawas') || str.includes('admin')) return 'monitoring';
+  
+  return str.replace(/\s+/g, '_');
+}
+
 // Cek session login
 const savedUser = sessionStorage.getItem('simpel_momen_user');
 if (savedUser) {
   currentUser = JSON.parse(savedUser);
   if (currentUser && currentUser.role) {
-    currentUser.role = currentUser.role.trim().toLowerCase().replace(/\s+/g, '_');
+    currentUser.role = normalizeUserRole(currentUser.role);
   }
   setupLoggedInUI();
 }
@@ -384,7 +410,7 @@ loginForm.addEventListener('submit', async (e) => {
         if (result.status === 'success') {
           currentUser = result.data;
           if (currentUser && currentUser.role) {
-            currentUser.role = currentUser.role.trim().toLowerCase().replace(/\s+/g, '_');
+            currentUser.role = normalizeUserRole(currentUser.role);
           }
           sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
           setupLoggedInUI();
