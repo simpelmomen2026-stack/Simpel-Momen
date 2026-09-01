@@ -3,7 +3,7 @@ if (localStorage.getItem('simpel_momen_api_url') === 'local') {
   localStorage.removeItem('simpel_momen_api_url');
 }
 
-let API_URL = 'https://script.google.com/macros/s/AKfycbzl-7-RgKsS48GL25_qkp-Jpoqjofs8ADfpgF40FbMrOn2fwn3dbX8OXueTKWQdZ3yY/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbzmuF_K90f4j262ECYc9wuifbHc_8u3bnXI6GzvUgPiZeL1wWzVgBNCXbo_sKfyzifeRw/exec';
 let currentUser = null;
 let allData = [];
 
@@ -855,12 +855,8 @@ async function loadData() {
     renderMonitoringTable();
     renderRekapitulasi();
   } catch (error) {
-    console.error(error);
-    showToast('Koneksi server gagal! Mengaktifkan mode simulasi browser.', 'error');
-    API_URL = 'local';
-    apiUrlInput.value = 'local';
-    localStorage.setItem('simpel_momen_api_url', 'local');
-    updateConnectionIndicator();
+    console.error('Gagal mengambil data dari Google Sheets:', error);
+    showToast('Koneksi ke Google Sheets terganggu. Menampilkan data lokal sementara.', 'warning');
     allData = getLocalDB();
     renderCounterDesk();
     renderMonitoringTable();
