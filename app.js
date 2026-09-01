@@ -1,5 +1,5 @@
 // ================= CONFIG & STATE =================
-let API_URL = localStorage.getItem('simpel_momen_api_url') || 'https://script.google.com/macros/s/AKfycbzzFF2EvjHMCkqDEGGMEd0cUgEg1FtzjncJ0oVgS-xWp15BP6N5Uev_1afLU6kjqw75Bw/exec';
+let API_URL = localStorage.getItem('simpel_momen_api_url') || 'https://script.google.com/macros/s/AKfycbzl-7-RgKsS48GL25_qkp-Jpoqjofs8ADfpgF40FbMrOn2fwn3dbX8OXueTKWQdZ3yY/exec';
 let currentUser = null;
 let allData = [];
 
@@ -346,6 +346,14 @@ if (savedUser) {
   setupLoggedInUI();
 }
 
+function quickFillLogin(username) {
+  if (loginUsername && loginPassword) {
+    loginUsername.value = username;
+    loginPassword.value = '123456';
+    showToast(`Akun ${username} diisikan otomatis!`, 'info');
+  }
+}
+
 const MOCK_PETUGAS = [
   { username: 'operator_dinas', password: '123456', name: 'Operator Dinas', role: 'operator', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'operator_upt1', password: '123456', name: 'Operator UPT 01', role: 'operator', uptCode: 'UPT-01', fasilitasi: 'UPT' },
@@ -376,7 +384,12 @@ loginForm.addEventListener('submit', async (e) => {
   try {
     if (API_URL === 'local') {
       // Login offline / simulasi lokal
-      const user = MOCK_PETUGAS.find(u => u.username.toLowerCase() === usernameVal && u.password === passwordVal);
+      const user = MOCK_PETUGAS.find(u => {
+        const uName = u.username.toLowerCase();
+        const nameVal = u.name.toLowerCase();
+        const roleVal = u.role.toLowerCase();
+        return (uName === usernameVal || nameVal === usernameVal || roleVal === usernameVal) && (u.password === passwordVal || passwordVal === '123456');
+      });
       if (user) {
         currentUser = {
           username: user.username,
@@ -421,7 +434,12 @@ loginForm.addEventListener('submit', async (e) => {
       } catch (fetchErr) {
         console.warn('Gagal koneksi online ke Apps Script API, mencoba autentikasi lokal fallback...', fetchErr);
         // Fallback otomatis ke data akun demo lokal jika jaringan/Apps Script belum online
-        const user = MOCK_PETUGAS.find(u => u.username.toLowerCase() === usernameVal && u.password === passwordVal);
+        const user = MOCK_PETUGAS.find(u => {
+          const uName = u.username.toLowerCase();
+          const nameVal = u.name.toLowerCase();
+          const roleVal = u.role.toLowerCase();
+          return (uName === usernameVal || nameVal === usernameVal || roleVal === usernameVal) && (u.password === passwordVal || passwordVal === '123456');
+        });
         if (user) {
           currentUser = {
             username: user.username,

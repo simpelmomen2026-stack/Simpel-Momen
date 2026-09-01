@@ -38,10 +38,22 @@
         
         <button type="submit" class="btn btn-primary btn-block" style="margin-top: 15px;">Masuk ke Sistem</button>
         
-        <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 10px; line-height: 1.4;">
-          <strong>Akun Demo Bawaan (Sandi: 123456):</strong><br>
-          • Dinas: <code>operator_dinas</code>, <code>scan_dinas</code>, <code>kasie_dafduk</code>, <code>kabid_dafduk</code>, <code>kadis</code>, <code>tte_dinas</code>, <code>print_dinas</code><br>
-          • UPT 01: <code>operator_upt1</code>, <code>scan_upt1</code>, <code>kepala_upt1</code>, <code>print_upt1</code>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 10px; line-height: 1.6;">
+          <strong>Klik akun untuk isi otomatis (Sandi: 123456):</strong><br>
+          <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;">
+            <span class="badge" style="cursor:pointer; background:rgba(255,255,255,0.1);" onclick="quickFillLogin('operator_dinas')">operator_dinas</span>
+            <span class="badge" style="cursor:pointer; background:rgba(255,255,255,0.1);" onclick="quickFillLogin('scan_dinas')">scan_dinas</span>
+            <span class="badge" style="cursor:pointer; background:rgba(255,255,255,0.1);" onclick="quickFillLogin('kasie_dafduk')">kasie_dafduk</span>
+            <span class="badge" style="cursor:pointer; background:rgba(255,255,255,0.1);" onclick="quickFillLogin('kasie_capil')">kasie_capil</span>
+            <span class="badge" style="cursor:pointer; background:rgba(255,255,255,0.1);" onclick="quickFillLogin('kabid_dafduk')">kabid_dafduk</span>
+            <span class="badge" style="cursor:pointer; background:rgba(255,255,255,0.1);" onclick="quickFillLogin('kadis')">kadis</span>
+            <span class="badge" style="cursor:pointer; background:rgba(255,255,255,0.1);" onclick="quickFillLogin('tte_dinas')">tte_dinas</span>
+            <span class="badge" style="cursor:pointer; background:rgba(255,255,255,0.1);" onclick="quickFillLogin('print_dinas')">print_dinas</span>
+            <span class="badge" style="cursor:pointer; background:rgba(99,102,241,0.2);" onclick="quickFillLogin('operator_upt1')">operator_upt1</span>
+            <span class="badge" style="cursor:pointer; background:rgba(99,102,241,0.2);" onclick="quickFillLogin('scan_upt1')">scan_upt1</span>
+            <span class="badge" style="cursor:pointer; background:rgba(99,102,241,0.2);" onclick="quickFillLogin('kepala_upt1')">kepala_upt1</span>
+            <span class="badge" style="cursor:pointer; background:rgba(99,102,241,0.2);" onclick="quickFillLogin('print_upt1')">print_upt1</span>
+          </div>
         </div>
       </form>
       
