@@ -1,5 +1,5 @@
 // ================= CONFIG & STATE =================
-let API_URL = 'https://script.google.com/macros/s/AKfycbzIcC01UXY6deqv4nnG8oJGgpEqRVjBwSrYclgipTTuQBZxQWr1zY373a4WI3v_6sV1Xw/exec';
+let API_URL = localStorage.getItem('simpel_momen_api_url') || 'https://script.google.com/macros/s/AKfycbzmuF_K90f4j262ECYc9wuifbHc_8u3bnXI6GzvUgPiZeL1wWzVgBNCXbo_sKfyzifeRw/exec';
 let currentUser = null;
 let allData = [];
 
@@ -367,29 +367,50 @@ loginForm.addEventListener('submit', async (e) => {
         showToast('Username atau password salah!', 'error');
       }
     } else {
-      // Login online via Google Sheets API
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8'
-        },
-        body: JSON.stringify({
-          action: 'login',
-          username: usernameVal,
-          password: passwordVal
-        })
-      });
-      const result = await response.json();
-      if (result.status === 'success') {
-        currentUser = result.data;
-        if (currentUser && currentUser.role) {
-          currentUser.role = currentUser.role.trim().toLowerCase().replace(/\s+/g, '_');
+      // Login online via Google Sheets API dengan fallback otomatis jika offline/gagal koneksi
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8'
+          },
+          body: JSON.stringify({
+            action: 'login',
+            username: usernameVal,
+            password: passwordVal
+          })
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+          currentUser = result.data;
+          if (currentUser && currentUser.role) {
+            currentUser.role = currentUser.role.trim().toLowerCase().replace(/\s+/g, '_');
+          }
+          sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+          setupLoggedInUI();
+          showToast(`Selamat datang, ${currentUser.name}!`, 'success');
+        } else {
+          showToast(result.message || 'Username atau password salah!', 'error');
         }
-        sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
-        setupLoggedInUI();
-        showToast(`Selamat datang, ${currentUser.name}!`, 'success');
-      } else {
-        showToast(result.message || 'Username atau password salah!', 'error');
+      } catch (fetchErr) {
+        console.warn('Gagal koneksi online ke Apps Script API, mencoba autentikasi lokal fallback...', fetchErr);
+        // Fallback otomatis ke data akun demo lokal jika jaringan/Apps Script belum online
+        const user = MOCK_PETUGAS.find(u => u.username.toLowerCase() === usernameVal && u.password === passwordVal);
+        if (user) {
+          currentUser = {
+            username: user.username,
+            name: user.name,
+            role: user.role,
+            uptCode: user.uptCode,
+            fasilitasi: user.fasilitasi,
+            sessionToken: 'local_token'
+          };
+          sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+          setupLoggedInUI();
+          showToast(`Selamat datang, ${currentUser.name}! (Mode Offline/Fallback)`, 'warning');
+        } else {
+          showToast('Gagal terhubung ke database dan akun lokal tidak ditemukan.', 'error');
+        }
       }
     }
   } catch (error) {
