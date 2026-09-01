@@ -156,9 +156,14 @@
 
         <!-- Desk Table -->
         <div class="card table-card">
-          <div class="table-header">
-            <h2>Dokumen Antrean di Meja Anda</h2>
-            <span class="entries-count" id="counterEntriesCount">Menampilkan 0 berkas</span>
+          <div class="table-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
+            <div>
+              <h2 style="margin:0;">Dokumen Antrean di Meja Anda</h2>
+              <span class="entries-count" id="counterEntriesCount">Menampilkan 0 berkas</span>
+            </div>
+            <div style="flex: 1; max-width: 380px;">
+              <input type="text" id="counterSearchInput" placeholder="🔍 Cari nama pemohon, kode antrean, no HP..." style="width: 100%; padding: 9px 14px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
+            </div>
           </div>
           <div class="table-container">
             <table>

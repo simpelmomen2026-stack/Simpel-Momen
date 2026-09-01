@@ -201,6 +201,7 @@ const valMetric2 = document.getElementById('valMetric2');
 const valMetric3 = document.getElementById('valMetric3');
 const counterEntriesCount = document.getElementById('counterEntriesCount');
 const counterTableBody = document.getElementById('counterTableBody');
+const counterSearchInput = document.getElementById('counterSearchInput');
 
 // Form Input Page elements
 const berkasForm = document.getElementById('berkasForm');
@@ -596,6 +597,10 @@ refreshBtn.addEventListener('click', () => {
   showToast('Memperbarui data antrean...', 'success');
 });
 
+if (counterSearchInput) {
+  counterSearchInput.addEventListener('input', renderCounterDesk);
+}
+
 // Event: TTE status change to toggle pending notes group
 document.getElementById('tteStatus').addEventListener('change', () => {
   const statusVal = document.getElementById('tteStatus').value;
@@ -940,6 +945,30 @@ function renderCounterDesk() {
     // Peran: Monitoring / Pengawas
     return false; // Monitoring tidak memiliki kerja antrean meja
   });
+
+  // Filter pencarian real-time pada Kerja Counter
+  if (counterSearchInput) {
+    const query = counterSearchInput.value.trim().toLowerCase();
+    if (query) {
+      filtered = filtered.filter(item => {
+        const key = String(item.key || "").toLowerCase();
+        const pemohon = String(item.pemohon || "").toLowerCase();
+        const layanan = String(item.jenis_layanan || "").toLowerCase();
+        const subLayanan = String(item.sub_layanan || "").toLowerCase();
+        const noHp = String(item.no_hp || "").toLowerCase();
+        const operator = String(item.operator || "").toLowerCase();
+        const alamat = String(item.alamat || "").toLowerCase();
+        
+        return key.includes(query) ||
+               pemohon.includes(query) ||
+               layanan.includes(query) ||
+               subLayanan.includes(query) ||
+               noHp.includes(query) ||
+               operator.includes(query) ||
+               alamat.includes(query);
+      });
+    }
+  }
 
   // Calculate Metrics Dashboard
   calculateCounterMetrics(filtered);
