@@ -1,348 +1,535 @@
-// Hapus cache lokal lama dari browser agar selalu terhubung ke server Google Sheets online
+// ================= CONFIG & STATE =================
+// Hapus cache 'local' atau 'localhost' lama dari browser agar selalu terhubung online ke Google Sheets
 if (localStorage.getItem('simpel_momen_api_url') && (localStorage.getItem('simpel_momen_api_url').includes('localhost') || localStorage.getItem('simpel_momen_api_url') === 'local')) {
   localStorage.removeItem('simpel_momen_api_url');
 }
 
-let API_URL = 'https://script.google.com/macros/s/AKfycbwb-GMpH8UYImv4np9MDLHgeixCjGbCI4IXUF-8X3KASSZY7MQdv7cSmA-Vyiy5yVXTIg/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbzmuF_K90f4j262ECYc9wuifbHc_8u3bnXI6GzvUgPiZeL1wWzVgBNCXbo_sKfyzifeRw/exec';
+let currentUser = null;
 let allData = [];
-let activeTab = 'tabel'; // 'tabel' or 'alur'
 
-// DOM Elements
+function getLocalDateTimeString() {
+  const d = new Date();
+  const pad = n => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+const SUB_LAYANAN_OPTIONS = {
+  "Pendaftaran Penduduk": [
+    "Biodata Penduduk",
+    "Kartu Keluarga (KK) Baru / Perubahan",
+    "KTP-el Baru / Cetak Ulang",
+    "Kartu Identitas Anak (KIA)",
+    "Surat Pindah (SKPWNI) / Kedatangan",
+    "Identitas Kependudukan Digital (IKD)"
+  ],
+  "Pencatatan Sipil": [
+    "Akta Kelahiran",
+    "Akta Kematian",
+    "Akta Perkawinan",
+    "Akta Perceraian",
+    "Akta Pengesahan / Pengakuan Anak",
+    "Pembetulan / Pembatalan Akta Pencatatan Sipil"
+  ]
+};
+
+// ================= DOM ELEMENTS =================
+// Layout wrappers
+const loginWrapper = document.getElementById('loginWrapper');
+const appWrapper = document.getElementById('appWrapper');
+const loginForm = document.getElementById('loginForm');
+const loginUsername = document.getElementById('loginUsername');
+const loginPassword = document.getElementById('loginPassword');
+const logoutBtn = document.getElementById('logoutBtn');
+
+// Nav links
+const navLinks = document.querySelectorAll('.nav-link');
+const menuDashboard = document.getElementById('menuDashboard');
+const menuInputForm = document.getElementById('menuInputForm');
+const menuMonitoring = document.getElementById('menuMonitoring');
+const menuRekapitulasi = document.getElementById('menuRekapitulasi');
+
+// Page Title
+const pageTitle = document.getElementById('pageTitle');
+const pageSubtitle = document.getElementById('pageSubtitle');
+
+// User details sidebar
+const userAvatar = document.getElementById('userAvatar');
+const userDisplayName = document.getElementById('userDisplayName');
+const userRoleBadge = document.getElementById('userRoleBadge');
+
+// Top action panels
 const configPanel = document.getElementById('configPanel');
 const toggleConfigBtn = document.getElementById('toggleConfigBtn');
 const apiUrlInput = document.getElementById('apiUrlInput');
 const saveConfigBtn = document.getElementById('saveConfigBtn');
+const useLocalSimBtn = document.getElementById('useLocalSimBtn');
 const connectionStatus = document.getElementById('connectionStatus');
 const refreshBtn = document.getElementById('refreshBtn');
 
-// Nav Tabs
-const tabTabelBtn = document.getElementById('tabTabelBtn');
-const tabAlurBtn = document.getElementById('tabAlurBtn');
-const viewTabel = document.getElementById('viewTabel');
-const viewAlur = document.getElementById('viewAlur');
+// Dashboard Page elements
+const lblMetric1 = document.getElementById('lblMetric1');
+const lblMetric2 = document.getElementById('lblMetric2');
+const lblMetric3 = document.getElementById('lblMetric3');
+const valMetric1 = document.getElementById('valMetric1');
+const valMetric2 = document.getElementById('valMetric2');
+const valMetric3 = document.getElementById('valMetric3');
+const counterEntriesCount = document.getElementById('counterEntriesCount');
+const counterTableBody = document.getElementById('counterTableBody');
+const counterSearchInput = document.getElementById('counterSearchInput');
 
-const valTotal = document.getElementById('valTotal');
-const valPending = document.getElementById('valPending');
-const valSelesai = document.getElementById('valSelesai');
+// Form Input Page elements
+const berkasForm = document.getElementById('berkasForm');
+const formKey = document.getElementById('formKey');
+const formRiwayatPending = document.getElementById('formRiwayatPending');
+const formTanggal = document.getElementById('formTanggal');
+const formOperator = document.getElementById('formOperator');
+const formPemohon = document.getElementById('formPemohon');
+const formNoHp = document.getElementById('formNoHp');
+const formEmail = document.getElementById('formEmail');
+const formIntegrasi = document.getElementById('formIntegrasi');
+const formAlamat = document.getElementById('formAlamat');
+const formJenisLayanan = document.getElementById('formJenisLayanan');
+const formSubLayanan = document.getElementById('formSubLayanan');
+const formLinkFile = document.getElementById('formLinkFile');
+const btnSubmitForm = document.getElementById('btnSubmitForm');
+const btnResetForm = document.getElementById('btnResetForm');
 
-const searchInput = document.getElementById('searchInput');
+// Monitoring Page elements
 const filterFasilitasi = document.getElementById('filterFasilitasi');
-const filterLayanan = document.getElementById('filterLayanan');
-const filterStatus = document.getElementById('filterStatus');
-const entriesCount = document.getElementById('entriesCount');
-const tableBody = document.getElementById('tableBody');
+const monitoringSearchInput = document.getElementById('monitoringSearchInput');
+const monitoringCount = document.getElementById('monitoringCount');
+const monitoringTableBody = document.getElementById('monitoringTableBody');
 
-// Modal Elements
+// Rekapitulasi Page elements
+const rekapTotal = document.getElementById('rekapTotal');
+const rekapSelesai = document.getElementById('rekapSelesai');
+const rekapProses = document.getElementById('rekapProses');
+const rekapTableBody = document.getElementById('rekapTableBody');
+
+// Action Modal elements
 const actionModal = document.getElementById('actionModal');
-const modalKey = document.getElementById('modalKey');
-const modalNama = document.getElementById('modalNama');
-const modalNoAntrean = document.getElementById('modalNoAntrean');
-const modalFasilitasi = document.getElementById('modalFasilitasi');
-const modalStage = document.getElementById('modalStage');
-const modalStatus = document.getElementById('modalStatus');
-const modalKeterangan = document.getElementById('modalKeterangan');
-const actionForm = document.getElementById('actionForm');
+const modalTitle = document.getElementById('modalTitle');
 const closeModalBtn = document.getElementById('closeModalBtn');
 const cancelModalBtn = document.getElementById('cancelModalBtn');
+const actionForm = document.getElementById('actionForm');
+const modalKey = document.getElementById('modalKey');
+const modalKodeText = document.getElementById('modalKodeText');
+const modalPemohonText = document.getElementById('modalPemohonText');
+const modalLayananText = document.getElementById('modalLayananText');
+const standardActionGroup = document.getElementById('standardActionGroup');
+const modalExecuteAction = document.getElementById('modalExecuteAction');
+const tteStatusGroup = document.getElementById('tteStatusGroup');
+const tteStatus = document.getElementById('tteStatus');
+const tteNotesGroup = document.getElementById('tteNotesGroup');
+const tteNotes = document.getElementById('tteNotes');
+const penerimaGroup = document.getElementById('penerimaGroup');
+const modalPenerima = document.getElementById('modalPenerima');
+const modalNotes = document.getElementById('modalNotes');
 const saveModalBtn = document.getElementById('saveModalBtn');
 
-// Initialize Config
-apiUrlInput.value = API_URL;
-updateConnectionStatusText();
+// Toast
+const toast = document.getElementById('toast');
 
-// Tab Switcher Handler
-tabTabelBtn.addEventListener('click', () => switchTab('tabel'));
-tabAlurBtn.addEventListener('click', () => switchTab('alur'));
+// ================= INITIALIZATION & ROUTING =================
+if (apiUrlInput) apiUrlInput.value = API_URL;
+updateConnectionIndicator();
 
-function switchTab(tab) {
-  activeTab = tab;
-  if (tab === 'tabel') {
-    tabTabelBtn.classList.add('active');
-    tabAlurBtn.classList.remove('active');
-    viewTabel.style.display = 'block';
-    viewAlur.style.display = 'none';
-  } else {
-    tabAlurBtn.classList.add('active');
-    tabTabelBtn.classList.remove('active');
-    viewTabel.style.display = 'none';
-    viewAlur.style.display = 'block';
-    renderAlurBoard(allData);
+// Normalisasi Peran (Role) Petugas dari Sheet ke Kode Teknis Sistem
+function normalizeUserRole(rawRole) {
+  if (!rawRole) return 'operator';
+  const str = String(rawRole).trim().toLowerCase();
+  
+  if (str.includes('scan')) return 'petugas_scan';
+  if (str.includes('tte')) return 'petugas_tte';
+  if (str.includes('print') || str.includes('cetak')) return 'petugas_pencetakan';
+  if (str.includes('kadis') || str.includes('kepala dinas')) return 'kadis';
+  if (str.includes('kepala upt') || str.includes('kepala_upt') || str.includes('ka upt') || str.includes('kaupt')) return 'kepala_upt';
+  
+  if (str.includes('kasie') || str.includes('kasi') || str.includes('seksi')) {
+    if (str.includes('capil') || str.includes('sipil')) return 'kasie_capil';
+    return 'kasie_dafduk';
+  }
+  
+  if (str.includes('kabid') || str.includes('bidang')) {
+    if (str.includes('capil') || str.includes('sipil')) return 'kabid_capil';
+    return 'kabid_dafduk';
+  }
+  
+  if (str.includes('operator')) return 'operator';
+  if (str.includes('monitor') || str.includes('pengawas') || str.includes('admin')) return 'monitoring';
+  
+  return str.replace(/\s+/g, '_');
+}
+
+// Cek session login dari sessionStorage
+const savedUser = sessionStorage.getItem('simpel_momen_user');
+if (savedUser) {
+  try {
+    currentUser = JSON.parse(savedUser);
+    if (currentUser && currentUser.role) {
+      currentUser.role = normalizeUserRole(currentUser.role);
+    }
+    setupLoggedInUI();
+  } catch (e) {
+    sessionStorage.removeItem('simpel_momen_user');
   }
 }
 
-// Config Panel Listeners
-toggleConfigBtn.addEventListener('click', () => {
-  const isHidden = configPanel.style.display === 'none';
-  configPanel.style.display = isHidden ? 'block' : 'none';
-});
+const MOCK_PETUGAS = [
+  { username: 'operator_dinas', password: '123456', name: 'Operator Dinas', role: 'operator', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'operator_upt1', password: '123456', name: 'Operator UPT 01', role: 'operator', uptCode: 'UPT-01', fasilitasi: 'UPT' },
+  { username: 'scan_dinas', password: '123456', name: 'Petugas Scan Dinas', role: 'petugas_scan', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'scan_upt1', password: '123456', name: 'Petugas Scan UPT 01', role: 'petugas_scan', uptCode: 'UPT-01', fasilitasi: 'UPT' },
+  { username: 'kepala_upt1', password: '123456', name: 'Kepala UPT 01', role: 'kepala_upt', uptCode: 'UPT-01', fasilitasi: 'UPT' },
+  { username: 'kasie_dafduk', password: '123456', name: 'Kasie Dafduk', role: 'kasie_dafduk', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'kasie_capil', password: '123456', name: 'Kasie Capil', role: 'kasie_capil', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'kabid_dafduk', password: '123456', name: 'Kabid Dafduk', role: 'kabid_dafduk', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'kabid_capil', password: '123456', name: 'Kabid Capil', role: 'kabid_capil', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'kadis', password: '123456', name: 'Kepala Dinas', role: 'kadis', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'tte_dinas', password: '123456', name: 'Petugas TTE', role: 'petugas_tte', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'print_dinas', password: '123456', name: 'Petugas Cetak Dinas', role: 'petugas_pencetakan', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'print_upt1', password: '123456', name: 'Petugas Cetak UPT 01', role: 'petugas_pencetakan', uptCode: 'UPT-01', fasilitasi: 'UPT' }
+];
 
-saveConfigBtn.addEventListener('click', () => {
-  const url = apiUrlInput.value.trim();
-  if (!url) {
-    showToast('Silakan masukkan URL API yang valid!', 'error');
-    return;
-  }
+// Event: Login Submit (Mendukung Login Online & Fallback Offline)
+if (loginForm) {
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const usernameVal = loginUsername.value.trim().toLowerCase();
+    const passwordVal = loginPassword.value.trim();
+    
+    const submitBtn = loginForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn ? submitBtn.textContent : 'Masuk';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Memverifikasi...';
+    }
+    
+    try {
+      if (API_URL === 'local') {
+        const user = MOCK_PETUGAS.find(u => {
+          const uName = u.username.toLowerCase();
+          const nameVal = u.name.toLowerCase();
+          const roleVal = u.role.toLowerCase();
+          return (uName === usernameVal || nameVal === usernameVal || roleVal === usernameVal) && (u.password === passwordVal || passwordVal === '123456');
+        });
+        if (user) {
+          currentUser = {
+            username: user.username,
+            name: user.name,
+            role: user.role,
+            uptCode: user.uptCode,
+            fasilitasi: user.fasilitasi,
+            sessionToken: 'local_token'
+          };
+          sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+          setupLoggedInUI();
+          showToast(`Selamat datang, ${currentUser.name}!`, 'success');
+        } else {
+          showToast('Username atau password tidak ditemukan!', 'error');
+        }
+      } else {
+        // Login Online via Google Sheets Apps Script API
+        try {
+          const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'text/plain;charset=utf-8'
+            },
+            body: JSON.stringify({
+              action: 'login',
+              username: usernameVal,
+              password: passwordVal
+            })
+          });
+          const result = await response.json();
+          if (result.status === 'success') {
+            currentUser = result.data;
+            if (currentUser && currentUser.role) {
+              currentUser.role = normalizeUserRole(currentUser.role);
+            }
+            sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+            setupLoggedInUI();
+            showToast(`Selamat datang, ${currentUser.name}!`, 'success');
+          } else {
+            showToast(result.message || 'Username atau password tidak cocok!', 'error');
+          }
+        } catch (fetchErr) {
+          console.warn('Koneksi online Apps Script gagal, menggunakan fallback akun demo...', fetchErr);
+          const user = MOCK_PETUGAS.find(u => {
+            const uName = u.username.toLowerCase();
+            const nameVal = u.name.toLowerCase();
+            const roleVal = u.role.toLowerCase();
+            return (uName === usernameVal || nameVal === usernameVal || roleVal === usernameVal) && (u.password === passwordVal || passwordVal === '123456');
+          });
+          if (user) {
+            currentUser = {
+              username: user.username,
+              name: user.name,
+              role: user.role,
+              uptCode: user.uptCode,
+              fasilitasi: user.fasilitasi,
+              sessionToken: 'local_token'
+            };
+            sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+            setupLoggedInUI();
+            showToast(`Selamat datang, ${currentUser.name}! (Mode Offline Cadangan)`, 'warning');
+          } else {
+            showToast('Gagal terhubung ke database dan akun tidak ditemukan!', 'error');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error saat login:', error);
+      showToast('Terjadi kesalahan saat login!', 'error');
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+      }
+    }
+  });
+}
+
+// Event: Logout
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', () => {
+    sessionStorage.removeItem('simpel_momen_user');
+    currentUser = null;
+    appWrapper.style.display = 'none';
+    loginWrapper.style.display = 'flex';
+  });
+}
+
+// Setup UI User Sesudah Login
+function setupLoggedInUI() {
+  if (!currentUser) return;
   
-  localStorage.setItem('simpel_momen_api_url', url);
-  API_URL = url;
-  updateConnectionStatusText();
-  showToast('Konfigurasi API diperbarui!', 'success');
-  loadData();
-});
-
-refreshBtn.addEventListener('click', () => {
-  loadData();
-  showToast('Memperbarui data...', 'success');
-});
-
-// Filter & Search Events
-searchInput.addEventListener('input', applyFilters);
-filterFasilitasi.addEventListener('change', applyFilters);
-filterLayanan.addEventListener('change', applyFilters);
-filterStatus.addEventListener('change', applyFilters);
-
-// Modal Close Events
-closeModalBtn.addEventListener('click', closeModal);
-cancelModalBtn.addEventListener('click', closeModal);
-window.addEventListener('click', (e) => {
-  if (e.target === actionModal) closeModal();
-});
-
-// Form Submit (Update Status, Fasilitasi, Stage & Keterangan)
-actionForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
+  loginWrapper.style.display = 'none';
+  appWrapper.style.display = 'flex';
   
-  const key = modalKey.value;
-  const fasilitasi = modalFasilitasi.value;
-  const stage = modalStage.value;
-  const status = modalStatus.value;
-  const keterangan = modalKeterangan.value;
+  userDisplayName.textContent = currentUser.name;
   
-  saveModalBtn.disabled = true;
-  saveModalBtn.textContent = 'Menyimpan...';
-  
-  const payload = {
-    action: 'update',
-    key: key,
-    fasilitasi: fasilitasi,
-    stage: stage,
-    status: status,
-    keterangan: keterangan
+  const initials = currentUser.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  userAvatar.textContent = initials || 'OP';
+
+  const roleTitleMap = {
+    'operator': `Operator ${currentUser.fasilitasi} ${currentUser.uptCode || ''}`.trim(),
+    'petugas_scan': `Petugas Scan ${currentUser.fasilitasi} ${currentUser.uptCode || ''}`.trim(),
+    'kasie_dafduk': 'Kasie Dafduk Dinas',
+    'kasie_capil': 'Kasie Capil Dinas',
+    'kepala_upt': `Kepala ${currentUser.uptCode || 'UPT'}`,
+    'kabid_dafduk': 'Kabid Dafduk',
+    'kabid_capil': 'Kabid Capil',
+    'kadis': 'Kepala Dinas (Kadis)',
+    'petugas_tte': 'Petugas TTE Dinas',
+    'petugas_pencetakan': `Petugas Cetak ${currentUser.fasilitasi} ${currentUser.uptCode || ''}`.trim(),
+    'monitoring': `Monitoring ${currentUser.fasilitasi}`
   };
-  
+
+  userRoleBadge.textContent = roleTitleMap[currentUser.role] || currentUser.role;
+
+  if (currentUser.role === 'operator') {
+    menuInputForm.style.display = 'flex';
+    formOperator.value = currentUser.name;
+  } else {
+    menuInputForm.style.display = 'none';
+  }
+
+  switchPage('dashboard');
+  loadData();
+}
+
+// Switch Sidebar Pages
+function switchPage(pageId) {
+  navLinks.forEach(link => {
+    if (link.getAttribute('data-page') === pageId) {
+      link.classList.add('active');
+    } else {
+      link.classList.remove('active');
+    }
+  });
+
+  document.querySelectorAll('.page-container').forEach(page => {
+    if (page.id === `page-${pageId}`) {
+      page.style.display = 'block';
+    } else {
+      page.style.display = 'none';
+    }
+  });
+
+  if (pageId === 'dashboard') {
+    pageTitle.textContent = `Kerja Counter: ${currentUser ? currentUser.name : ''}`;
+    pageSubtitle.textContent = `Daftar dokumen antrean pelayanan yang membutuhkan tindakan Anda.`;
+  } else if (pageId === 'input-form') {
+    pageTitle.textContent = `Pendaftaran Berkas Baru`;
+    pageSubtitle.textContent = `Operator ${currentUser ? currentUser.fasilitasi : ''} - Input formulir digital pelayanan.`;
+  } else if (pageId === 'monitoring') {
+    pageTitle.textContent = `Monitoring Alur Pelayanan`;
+    pageSubtitle.textContent = `Lacak perjalanan dan verifikasi dokumen secara real-time.`;
+    renderMonitoringTable();
+  } else if (pageId === 'rekapitulasi') {
+    pageTitle.textContent = `Rekapitulasi Pelayanan`;
+    pageSubtitle.textContent = `Laporan statistik berkas masuk, dalam alur, dan selesai dicetak.`;
+    renderRekapitulasi();
+  }
+}
+
+navLinks.forEach(link => {
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    const pageId = link.getAttribute('data-page');
+    switchPage(pageId);
+  });
+});
+
+if (refreshBtn) {
+  refreshBtn.addEventListener('click', () => {
+    loadData();
+    showToast('Memperbarui data antrean...', 'success');
+  });
+}
+
+if (counterSearchInput) {
+  counterSearchInput.addEventListener('input', renderCounterDesk);
+}
+
+if (monitoringSearchInput) {
+  monitoringSearchInput.addEventListener('input', renderMonitoringTable);
+}
+
+if (filterFasilitasi) {
+  filterFasilitasi.addEventListener('change', () => {
+    renderMonitoringTable();
+    if (currentUser && currentUser.role === 'kadis') {
+      renderCounterDesk();
+    }
+  });
+}
+
+function updateConnectionIndicator() {
+  if (!connectionStatus) return;
+  if (API_URL === 'local') {
+    connectionStatus.innerHTML = '<span class="status-indicator offline" style="background:var(--danger); box-shadow: 0 0 8px var(--danger);"></span> Mode Simulasi Browser Offline.';
+  } else {
+    connectionStatus.innerHTML = '<span class="status-indicator online"></span> 🟢 Terhubung ke live jembatan Google Sheets asli.';
+  }
+}
+
+// Check Single Device Token Online
+async function checkSessionTokenOnline() {
+  if (!currentUser || API_URL === 'local' || !currentUser.sessionToken || !currentUser.username) {
+    return true;
+  }
   try {
     const response = await fetch(API_URL, {
       method: 'POST',
-      mode: 'cors',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8'
-      },
-      body: JSON.stringify(payload)
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'check_session',
+        username: currentUser.username,
+        sessionToken: currentUser.sessionToken
+      })
     });
-    
-    if (!response.ok) throw new Error('Gagal memperbarui status di server.');
-    
     const result = await response.json();
-    if (result.status === 'success') {
-      showToast('Status & Tahap Alur berhasil diperbarui!', 'success');
-      closeModal();
-      loadData();
-    } else {
-      throw new Error(result.message || 'Gagal memperbarui data.');
+    if (result.status === 'expired') {
+      showToast('Akun Anda telah masuk di perangkat lain! Menutup sesi...', 'error');
+      setTimeout(() => {
+        sessionStorage.removeItem('simpel_momen_user');
+        currentUser = null;
+        appWrapper.style.display = 'none';
+        loginWrapper.style.display = 'flex';
+      }, 2500);
+      return false;
     }
   } catch (error) {
-    console.error(error);
-    showToast('Permintaan dikirim! Memperbarui dasbor...', 'success');
-    closeModal();
-    setTimeout(loadData, 1500);
-  } finally {
-    saveModalBtn.disabled = false;
-    saveModalBtn.textContent = 'Simpan Ke Spreadsheet';
+    console.warn('Gagal memverifikasi token sesi login:', error);
   }
-});
-
-function updateConnectionStatusText() {
-  const isMock = API_URL.includes('localhost') || API_URL.includes('127.0.0.1');
-  const indicator = connectionStatus.querySelector('.status-indicator');
-  
-  if (isMock) {
-    indicator.className = 'status-indicator offline';
-    connectionStatus.innerHTML = '<span class="status-indicator offline"></span> Menghubungkan ke server simulasi lokal.';
-  } else {
-    indicator.className = 'status-indicator online';
-    connectionStatus.innerHTML = '<span class="status-indicator online"></span> Terhubung ke jembatan Google Sheets asli.';
-  }
+  return true;
 }
 
-function showToast(message, type = 'success') {
-  const toast = document.getElementById('toast');
-  toast.textContent = message;
-  toast.className = `toast ${type} show`;
-  
-  setTimeout(() => {
-    toast.className = 'toast';
-  }, 3000);
-}
-
-// Fetch Data
+// ================= DATA FETCHER & RENDERING =================
 async function loadData() {
-  tableBody.innerHTML = Array(5).fill(0).map(() => `
-    <tr>
-      <td><div class="skeleton"></div></td>
-      <td><div class="skeleton"></div></td>
-      <td><div class="skeleton"></div></td>
-      <td><div class="skeleton"></div></td>
-      <td><div class="skeleton"></div></td>
-      <td><div class="skeleton"></div></td>
-      <td><div class="skeleton"></div></td>
-      <td><div class="skeleton"></div></td>
-      <td><div class="skeleton"></div></td>
-    </tr>
-  `).join('');
+  const isSessionValid = await checkSessionTokenOnline();
+  if (!isSessionValid) return;
+
+  if (counterTableBody) {
+    counterTableBody.innerHTML = Array(3).fill(0).map(() => `
+      <tr>
+        <td><div class="skeleton" style="height:20px; background:rgba(255,255,255,0.05); border-radius:4px;"></div></td>
+        <td><div class="skeleton" style="height:20px; background:rgba(255,255,255,0.05); border-radius:4px;"></div></td>
+        <td><div class="skeleton" style="height:20px; background:rgba(255,255,255,0.05); border-radius:4px;"></div></td>
+        <td><div class="skeleton" style="height:20px; background:rgba(255,255,255,0.05); border-radius:4px;"></div></td>
+        <td><div class="skeleton" style="height:20px; background:rgba(255,255,255,0.05); border-radius:4px;"></div></td>
+        <td><div class="skeleton" style="height:20px; background:rgba(255,255,255,0.05); border-radius:4px;"></div></td>
+        <td><div class="skeleton" style="height:20px; background:rgba(255,255,255,0.05); border-radius:4px;"></div></td>
+      </tr>
+    `).join('');
+  }
+  
+  if (API_URL === 'local') {
+    allData = getLocalDB();
+    populateFasilitasiFilterOptions();
+    renderCounterDesk();
+    renderMonitoringTable();
+    renderRekapitulasi();
+    return;
+  }
   
   try {
     const response = await fetch(API_URL);
-    if (!response.ok) throw new Error('Gagal mengambil data.');
-    
+    if (!response.ok) throw new Error('Gagal memuat data');
     const resJson = await response.json();
-    let rawRows = [];
     
     if (resJson.status === 'success' && Array.isArray(resJson.data)) {
-      rawRows = resJson.data;
+      allData = resJson.data;
     } else if (Array.isArray(resJson)) {
-      rawRows = resJson;
+      allData = resJson;
+    } else {
+      allData = [];
     }
     
-    allData = rawRows.map((row, idx) => {
-      const noAntrian = row.no_antrian || row['No. Antrean'] || row['No Antrean'] || row.no || row.antrean || idx + 1;
-      const tanggal = row.tanggal || row.waktu || row.Tanggal || row.Timestamp || '-';
-      const nama = row.nama || row['Nama Pemohon'] || row.nama_pemohon || '-';
-      const layanan = row.layanan || row['Jenis Layanan'] || row.layanan_id || '-';
-      const fasilitasi = row.fasilitasi || row.lokasi || row['Fasilitasi / Lokasi'] || 'Fasilitasi Dinas';
-      const stage = row.stage || row.posisi_alur || row.tahap || 'Kadis';
-      const status = row.status || row.Status || 'Pending';
-      const keterangan = row.keterangan || row.Catatan || row['Catatan / Keterangan'] || '';
-      
-      const key = `${noAntrian}_${nama}_${tanggal}`.replace(/\s+/g, '_');
-      
-      return { noAntrian, tanggal, nama, layanan, fasilitasi, stage, status, keterangan, key };
-    });
-    
-    calculateMetrics(allData);
     populateFasilitasiFilterOptions();
-    applyFilters();
-    if (activeTab === 'alur') renderAlurBoard(allData);
+    renderCounterDesk();
+    renderMonitoringTable();
+    renderRekapitulasi();
   } catch (error) {
-    console.error(error);
-    tableBody.innerHTML = `
-      <tr>
-        <td colspan="9" class="text-center text-muted" style="color: var(--danger); padding: 2rem;">
-          ❌ Gagal memuat data antrean. Pastikan URL API dikonfigurasi dengan benar.
-        </td>
-      </tr>
-    `;
-    valTotal.textContent = '-';
-    valPending.textContent = '-';
-    valSelesai.textContent = '-';
+    console.error('Gagal mengambil data dari Google Sheets:', error);
+    showToast('Koneksi ke Google Sheets terganggu. Menampilkan data cadangan sementara.', 'warning');
+    allData = getLocalDB();
+    populateFasilitasiFilterOptions();
+    renderCounterDesk();
+    renderMonitoringTable();
+    renderRekapitulasi();
   }
 }
 
-function calculateMetrics(data) {
-  valTotal.textContent = data.length;
-  valPending.textContent = data.filter(item => String(item.status).trim().toLowerCase() === 'pending').length;
-  valSelesai.textContent = data.filter(item => String(item.status).trim().toLowerCase() === 'selesai').length;
-}function populateFasilitasiFilterOptions() {
+function populateFasilitasiFilterOptions() {
   if (!filterFasilitasi) return;
   const currentVal = filterFasilitasi.value;
   
   const uptSet = new Set();
   if (Array.isArray(allData)) {
     allData.forEach(item => {
-      const op = String(item.operator || "");
       const fas = String(item.fasilitasi || "");
-      const match = op.match(/UPT[-\s]?\d+/i) || fas.match(/UPT[-\s]?\d+/i);
-      if (match) {
-        uptSet.add(match[0].toUpperCase().replace(/\s+/, '-'));
+      if (fas.toLowerCase().includes('upt')) {
+        uptSet.add('UPT');
+      } else {
+        uptSet.add('Dinas');
       }
     });
   }
   
-  let html = `
-    <option value="ALL">🌐 Semua Fasilitasi (Dinas & UPT)</option>
-    <option value="Dinas">🏢 Khusus Fasilitasi Dinas</option>
-    <option value="UPT">🏛️ Khusus Semua UPT</option>
-  `;
-  
-  uptSet.forEach(upt => {
-    html += `<option value="${upt}">📍 Khusus ${upt}</option>`;
+  let html = `<option value="ALL">🌐 Semua Fasilitasi</option>`;
+  uptSet.forEach(val => {
+    html += `<option value="${val}">${val}</option>`;
   });
   
   filterFasilitasi.innerHTML = html;
   filterFasilitasi.value = currentVal || "ALL";
 }
 
-function applyFilters() {
-  const searchVal = searchInput.value.toLowerCase().trim();
-  const fasilitasiVal = filterFasilitasi.value;
-  const layananVal = filterLayanan.value;
-  const statusVal = filterStatus.value;
-  
-  const filtered = allData.filter(item => {
-    const matchSearch = String(item.nama || item.pemohon || "").toLowerCase().includes(searchVal) || 
-                        String(item.noAntrian || item.key || "").toLowerCase().includes(searchVal);
-                        
-    let matchFasilitasi = true;
-    if (fasilitasiVal !== 'ALL') {
-      const itemFas = String(item.fasilitasi || "").toLowerCase();
-      const itemOp = String(item.operator || "").toLowerCase();
-      const filterLow = fasilitasiVal.toLowerCase();
-      
-      if (filterLow === 'dinas' || filterLow === 'fasilitasi dinas') {
-        matchFasilitasi = itemFas.includes('dinas') || (!itemFas.includes('upt') && !itemOp.includes('upt'));
-      } else if (filterLow === 'upt') {
-        matchFasilitasi = itemFas.includes('upt') || itemOp.includes('upt');
-      } else {
-        const cleanFilter = filterLow.replace(/[^a-z0-9]/g, '');
-        const cleanItemFas = itemFas.replace(/[^a-z0-9]/g, '');
-        const cleanItemOp = itemOp.replace(/[^a-z0-9]/g, '');
-        matchFasilitasi = cleanItemFas.includes(cleanFilter) || cleanItemOp.includes(cleanFilter);
-      }
-    }
-
-    const matchLayanan = layananVal === 'ALL' || String(item.layanan || item.jenis_layanan || "").toLowerCase().includes(layananVal.toLowerCase());
-    const matchStatus = statusVal === 'ALL' || String(item.status || item.status_alur || "").trim().toLowerCase().includes(statusVal.toLowerCase());
-    
-    return matchSearch && matchFasilitasi && matchLayanan && matchStatus;
-  });
-  
-  entriesCount.textContent = `Menampilkan ${filtered.length} dari ${allData.length} data`;
-  renderTable(filtered);
-}
-
-function renderTable(rows) {
-  if (rows.length === 0) {
-    tableBody.innerHTML = `
-      <tr>
-        <td colspan="9" class="text-center text-muted" style="padding: 2rem;">
-          Tidak ada data antrean yang cocok dengan filter pencarian.
-        </td>
-      </tr>
-    `;
-    return;
-  }
-  
-  tableBody.innerHTML = rows.map((row) => {
-    const statusClass = String(row.status).trim().toLowerCase() === 'selesai' ? 'selesai' : 'pending';
-    const fasilitasiClass = String(row.fasilitasi).trim().toLowerCase().includes('upt') ? 'badge-upt' : 'fasilitasi-dinas';
-    
-    return `
-      <tr>
-        <td style="font-weight: 700; font-family: var(--font-title); color: #3b82f6;">${escapeHTML(row.noAntrian)}</td>
-        <td style="white-space: nowrap; font-size: 0.85rem; color: var(--text-muted);">${formatDate(row.tanggal)}</td>
-        <td style="font-weight: 500; color: #fff;">${escapeHTML(row.nama)}</td>
-        <td>${escapeHTML(row.layanan)}</td>
-        <td>
-          <span class="badge ${fasilitasiClass}">${escapeHTML(row.fasilitasi)}</span>
         </td>
         <td style="font-weight: 600; color: #a78bfa;">${escapeHTML(row.stage)}</td>
         <td>

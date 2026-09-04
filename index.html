@@ -47,478 +47,372 @@
 
   <!-- ================= LAYOUT 2: MAIN PANEL APLIKASI ================= -->
   <div class="app-wrapper" id="appWrapper" style="display: none;">
-    
-    <!-- Sidebar -->
+    <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <img src="logo.png" class="brand-logo-img sidebar-logo" alt="Logo Dukcapil">
-        <div class="brand-text">
-          <h3>Simpel Momen</h3>
-          <p>Dukcapil Service</p>
+        <img src="logo.png" class="brand-logo-img sidebar-logo" alt="Logo">
+        <div class="brand-title-wrap">
+          <span class="brand-name">Simpel Momen</span>
+          <span class="brand-tagline">Pelayanan Berjenjang</span>
         </div>
       </div>
       
-      <div class="user-profile">
-        <div class="avatar" id="userAvatar">U</div>
-        <div class="user-info">
-          <h4 id="userRoleName">Operator Dinas</h4>
-          <span class="badge" id="userRoleBadge">Dinas</span>
-        </div>
-      </div>
-      
-      <nav class="sidebar-nav">
-        <ul>
-          <li>
-            <a href="#" class="nav-link active" data-page="dashboard" id="menuDashboard">
-              <span class="icon">📋</span> Kerja Counter
-            </a>
-          </li>
-          <li>
-            <a href="#" class="nav-link" data-page="input-form" id="menuInputForm">
-              <span class="icon">✏️</span> Input Berkas Baru
-            </a>
-          </li>
-          <li>
-            <a href="#" class="nav-link" data-page="monitoring" id="menuMonitoring">
-              <span class="icon">🔍</span> Monitoring Alur
-            </a>
-          </li>
-          <li>
-            <a href="#" class="nav-link" data-page="rekapitulasi" id="menuRekapitulasi">
-              <span class="icon">📊</span> Rekap & Laporan
-            </a>
-          </li>
-        </ul>
+      <nav class="sidebar-menu">
+        <a href="#" class="nav-link active" data-page="dashboard" id="menuDashboard">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">Kerja Counter</span>
+        </a>
+        <a href="#" class="nav-link" data-page="input-form" id="menuInputForm">
+          <span class="nav-icon">📝</span>
+          <span class="nav-text">Pendaftaran Berkas</span>
+        </a>
+        <a href="#" class="nav-link" data-page="monitoring" id="menuMonitoring">
+          <span class="nav-icon">🔍</span>
+          <span class="nav-text">Monitoring Alur</span>
+        </a>
+        <a href="#" class="nav-link" data-page="rekapitulasi" id="menuRekapitulasi">
+          <span class="nav-icon">📈</span>
+          <span class="nav-text">Rekapitulasi</span>
+        </a>
       </nav>
-      
-      <div class="sidebar-footer">
-        <button class="btn btn-danger btn-block" id="logoutBtn">🚪 Keluar</button>
+
+      <div class="sidebar-user">
+        <div class="user-avatar" id="userAvatar">OP</div>
+        <div class="user-details">
+          <span class="user-name" id="userDisplayName">Operator</span>
+          <span class="user-role-badge" id="userRoleBadge">Operator</span>
+        </div>
+        <button class="btn-logout" id="logoutBtn" title="Keluar dari Akun">🚪</button>
       </div>
     </aside>
 
-    <!-- Content Area -->
-    <main class="content-area">
-      
-      <!-- Top Header -->
-      <header class="content-header">
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Navbar Header -->
+      <header class="top-header">
         <div class="header-title">
-          <h1 id="pageTitle">Kerja Counter</h1>
-          <p id="pageSubtitle">Daftar antrean dokumen yang menunggu eksekusi di meja Anda</p>
+          <h1 id="pageTitle">Kerja Counter Desk</h1>
+          <p id="pageSubtitle">Monitoring dan verifikasi alur pergerakan berkas</p>
         </div>
         <div class="header-actions">
           <button class="btn btn-primary" id="refreshBtn">🔄 Segarkan Data</button>
         </div>
       </header>
 
-      <!-- Config Panel (Google Sheets / Local server) -->
-      <section class="card config-panel" id="configPanel" style="display: none;">
-        <div class="config-header">
-          <h3>🔧 Pengaturan Jembatan Database (Google Sheets)</h3>
-          <span class="close-config" id="closeConfigBtn">&times;</span>
-        </div>
-        <p>Hubungkan aplikasi ini dengan spreadsheet asli menggunakan URL Web App dari Google Apps Script.</p>
+      <!-- Config Panel (Hidden by Default) -->
+      <section class="card config-panel" id="configPanel" style="display: none; margin: 1rem 2rem 0 2rem;">
+        <h3>🔧 Konfigurasi Jembatan Database (API)</h3>
+        <p>URL Web App Google Sheets Anda untuk menghubungkan data asli secara real-time.</p>
         <div class="config-input-group">
           <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
           <button class="btn btn-success" id="saveConfigBtn">Hubungkan</button>
           <button class="btn btn-secondary" id="useLocalSimBtn">Gunakan Simulasi Browser</button>
         </div>
         <div class="connection-status" id="connectionStatus">
-          <span class="status-indicator offline"></span> Menggunakan database simulasi lokal (`db.json`).
+          <span class="status-indicator offline"></span> Menggunakan database simulasi lokal.
         </div>
       </section>
 
-      <!-- ================= PAGE 1: WORK DESK / DASHBOARD COUNTER ================= -->
-      <div class="page-container" id="page-dashboard">
-        <!-- Dashboard Metrics -->
-        <div class="metrics-grid">
-          <div class="metric-card card blue">
-            <div class="metric-info">
-              <span class="metric-label" id="lblMetric1">Berkas Masuk Meja</span>
-              <span class="metric-value" id="valMetric1">0</span>
+      <!-- Content Pages Container -->
+      <div class="content-body">
+        <!-- ================= PAGE 1: WORK DESK / DASHBOARD COUNTER ================= -->
+        <div class="page-container" id="page-dashboard">
+          <!-- Dashboard Metrics -->
+          <div class="metrics-grid">
+            <div class="metric-card card blue">
+              <div class="metric-info">
+                <span class="metric-label" id="lblMetric1">Berkas Masuk Meja</span>
+                <span class="metric-value" id="valMetric1">0</span>
+              </div>
+              <div class="metric-icon">📂</div>
             </div>
-            <div class="metric-icon">📂</div>
+            <div class="metric-card card amber">
+              <div class="metric-info">
+                <span class="metric-label" id="lblMetric2">Sedang Pending</span>
+                <span class="metric-value" id="valMetric2">0</span>
+              </div>
+              <div class="metric-icon">⏳</div>
+            </div>
+            <div class="metric-card card emerald">
+              <div class="metric-info">
+                <span class="metric-label" id="lblMetric3">Total Berkas Selesai</span>
+                <span class="metric-value" id="valMetric3">0</span>
+              </div>
+              <div class="metric-icon">✅</div>
+            </div>
           </div>
-          <div class="metric-card card amber">
-            <div class="metric-info">
-              <span class="metric-label" id="lblMetric2">Sedang Pending</span>
-              <span class="metric-value" id="valMetric2">0</span>
+
+          <!-- Desk Table -->
+          <div class="card table-card">
+            <div class="table-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
+              <div>
+                <h2 style="margin:0;">Dokumen Antrean di Meja Anda</h2>
+                <span class="entries-count" id="counterEntriesCount">Menampilkan 0 berkas</span>
+              </div>
+              <div style="flex: 1; max-width: 380px;">
+                <input type="text" id="counterSearchInput" placeholder="🔍 Cari nama pemohon, kode antrean, no HP..." style="width: 100%; padding: 9px 14px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
+              </div>
             </div>
-            <div class="metric-icon">⏳</div>
-          </div>
-          <div class="metric-card card emerald">
-            <div class="metric-info">
-              <span class="metric-label" id="lblMetric3">Total Berkas Selesai</span>
-              <span class="metric-value" id="valMetric3">0</span>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Kode Berkas</th>
+                    <th>Tanggal</th>
+                    <th>Nama Pemohon</th>
+                    <th>Jenis Layanan</th>
+                    <th>Integrasi</th>
+                    <th>Status Workflow</th>
+                    <th class="text-center">Tindakan</th>
+                  </tr>
+                </thead>
+                <tbody id="counterTableBody">
+                  <tr>
+                    <td colspan="7" class="text-center text-muted">Memuat data...</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <div class="metric-icon">✅</div>
           </div>
         </div>
 
-        <!-- Desk Table -->
-        <div class="card table-card">
-          <div class="table-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
-            <div>
-              <h2 style="margin:0;">Dokumen Antrean di Meja Anda</h2>
-              <span class="entries-count" id="counterEntriesCount">Menampilkan 0 berkas</span>
+        <!-- ================= PAGE 2: FORM PENDAFTARAN BERKAS (OPERATOR) ================= -->
+        <div class="page-container" id="page-input-form" style="display: none;">
+          <div class="card form-card">
+            <div class="card-header">
+              <h2>Formulir Pendaftaran Berkas Baru</h2>
+              <p>Isikan data permohonan pemohon dengan akurat untuk memulai alur pelayanan berjenjang.</p>
             </div>
-            <div style="flex: 1; max-width: 380px;">
-              <input type="text" id="counterSearchInput" placeholder="🔍 Cari nama pemohon, kode antrean, no HP..." style="width: 100%; padding: 9px 14px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
-            </div>
-          </div>
-          <div class="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Kode Berkas</th>
-                  <th>Tanggal</th>
-                  <th>Nama Pemohon</th>
-                  <th>Jenis Layanan</th>
-                  <th>Integrasi</th>
-                  <th>Status Workflow</th>
-                  <th class="text-center">Tindakan</th>
-                </tr>
-              </thead>
-              <tbody id="counterTableBody">
-                <tr>
-                  <td colspan="7" class="text-center text-muted">Memuat data...</td>
-                </tr>
-              </tbody>
-            </table>
+            
+            <form id="berkasForm">
+              <input type="hidden" id="formKey">
+              <input type="hidden" id="formRiwayatPending">
+              
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="formTanggal">Tanggal Permohonan *</label>
+                  <input type="date" id="formTanggal" required>
+                </div>
+                
+                <div class="form-group">
+                  <label for="formOperator">Nama Operator *</label>
+                  <input type="text" id="formOperator" readonly style="width: 100%; padding: 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.9rem;" required>
+                </div>
+                
+                <div class="form-group">
+                  <label for="formPemohon">Nama Pemohon / Warga *</label>
+                  <input type="text" id="formPemohon" placeholder="Masukkan nama lengkap pemohon..." required>
+                </div>
+                
+                <div class="form-group">
+                  <label for="formNoHp">Nomor HP / WA Pemohon *</label>
+                  <input type="text" id="formNoHp" placeholder="08xxxxxxxxxx" required>
+                </div>
+                
+                <div class="form-group">
+                  <label for="formEmail">Alamat Email (Opsional)</label>
+                  <input type="email" id="formEmail" placeholder="contoh@email.com">
+                </div>
+                
+                <div class="form-group">
+                  <label for="formIntegrasi">Status Integrasi Berkas *</label>
+                  <select id="formIntegrasi" required>
+                    <option value="Non Integrasi">Non Integrasi (Single Dokumentasi)</option>
+                    <option value="Integrasi">Integrasi Paket (Multi Dokumen)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 15px;">
+                <label for="formAlamat">Alamat Pemohon *</label>
+                <textarea id="formAlamat" rows="2" placeholder="Isikan alamat lengkap pemohon..." required></textarea>
+              </div>
+
+              <div class="form-grid" style="margin-top: 15px;">
+                <div class="form-group">
+                  <label for="formJenisLayanan">Kategori Utama Layanan *</label>
+                  <select id="formJenisLayanan" required>
+                    <option value="Pendaftaran Penduduk">Pendaftaran Penduduk (Dafduk)</option>
+                    <option value="Pencatatan Sipil">Pencatatan Sipil (Capil)</option>
+                  </select>
+                </div>
+                
+                <div class="form-group">
+                  <label for="formSubLayanan">Sub Jenis Layanan *</label>
+                  <select id="formSubLayanan" required>
+                    <!-- Populated dynamically -->
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 15px;">
+                <label for="formLinkFile">Link Berkas Scan PDF / Cloud (Opsional)</label>
+                <input type="url" id="formLinkFile" placeholder="https://drive.google.com/file/d/...">
+              </div>
+
+              <div class="form-actions" style="margin-top: 25px; display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary" id="btnSubmitForm">🚀 Daftarkan & Kirim ke Scan</button>
+                <button type="button" class="btn btn-secondary" id="btnResetForm">🔄 Reset Formulir</button>
+              </div>
+            </form>
           </div>
         </div>
-      </div>
 
-      <!-- ================= PAGE 2: FORM INPUT BARU ================= -->
-      <div class="page-container" id="page-input-form" style="display: none;">
-        <div class="card form-card">
-          <div class="form-header">
-            <h2>Formulir Pendaftaran Berkas Baru</h2>
-            <p>Masukkan data pemohon secara lengkap. Semua kolom bertanda bintang (*) bersifat mandatori.</p>
-          </div>
-          
-          <form id="berkasForm">
-            <!-- Hidden key for editing pending data -->
-            <input type="hidden" id="formKey" value="">
-            <input type="hidden" id="formRiwayatPending" value="">
-
-            <div id="formPendingReasonGroup" style="display: none; margin-bottom: 20px; padding: 15px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: var(--radius-md); color: #fff;">
-              <h4 style="color: var(--danger); margin-bottom: 5px; display: flex; align-items: center; gap: 8px;">
-                ⚠️ Catatan Pengembalian (Pending)
-              </h4>
-              <p id="formPendingReasonText" style="font-size: 0.9rem; line-height: 1.4; color: var(--text-muted);"></p>
-            </div>
-
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="formTanggal">Tanggal Pendaftaran *</label>
-                <input type="date" id="formTanggal" required>
+        <!-- ================= PAGE 3: MONITORING ALL ALUR BERKAS ================= -->
+        <div class="page-container" id="page-monitoring" style="display: none;">
+          <div class="card table-card">
+            <div class="table-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
+              <div>
+                <h2 style="margin:0;">Lacak & Monitoring Alur Berkas</h2>
+                <span class="entries-count" id="monitoringCount">Menampilkan 0 berkas</span>
               </div>
-
-              <div class="form-group">
-                <label for="formOperator">Nama Operator *</label>
-                <input type="text" id="formOperator" readonly style="width: 100%; padding: 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.9rem;" required>
-              </div>
-            </div>
-
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="formPemohon">Nama Pemohon *</label>
-                <input type="text" id="formPemohon" placeholder="Masukkan nama lengkap pemohon..." required>
-              </div>
-
-              <div class="form-group">
-                <label for="formNoHp">No. HP / WhatsApp *</label>
-                <input type="text" id="formNoHp" placeholder="Contoh: 081234567890..." required>
-              </div>
-            </div>
-
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="formEmail">Email Pemohon *</label>
-                <input type="email" id="formEmail" placeholder="Contoh: pemohon@email.com..." required>
-              </div>
-
-              <div class="form-group">
-                <label for="formIntegrasi">Integrasi Layanan *</label>
-                <select id="formIntegrasi" required>
-                  <option value="tunggal">Tunggal</option>
-                  <option value="Dafduk - Capil">Dafduk - Capil</option>
-                  <option value="Dafduk - Dafduk">Dafduk - Dafduk</option>
+              <div style="display: flex; gap: 10px; flex-wrap: wrap; flex: 1; max-width: 600px; justify-content: flex-end;">
+                <select id="filterFasilitasi" title="Filter Lokasi Fasilitasi" style="padding: 8px 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
+                  <option value="ALL">🌐 Semua Fasilitasi (Dinas & UPT)</option>
+                  <option value="Dinas">🏢 Khusus Fasilitasi Dinas</option>
+                  <option value="UPT">🏛️ Khusus Semua UPT</option>
                 </select>
+                <input type="text" id="monitoringSearchInput" placeholder="🔍 Cari nama / kode antrean..." style="flex: 1; min-width: 180px; padding: 8px 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
               </div>
             </div>
-
-            <div class="form-group">
-              <label for="formAlamat">Alamat Lengkap Pemohon *</label>
-              <textarea id="formAlamat" rows="2" placeholder="Masukkan alamat lengkap RT/RW..." required></textarea>
+            
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Kode Berkas</th>
+                    <th>Tanggal</th>
+                    <th>Pemohon</th>
+                    <th>Layanan</th>
+                    <th>Operator</th>
+                    <th>Posisi Alur Saat Ini</th>
+                    <th>Riwayat Pending / Catatan</th>
+                  </tr>
+                </thead>
+                <tbody id="monitoringTableBody">
+                  <tr>
+                    <td colspan="7" class="text-center text-muted">Memuat data monitoring...</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="formJenisLayanan">Jenis Pelayanan *</label>
-                <select id="formJenisLayanan" required>
-                  <option value="Pendaftaran Penduduk">Pendaftaran Penduduk</option>
-                  <option value="Pencatatan Sipil">Pencatatan Sipil</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="formSubLayanan">Sub Layanan Pelayanan *</label>
-                <select id="formSubLayanan" required>
-                  <!-- Will be loaded dynamically based on Jenis Pelayanan -->
-                </select>
-              </div>
-            </div>
-
-            <div class="form-actions">
-              <button type="button" class="btn btn-secondary" id="resetFormBtn">Batal / Reset</button>
-              <button type="submit" class="btn btn-success" id="saveFormBtn">Simpan Berkas & Kirim ke Scan</button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <!-- ================= PAGE 3: MONITORING ALL ALUR ================= -->
-      <div class="page-container" id="page-monitoring" style="display: none;">
-        <div class="card filter-card">
-          <div class="search-box">
-            <span class="search-icon">🔍</span>
-            <input type="text" id="monitoringSearchInput" placeholder="Cari nama pemohon, kode berkas, atau alamat...">
-          </div>
-          <div class="filter-group">
-            <select id="filterFasilitasi">
-              <option value="ALL">Semua Fasilitasi</option>
-              <option value="Dinas">Layanan Dinas</option>
-              <option value="UPT">Layanan UPT</option>
-            </select>
-            <select id="filterJenisLayanan">
-              <option value="ALL">Semua Layanan</option>
-              <option value="Pendaftaran Penduduk">Pendaftaran Penduduk</option>
-              <option value="Pencatatan Sipil">Pencatatan Sipil</option>
-            </select>
-            <select id="filterWorkflowStatus">
-              <option value="ALL">Semua Status</option>
-              <option value="1_PETUGAS_SCAN">Petugas Scan</option>
-              <option value="2_VERIFIKASI">Tahap Verifikasi (Kasie/UPT)</option>
-              <option value="3_VALIDASI_KABID">Tahap Validasi Kabid</option>
-              <option value="4_SERTIFIKASI_KADIS">Sertifikasi Kadis</option>
-              <option value="5_TTE">Tahap TTE</option>
-              <option value="6_PENCETAKAN">Tahap Pencetakan</option>
-              <option value="7_SELESAI">Selesai</option>
-              <option value="PENDING_OPERATOR">Pending Operator</option>
-            </select>
           </div>
         </div>
 
-        <div class="card table-card">
-          <div class="table-header">
-            <h2>Semua Proses Pelayanan (Simpel Momen)</h2>
-            <span class="entries-count" id="monitoringEntriesCount">Menampilkan 0 berkas</span>
+        <!-- ================= PAGE 4: REKAPITULASI & LAPORAN ================= -->
+        <div class="page-container" id="page-rekapitulasi" style="display: none;">
+          <div class="metrics-grid">
+            <div class="metric-card card blue">
+              <div class="metric-info">
+                <span class="metric-label">Total Permohonan Masuk</span>
+                <span class="metric-value" id="rekapTotal">0</span>
+              </div>
+              <div class="metric-icon">📑</div>
+            </div>
+            <div class="metric-card card emerald">
+              <div class="metric-info">
+                <span class="metric-label">Selesai Dicetak</span>
+                <span class="metric-value" id="rekapSelesai">0</span>
+              </div>
+              <div class="metric-icon">🏆</div>
+            </div>
+            <div class="metric-card card amber">
+              <div class="metric-info">
+                <span class="metric-label">Dalam Proses Alur</span>
+                <span class="metric-value" id="rekapProses">0</span>
+              </div>
+              <div class="metric-icon">⚡</div>
+            </div>
           </div>
-          <div class="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Kode</th>
-                  <th>Tanggal</th>
-                  <th>Pemohon</th>
-                  <th>Fasilitasi</th>
-                  <th>Layanan</th>
-                  <th>Posisi Berkas</th>
-                  <th>Status TTE</th>
-                  <th>Pengambil</th>
-                  <th class="text-center">Detail</th>
-                </tr>
-              </thead>
-              <tbody id="monitoringTableBody">
-                <tr>
-                  <td colspan="9" class="text-center text-muted">Memuat data...</td>
-                </tr>
-              </tbody>
-            </table>
+
+          <div class="card table-card" style="margin-top: 1.5rem;">
+            <div class="table-header">
+              <h2>Rekapitulasi Pelayanan per Jenis Layanan</h2>
+            </div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Kategori Layanan</th>
+                    <th>Total Permohonan</th>
+                    <th>Selesai Cetak</th>
+                    <th>Dalam Proses</th>
+                    <th>Persentase Penyelesaian</th>
+                  </tr>
+                </thead>
+                <tbody id="rekapTableBody">
+                  <tr>
+                    <td colspan="5" class="text-center text-muted">Memuat rekapitulasi...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
-
-      <!-- ================= PAGE 4: REKAPITULASI & LAPORAN ================= -->
-      <div class="page-container" id="page-rekapitulasi" style="display: none;">
-        
-        <!-- Printable Report Layout -->
-        <div id="printArea" class="print-container">
-          <div class="print-header">
-            <img src="logo.png" class="brand-logo-img print-logo" alt="Logo Dukcapil">
-            <div class="print-title">
-              <h2>REKAPITULASI DOKUMEN PELAYANAN</h2>
-              <p>Simpel Momen (Sistem Informasi Pelayanan dan Monitoring Dokumen)</p>
-              <p>Dinas Kependudukan dan Pencatatan Sipil</p>
-            </div>
-          </div>
-          
-          <div class="rekap-summary-grid">
-            <div class="rekap-card">
-              <h4>Total Berkas Diproses</h4>
-              <p class="number" id="rekapTotalCount">0</p>
-            </div>
-            <div class="rekap-card">
-              <h4>Layanan Dinas</h4>
-              <p class="number" id="rekapDinasCount">0</p>
-            </div>
-            <div class="rekap-card">
-              <h4>Layanan UPT</h4>
-              <p class="number" id="rekapUptCount">0</p>
-            </div>
-            <div class="rekap-card">
-              <h4>Selesai Diserahkan</h4>
-              <p class="number" id="rekapSelesaiCount">0</p>
-            </div>
-          </div>
-
-          <div class="card rekap-table-card">
-            <h3>Rincian Berkas Per Meja Kerja</h3>
-            <table class="report-table">
-              <thead>
-                <tr>
-                  <th>Meja / Counter Kerja</th>
-                  <th>Layanan Dinas (Pcs)</th>
-                  <th>Layanan UPT (Pcs)</th>
-                  <th>Total Akumulasi</th>
-                </tr>
-              </thead>
-              <tbody id="rekapWorkflowTableBody">
-                <!-- Calculated dynamically -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-        
-        <div class="form-actions text-center" style="margin-top: 2rem;">
-          <button class="btn btn-success" id="printReportBtn">🖨️ Cetak / Unduh Rekap PDF</button>
-        </div>
-      </div>
-
     </main>
   </div>
 
-  <!-- ================= LAYOUT 3: MODAL AKSI TINDAK LANJUT BERKAS ================= -->
-  <div class="modal" id="actionModal" style="display: none;">
-    <div class="modal-content card">
+  <!-- ================= MODAL EKSEKUSI ACTION VERIFIKASI MEJA ================= -->
+  <div class="modal-backdrop" id="actionModal" style="display: none;">
+    <div class="modal-card">
       <div class="modal-header">
-        <h3>Tindak Lanjut Berkas Dukcapil</h3>
-        <button class="close-btn" id="closeModalBtn">&times;</button>
+        <h3 id="modalTitle">Tindak Lanjut Berkas Antrean</h3>
+        <button class="modal-close" id="closeModalBtn">&times;</button>
       </div>
       
       <form id="actionForm">
         <input type="hidden" id="modalKey">
         
-        <div class="modal-info-panel">
-          <div class="info-row">
-            <span>Kode Berkas:</span>
-            <strong id="modalInfoKey">-</strong>
-          </div>
-          <div class="info-row">
-            <span>Pemohon:</span>
-            <span id="modalInfoNama">-</span>
-          </div>
-          <div class="info-row">
-            <span>Layanan:</span>
-            <span id="modalInfoLayanan">-</span>
-          </div>
-          <div class="info-row">
-            <span>Fasilitasi:</span>
-            <span id="modalInfoFasilitasi">-</span>
-          </div>
-          <div class="info-row" id="rowScanLink" style="display:none;">
-            <span>File Hasil Scan:</span>
-            <span><a id="modalInfoScanLink" href="#" target="_blank" style="color:var(--primary); font-weight:600; text-decoration:underline;">Buka File Scan 🔗</a></span>
-          </div>
-          <div class="info-row" id="rowPendingHist" style="display:none;">
-            <span>Log Pending Sebelumnya:</span>
-            <div id="modalInfoPending" class="riwayat-pending-box"></div>
-          </div>
+        <div class="modal-info-box" style="background: var(--bg-sidebar); border-radius: var(--radius-md); padding: 12px; margin-bottom: 15px; border: 1px solid var(--border-color); font-size: 0.85rem; line-height: 1.5;">
+          <div><strong>Kode Berkas:</strong> <span id="modalKodeText" style="color: var(--accent-primary); font-family: monospace;">-</span></div>
+          <div><strong>Pemohon:</strong> <span id="modalPemohonText">-</span></div>
+          <div><strong>Layanan:</strong> <span id="modalLayananText">-</span></div>
         </div>
 
-        <!-- Dinamis Berdasarkan Peran User -->
-
-        <!-- 1. Peran: Petugas Scan -->
-        <div class="role-fields" id="fields-petugas_scan" style="display: none;">
-          <div class="form-group">
-            <label for="scanLinkFile">Link Tautan File Hasil Scan (Google Drive/SIAK) *</label>
-            <input type="url" id="scanLinkFile" placeholder="https://drive.google.com/file/.../view">
-          </div>
-          <div class="form-group">
-            <label for="scanNotes">Catatan Petugas Scan</label>
-            <textarea id="scanNotes" rows="2" placeholder="Tuliskan catatan kelengkapan berkas fisik yang discan..."></textarea>
-          </div>
+        <!-- Opsi Status TTE (Khusus Petugas TTE) -->
+        <div class="form-group" id="tteStatusGroup" style="display: none; margin-bottom: 15px;">
+          <label for="tteStatus">Status TTE / SIAK *</label>
+          <select id="tteStatus">
+            <option value="SIAK">TTE Berhasil / SIAK Terverifikasi (Lanjut Cetak)</option>
+            <option value="Belum diajukan SIAK">Belum diajukan SIAK (Kembalikan ke Kasie)</option>
+            <option value="Belum Verifikasi SIAK">Belum Verifikasi SIAK (Kembalikan ke Kabid)</option>
+          </select>
         </div>
 
-        <!-- 2. Peran: Kasie / Kepala UPT / Kabid / Kadis (Persetujuan Berjenjang) -->
-        <div class="role-fields" id="fields-verifikator" style="display: none;">
-          <div class="form-group">
-            <label id="lblVerifikasiNotes" for="verifikasiNotes">Catatan Verifikasi / Validasi / Sertifikasi *</label>
-            <textarea id="verifikasiNotes" rows="3" placeholder="Wajib diisi! Masukkan alasan persetujuan atau alasan pending dokumen..."></textarea>
-          </div>
+        <div class="form-group" id="tteNotesGroup" style="display: none; margin-bottom: 15px;">
+          <label for="tteNotes">Catatan TTE (Wajib diisi jika Belum SIAK) *</label>
+          <textarea id="tteNotes" rows="2" placeholder="Tuliskan catatan penjelasan mengenai SIAK..."></textarea>
         </div>
 
-        <!-- 3. Peran: Petugas TTE -->
-        <div class="role-fields" id="fields-petugas_tte" style="display: none;">
-          <div class="form-group">
-            <label for="tteStatus">Status Sertifikasi TTE *</label>
-            <select id="tteStatus">
-              <option value="Sudah di TTE">Sudah di TTE</option>
-              <option value="Belum diajukan SIAK">Belum diajukan SIAK (Kembalikan ke Kasie)</option>
-              <option value="Belum Verifikasi SIAK">Belum Verifikasi SIAK (Kembalikan ke Kabid)</option>
-            </select>
-          </div>
-          <div class="form-group" id="tteNotesGroup" style="display: none;">
-            <label for="tteNotes">Catatan Pending TTE *</label>
-            <textarea id="tteNotes" rows="2" placeholder="Wajib diisi! Masukkan alasan pengembalian berkas..."></textarea>
-          </div>
+        <!-- Opsi Eksekusi Verifikator Biasa (Disetujui / Pending) -->
+        <div class="form-group" id="standardActionGroup">
+          <label for="modalExecuteAction">Keputusan Tindakan *</label>
+          <select id="modalExecuteAction" required>
+            <option value="approve">✅ Setujui & Lanjutkan ke Meja Berikutnya</option>
+            <option value="pending">⚠️ Ditunda / Pending (Kembalikan ke Operator)</option>
+          </select>
         </div>
 
-        <!-- 4. Peran: Petugas Pencetakan -->
-        <div class="role-fields" id="fields-petugas_pencetakan" style="display: none;">
-          <div class="form-group">
-            <label for="printPenerima">Nama Penerima / Pengambil Dokumen *</label>
-            <input type="text" id="printPenerima" placeholder="Contoh: Pemohon Sendiri / Istri / Kakak...">
-          </div>
-          <div class="form-group">
-            <label for="printNotes">Catatan Penyerahan Dokumen *</label>
-            <textarea id="printNotes" rows="2" placeholder="Wajib diisi! Tulis catatan pengambilan (contoh: KTP-el asli ditarik, dll)..."></textarea>
-          </div>
+        <!-- Khusus Petugas Cetak: Nama Penerima -->
+        <div class="form-group" id="penerimaGroup" style="display: none; margin-top: 15px;">
+          <label for="modalPenerima">Nama Penerima Dokumen Cetak *</label>
+          <input type="text" id="modalPenerima" placeholder="Isikan nama warga / perwakilan penerima dokumen...">
         </div>
 
-        <!-- Button Actions Dinamis -->
-        <div class="modal-actions" id="modalNormalActions">
-          <button type="button" class="btn btn-secondary" id="cancelModalBtn">Tutup</button>
-          <button type="submit" class="btn btn-success" id="submitModalBtn">Simpan & Kirim</button>
+        <div class="form-group" style="margin-top: 15px;">
+          <label for="modalNotes">Catatan / Keterangan Verifikasi</label>
+          <textarea id="modalNotes" rows="3" placeholder="Tuliskan catatan verifikasi (opsional untuk persetujuan, wajib untuk pending)..."></textarea>
         </div>
 
-        <div class="modal-actions" id="modalVerifikasiActions" style="display: none;">
-          <button type="button" class="btn btn-secondary" id="cancelVerifModalBtn">Batal</button>
-          <button type="button" class="btn btn-danger" id="pendingVerifModalBtn">⚠️ Pending (Kembalikan ke Operator)</button>
-          <button type="button" class="btn btn-success" id="approveVerifModalBtn">✅ Setujui & Lanjutkan</button>
+        <div class="modal-footer" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-secondary" id="cancelModalBtn">Batal</button>
+          <button type="submit" class="btn btn-primary" id="saveModalBtn">💾 Eksekusi Tindakan</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- ================= LAYOUT 4: DETAILED VIEW MODAL (MONITORING) ================= -->
-  <div class="modal" id="detailModal" style="display: none;">
-    <div class="modal-content card">
-      <div class="modal-header">
-        <h3>Detail Riwayat Alur Berkas</h3>
-        <button class="close-btn" id="closeDetailModalBtn">&times;</button>
-      </div>
-      <div class="modal-body" id="detailModalBody">
-        <!-- Loaded dynamically -->
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" id="closeDetailBtn">Tutup Detail</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Notification Toast -->
   <div class="toast" id="toast"></div>
 
   <script src="app.js"></script>
