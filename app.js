@@ -4,7 +4,7 @@ if (localStorage.getItem('simpel_momen_api_url') && (localStorage.getItem('simpe
   localStorage.removeItem('simpel_momen_api_url');
 }
 
-let API_URL = 'https://script.google.com/macros/s/AKfycbwb-GMpH8UYImv4np9MDLHgeixCjGbCI4IXUF-8X3KASSZY7MQdv7cSmA-Vyiy5yVXTIg/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycby-RoYMJq-lFarD4KWcOTrCfTj93xze8ljDhvjGBT2faQ8WsYW0BSdqyPlpWxxg6ieqBg/exec';
 let currentUser = null;
 let allData = [];
 
@@ -196,9 +196,23 @@ const MOCK_PETUGAS = [
 if (loginForm) {
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const usernameVal = loginUsername.value.trim().toLowerCase();
+    const usernameVal = loginUsername.value.trim();
     const passwordVal = loginPassword.value.trim();
     
+    const cleanStr = (s) => (s ? s.toString().toLowerCase().replace(/[^a-z0-9]/g, '') : '');
+    const inputClean = cleanStr(usernameVal);
+    
+    const findMockUser = () => {
+      return MOCK_PETUGAS.find(u => {
+        const uNameClean = cleanStr(u.username);
+        const nameClean = cleanStr(u.name);
+        const roleClean = cleanStr(u.role);
+        const isMatch = (uNameClean === inputClean || nameClean === inputClean || roleClean === inputClean || (inputClean.length >= 3 && nameClean.includes(inputClean)));
+        const isPass = (u.password === passwordVal || passwordVal === '123456');
+        return isMatch && isPass;
+      });
+    };
+
     const submitBtn = loginForm.querySelector('button[type="submit"]');
     const originalText = submitBtn ? submitBtn.textContent : 'Masuk';
     if (submitBtn) {
@@ -208,12 +222,7 @@ if (loginForm) {
     
     try {
       if (API_URL === 'local') {
-        const user = MOCK_PETUGAS.find(u => {
-          const uName = u.username.toLowerCase();
-          const nameVal = u.name.toLowerCase();
-          const roleVal = u.role.toLowerCase();
-          return (uName === usernameVal || nameVal === usernameVal || roleVal === usernameVal) && (u.password === passwordVal || passwordVal === '123456');
-        });
+        const user = findMockUser();
         if (user) {
           currentUser = {
             username: user.username,
@@ -257,12 +266,7 @@ if (loginForm) {
           }
         } catch (fetchErr) {
           console.warn('Koneksi online Apps Script gagal, menggunakan fallback akun demo...', fetchErr);
-          const user = MOCK_PETUGAS.find(u => {
-            const uName = u.username.toLowerCase();
-            const nameVal = u.name.toLowerCase();
-            const roleVal = u.role.toLowerCase();
-            return (uName === usernameVal || nameVal === usernameVal || roleVal === usernameVal) && (u.password === passwordVal || passwordVal === '123456');
-          });
+          const user = findMockUser();
           if (user) {
             currentUser = {
               username: user.username,
