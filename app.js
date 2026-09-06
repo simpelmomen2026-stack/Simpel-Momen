@@ -1,4 +1,4 @@
-// Simpel Momen Web Logic - Version 2026.09.06.1845
+// Simpel Momen Web Logic - Version 2026.09.06.1930
 // ================= CONFIG & STATE =================
 // Hapus cache API_URL lama dari localStorage agar selalu terhubung 100% ONLINE ke Google Sheets
 localStorage.removeItem('simpel_momen_api_url');
@@ -162,6 +162,50 @@ function normalizeUserRole(rawRole) {
   if (str.includes('monitor') || str.includes('pengawas') || str.includes('admin')) return 'monitoring';
   
   return str.replace(/\s+/g, '_');
+}
+
+// HELPER FILTER KHUSUS WILAYAH UPT
+function isUserUpt(user) {
+  if (!user) return false;
+  const fas = String(user.fasilitasi || "").toUpperCase().trim();
+  const upt = String(user.uptCode || "").toUpperCase().trim();
+  return fas.includes('UPT') || (upt !== '' && upt !== 'DINAS');
+}
+
+function matchItemToUserUpt(item, user) {
+  if (!isUserUpt(user)) return true; // User Dinas (Non-UPT)
+  
+  const itemFas = String(item.fasilitasi || "").toUpperCase().trim();
+  const itemInt = String(item.integrasi || "").toUpperCase().trim();
+  const itemOp = String(item.operator || "").toUpperCase().trim();
+  const userUpt = String(user.uptCode || "UPT").toUpperCase().trim();
+  
+  // 1. Dokumen yang difasilitasi Dinas TIDAK BISA ditampilkan pada seluruh user UPT
+  if (itemFas === 'DINAS' || itemFas === '🏢 FASILITASI DINAS' || itemFas.startsWith('DINAS')) {
+    return false;
+  }
+  
+  // 2. Filter presisi berdasarkan wilayah UPT spesifik
+  const cleanStr = s => s.replace(/[^A-Z0-9]/g, '');
+  const cleanUserUpt = cleanStr(userUpt);
+  const cleanItemFas = cleanStr(itemFas);
+  const cleanItemInt = cleanStr(itemInt);
+  const cleanItemOp = cleanStr(itemOp);
+  
+  if (cleanUserUpt && cleanUserUpt !== 'UPT') {
+    if (cleanItemFas && cleanItemFas !== 'UPT') {
+      return cleanItemFas.includes(cleanUserUpt) || cleanUserUpt.includes(cleanItemFas);
+    }
+    if (cleanItemInt && cleanItemInt !== 'UPT') {
+      return cleanItemInt.includes(cleanUserUpt) || cleanUserUpt.includes(cleanItemInt);
+    }
+    if (cleanItemOp.includes(cleanUserUpt)) {
+      return true;
+    }
+    return itemFas.includes('UPT');
+  }
+  
+  return itemFas.includes('UPT');
 }
 
 const savedUser = sessionStorage.getItem('simpel_momen_user');
@@ -554,6 +598,16 @@ async function loadData() {
 
 function populateFasilitasiFilterOptions() {
   if (!filterFasilitasi) return;
+
+  if (isUserUpt(currentUser)) {
+    const userUpt = currentUser.uptCode || "UPT";
+    filterFasilitasi.innerHTML = `<option value="${userUpt}">🏛️ Fasilitasi ${userUpt}</option>`;
+    filterFasilitasi.value = userUpt;
+    filterFasilitasi.disabled = true;
+    return;
+  }
+  
+  filterFasilitasi.disabled = false;
   const currentVal = filterFasilitasi.value;
   
   const uptSet = new Set();
@@ -587,6 +641,11 @@ function renderCounterDesk() {
 
   // Filter antrean khusus meja aktif user
   const userActiveDeskItems = allData.filter(item => {
+    // 🛑 Filter Utama UPT: Sembunyikan berkas Dinas dan berkas UPT lain bagi user tingkatan UPT
+    if (isUserUpt(currentUser) && !matchItemToUserUpt(item, currentUser)) {
+      return false;
+    }
+
     const statusAlur = String(item.status_alur || "");
     const itemFas = String(item.fasilitasi || "");
     const itemJenis = String(item.jenis_layanan || "").trim().toLowerCase();
@@ -594,7 +653,7 @@ function renderCounterDesk() {
     if (role === 'operator') {
       return statusAlur === 'PENDING_OPERATOR';
     } else if (role === 'petugas_scan') {
-      if (fasilitasi === 'UPT') return statusAlur === '1_PETUGAS_SCAN' && itemFas.toLowerCase().includes('upt');
+      if (fasilitasi === 'UPT') return statusAlur === '1_PETUGAS_SCAN';
       return statusAlur === '1_PETUGAS_SCAN' && !itemFas.toLowerCase().includes('upt');
     } else if (role === 'kasie_dafduk') {
       return statusAlur === '2_VERIFIKASI_KASIE' && itemJenis === 'pendaftaran penduduk';
@@ -620,9 +679,10 @@ function renderCounterDesk() {
   });
 
   // AKUMULASI NILAI METRIK PADA DASHBOARD
+  const userUptScopeData = isUserUpt(currentUser) ? allData.filter(d => matchItemToUserUpt(d, currentUser)) : allData;
   const countActiveDesk = userActiveDeskItems.length;
-  const countPendingAll = allData.filter(d => String(d.status_alur).includes('PENDING')).length;
-  const countCompletedAll = allData.filter(d => String(d.status_alur).includes('7_SELESAI')).length;
+  const countPendingAll = userUptScopeData.filter(d => String(d.status_alur).includes('PENDING')).length;
+  const countCompletedAll = userUptScopeData.filter(d => String(d.status_alur).includes('7_SELESAI')).length;
 
   if (valMetric1) valMetric1.textContent = countActiveDesk;
   if (valMetric2) valMetric2.textContent = countPendingAll;
@@ -633,6 +693,11 @@ function renderCounterDesk() {
   const selectedFas = fasilitasiSelect ? fasilitasiSelect.value : 'ALL';
 
   const filtered = allData.filter(item => {
+    // Filter akses UPT spesifik
+    if (isUserUpt(currentUser) && !matchItemToUserUpt(item, currentUser)) {
+      return false;
+    }
+
     const keyMatch = String(item.key || "").toLowerCase().includes(query);
     const pemohonMatch = String(item.pemohon || "").toLowerCase().includes(query);
     const jenisMatch = String(item.jenis_layanan || "").toLowerCase().includes(query);
@@ -743,6 +808,10 @@ function renderMonitoringTable() {
 
   const query = monitoringSearchInput ? monitoringSearchInput.value.toLowerCase().trim() : "";
   const filtered = allData.filter(item => {
+    // 🛑 Filter Utama UPT: Sembunyikan berkas Dinas dan berkas UPT lain bagi user tingkatan UPT
+    if (isUserUpt(currentUser) && !matchItemToUserUpt(item, currentUser)) {
+      return false;
+    }
     const keyMatch = String(item.key || "").toLowerCase().includes(query);
     const pemohonMatch = String(item.pemohon || "").toLowerCase().includes(query);
     const jenisMatch = String(item.jenis_layanan || "").toLowerCase().includes(query);
@@ -793,8 +862,9 @@ function renderMonitoringTable() {
 function renderRekapitulasi() {
   if (!rekapTableBody) return;
 
-  const total = allData.length;
-  const selesai = allData.filter(d => d.status_alur === '7_SELESAI').length;
+  const targetData = isUserUpt(currentUser) ? allData.filter(d => matchItemToUserUpt(d, currentUser)) : allData;
+  const total = targetData.length;
+  const selesai = targetData.filter(d => d.status_alur === '7_SELESAI').length;
   const proses = total - selesai;
 
   if (rekapTotal) rekapTotal.textContent = total;
@@ -802,7 +872,7 @@ function renderRekapitulasi() {
   if (rekapProses) rekapProses.textContent = proses;
 
   const statsByLayanan = {};
-  allData.forEach(item => {
+  targetData.forEach(item => {
     const lay = item.jenis_layanan || "Lainnya";
     if (!statsByLayanan[lay]) statsByLayanan[lay] = { total: 0, selesai: 0, proses: 0 };
     statsByLayanan[lay].total++;
@@ -1065,7 +1135,7 @@ if (berkasForm) {
 
     const payloadData = {
       tanggal: currentSystemTime.slice(0, 10),
-      fasilitasi: currentUser ? currentUser.fasilitasi || 'Dinas' : 'Dinas',
+      fasilitasi: currentUser ? (isUserUpt(currentUser) ? (currentUser.uptCode || currentUser.fasilitasi || 'UPT') : 'Dinas') : 'Dinas',
       operator: currentUser ? currentUser.name || currentUser.username : 'Operator',
       userName: currentUser ? currentUser.name || currentUser.username : 'Operator',
       pemohon: pemohon,
