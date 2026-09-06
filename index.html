@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=20260906_1531">
+  <link rel="stylesheet" href="style.css?v=20260906_1543">
 </head>
 <body>
 
@@ -57,6 +57,15 @@
         </div>
       </div>
       
+      <!-- Kotak User & Nama Lengkap Tepat di Bawah Logo Simpel Momen -->
+      <div class="sidebar-user-box" id="sidebarUserBox" style="margin: 0.75rem 1rem 1rem 1rem; padding: 0.85rem 1rem; background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; display: flex; align-items: center; gap: 10px;">
+        <div class="user-avatar" id="userAvatar" style="width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #6366f1); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; flex-shrink: 0;">OP</div>
+        <div class="user-details" style="display: flex; flex-direction: column; overflow: hidden;">
+          <span class="user-name" id="userDisplayName" style="font-weight: 700; font-size: 0.88rem; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Operator</span>
+          <span class="user-role-badge" id="userRoleBadge" style="font-size: 0.72rem; color: #93c5fd; background: rgba(59, 130, 246, 0.2); padding: 2px 8px; border-radius: 6px; display: inline-block; width: fit-content; margin-top: 2px;">Operator</span>
+        </div>
+      </div>
+
       <nav class="sidebar-menu">
         <a href="#" class="nav-link active" data-page="dashboard" id="menuDashboard">
           <span class="nav-icon">📊</span>
@@ -74,16 +83,13 @@
           <span class="nav-icon">📈</span>
           <span class="nav-text">Rekapitulasi</span>
         </a>
-      </nav>
 
-      <div class="sidebar-user">
-        <div class="user-avatar" id="userAvatar">OP</div>
-        <div class="user-details">
-          <span class="user-name" id="userDisplayName">Operator</span>
-          <span class="user-role-badge" id="userRoleBadge">Operator</span>
-        </div>
-        <button class="btn-logout" id="logoutBtn" title="Keluar dari Akun">🚪</button>
-      </div>
+        <!-- Tombol Selesai / Keluar Tepat di Bawah Tombol Rekapitulasi -->
+        <a href="#" class="nav-link nav-logout" id="logoutBtn" style="margin-top: 0.5rem; color: #ef4444 !important; border: 1px solid rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.08);">
+          <span class="nav-icon">🚪</span>
+          <span class="nav-text" style="font-weight: 700;">Selesai / Keluar</span>
+        </a>
+      </nav>
     </aside>
 
     <!-- Main Content Area -->
@@ -149,12 +155,19 @@
                 <h2 style="margin:0;">Dokumen Antrean di Meja Anda</h2>
                 <span class="entries-count" id="counterEntriesCount">Menampilkan 0 berkas</span>
               </div>
-              <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                <button class="desk-tab active" id="tabMejaAktif" onclick="setDeskFilter('active')">⚡ Meja Kerja Saya</button>
-                <button class="desk-tab" id="tabSelesai" onclick="setDeskFilter('completed')">✅ Berkas Selesai</button>
-                <button class="desk-tab" id="tabSemua" onclick="setDeskFilter('all')">🌐 Semua Antrean</button>
+              
+              <!-- Filter Dropdown Fasilitasi Layanan Dinas & UPT -->
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <label for="fasilitasiFilter" style="font-size: 0.85rem; font-weight: 600; color: #94a3b8; margin: 0; white-space: nowrap;">🏢 Fasilitasi Layanan:</label>
+                <select id="fasilitasiFilter" style="padding: 8px 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; color: #fff; font-size: 0.85rem; font-weight: 600; cursor: pointer; outline: none;">
+                  <option value="ALL">🏢 Semua Fasilitasi (Dinas & UPT)</option>
+                  <option value="Dinas">🏛️ Fasilitasi Dinas</option>
+                  <option value="UPT">🏪 Fasilitasi UPT</option>
+                </select>
               </div>
-              <div style="flex: 1; max-width: 280px;">
+
+              <!-- Kolom Pencarian Berkas -->
+              <div style="flex: 1; min-width: 200px; max-width: 280px;">
                 <input type="text" id="counterSearchInput" placeholder="🔍 Cari nama, kode antrean..." style="width: 100%; padding: 8px 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
               </div>
             </div>
@@ -455,6 +468,6 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="app.js?v=20260906_1531"></script>
+  <script src="app.js?v=20260906_1543"></script>
 </body>
 </html>

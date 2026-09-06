@@ -954,7 +954,7 @@ td {
   margin-bottom: 1rem;
 }
 
-/* Modal Backdrop & Centered Overlay Fix (Langsung Terbuka di Tengah Layar Viewport Overlay) */
+/* Modal Backdrop & Centered Overlay Fix (Lembar Kerja Disesuaikan Ukuran Layar) */
 #actionModal, .modal-backdrop, .modal {
   position: fixed !important;
   top: 0 !important;
@@ -963,35 +963,51 @@ td {
   bottom: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
-  background: rgba(11, 15, 25, 0.85) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
+  background: rgba(11, 15, 25, 0.88) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
   z-index: 999999 !important;
+  display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   padding: 1.25rem !important;
   overflow-y: auto !important;
+  box-sizing: border-box !important;
 }
 
 #actionModal .modal-card, .modal-card, .modal-content {
   position: relative !important;
-  width: 100% !important;
-  max-width: 540px !important;
-  background: rgba(17, 24, 39, 0.98) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  width: 96% !important;
+  max-width: 680px !important;
+  background: rgba(15, 23, 42, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
   border-radius: 20px !important;
   padding: 1.75rem !important;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8) !important;
-  max-height: 90vh !important;
+  box-shadow: 0 25px 65px rgba(0, 0, 0, 0.85) !important;
+  max-height: 92vh !important;
   overflow-y: auto !important;
+  box-sizing: border-box !important;
   animation: modalSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
   margin: auto !important;
+}
+
+@media (max-width: 640px) {
+  #actionModal, .modal-backdrop, .modal {
+    padding: 0.5rem !important;
+  }
+  #actionModal .modal-card, .modal-card, .modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 96vh !important;
+    padding: 1.1rem !important;
+    border-radius: 16px !important;
+  }
 }
 
 @keyframes modalSlideIn {
   from {
     opacity: 0;
-    transform: scale(0.94) translateY(20px);
+    transform: scale(0.95) translateY(15px);
   }
   to {
     opacity: 1;
