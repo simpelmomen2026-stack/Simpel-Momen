@@ -32,7 +32,6 @@ const SUB_LAYANAN_OPTIONS = {
 };
 
 // ================= DOM ELEMENTS =================
-// Layout wrappers
 const loginWrapper = document.getElementById('loginWrapper');
 const appWrapper = document.getElementById('appWrapper');
 const loginForm = document.getElementById('loginForm');
@@ -40,23 +39,19 @@ const loginUsername = document.getElementById('loginUsername');
 const loginPassword = document.getElementById('loginPassword');
 const logoutBtn = document.getElementById('logoutBtn');
 
-// Nav links
 const navLinks = document.querySelectorAll('.nav-link');
 const menuDashboard = document.getElementById('menuDashboard');
 const menuInputForm = document.getElementById('menuInputForm');
 const menuMonitoring = document.getElementById('menuMonitoring');
 const menuRekapitulasi = document.getElementById('menuRekapitulasi');
 
-// Page Title
 const pageTitle = document.getElementById('pageTitle');
 const pageSubtitle = document.getElementById('pageSubtitle');
 
-// User details sidebar
 const userAvatar = document.getElementById('userAvatar');
 const userDisplayName = document.getElementById('userDisplayName');
 const userRoleBadge = document.getElementById('userRoleBadge');
 
-// Top action panels
 const configPanel = document.getElementById('configPanel');
 const toggleConfigBtn = document.getElementById('toggleConfigBtn');
 const apiUrlInput = document.getElementById('apiUrlInput');
@@ -65,7 +60,6 @@ const useLocalSimBtn = document.getElementById('useLocalSimBtn');
 const connectionStatus = document.getElementById('connectionStatus');
 const refreshBtn = document.getElementById('refreshBtn');
 
-// Dashboard Page elements
 const lblMetric1 = document.getElementById('lblMetric1');
 const lblMetric2 = document.getElementById('lblMetric2');
 const lblMetric3 = document.getElementById('lblMetric3');
@@ -76,7 +70,6 @@ const counterEntriesCount = document.getElementById('counterEntriesCount');
 const counterTableBody = document.getElementById('counterTableBody');
 const counterSearchInput = document.getElementById('counterSearchInput');
 
-// Form Input Page elements
 const berkasForm = document.getElementById('berkasForm');
 const formKey = document.getElementById('formKey');
 const formRiwayatPending = document.getElementById('formRiwayatPending');
@@ -93,19 +86,16 @@ const formLinkFile = document.getElementById('formLinkFile');
 const btnSubmitForm = document.getElementById('btnSubmitForm');
 const btnResetForm = document.getElementById('btnResetForm');
 
-// Monitoring Page elements
 const filterFasilitasi = document.getElementById('filterFasilitasi');
 const monitoringSearchInput = document.getElementById('monitoringSearchInput');
 const monitoringCount = document.getElementById('monitoringCount');
 const monitoringTableBody = document.getElementById('monitoringTableBody');
 
-// Rekapitulasi Page elements
 const rekapTotal = document.getElementById('rekapTotal');
 const rekapSelesai = document.getElementById('rekapSelesai');
 const rekapProses = document.getElementById('rekapProses');
 const rekapTableBody = document.getElementById('rekapTableBody');
 
-// Action Modal elements
 const actionModal = document.getElementById('actionModal');
 const modalTitle = document.getElementById('modalTitle');
 const closeModalBtn = document.getElementById('closeModalBtn');
@@ -126,14 +116,12 @@ const modalPenerima = document.getElementById('modalPenerima');
 const modalNotes = document.getElementById('modalNotes');
 const saveModalBtn = document.getElementById('saveModalBtn');
 
-// Toast
 const toast = document.getElementById('toast');
 
 // ================= INITIALIZATION & ROUTING =================
 if (apiUrlInput) apiUrlInput.value = API_URL;
 updateConnectionIndicator();
 
-// Normalisasi Peran (Role) Petugas dari Sheet ke Kode Teknis Sistem
 function normalizeUserRole(rawRole) {
   if (!rawRole) return 'operator';
   const str = String(rawRole).trim().toLowerCase();
@@ -160,7 +148,6 @@ function normalizeUserRole(rawRole) {
   return str.replace(/\s+/g, '_');
 }
 
-// Cek session login dari sessionStorage
 const savedUser = sessionStorage.getItem('simpel_momen_user');
 if (savedUser) {
   try {
@@ -192,7 +179,7 @@ const MOCK_PETUGAS = [
   { username: 'print_upt1', password: '123456', name: 'Petugas Cetak UPT 01', role: 'petugas_pencetakan', uptCode: 'UPT-01', fasilitasi: 'UPT' }
 ];
 
-// Event: Login Submit (Mendukung Login Online & Fallback Offline)
+// Event: Login Submit (Online via GET Parameter & Fallback Offline)
 if (loginForm) {
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -239,21 +226,13 @@ if (loginForm) {
           showToast('Username atau password tidak ditemukan!', 'error');
         }
       } else {
-        // Login Online via Google Sheets Apps Script API
+        // Login Online via Google Sheets Apps Script API (GET Parameter anti-redirect cross origin)
         try {
-          const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'text/plain;charset=utf-8'
-            },
-            body: JSON.stringify({
-              action: 'login',
-              username: usernameVal,
-              password: passwordVal
-            })
-          });
+          const loginUrl = `${API_URL}?action=login&username=${encodeURIComponent(usernameVal)}&password=${encodeURIComponent(passwordVal)}`;
+          const response = await fetch(loginUrl, { method: 'GET' });
           const result = await response.json();
-          if (result.status === 'success') {
+          
+          if (result.status === 'success' && result.data && !Array.isArray(result.data)) {
             currentUser = result.data;
             if (currentUser && currentUser.role) {
               currentUser.role = normalizeUserRole(currentUser.role);
@@ -261,8 +240,10 @@ if (loginForm) {
             sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
             setupLoggedInUI();
             showToast(`Selamat datang, ${currentUser.name}!`, 'success');
-          } else {
+          } else if (result.status === 'error') {
             showToast(result.message || 'Username atau password tidak cocok!', 'error');
+          } else {
+            showToast('Respon login dari server tidak valid!', 'error');
           }
         } catch (fetchErr) {
           console.warn('Koneksi online Apps Script gagal, menggunakan fallback akun demo...', fetchErr);
@@ -370,18 +351,18 @@ function switchPage(pageId) {
   });
 
   if (pageId === 'dashboard') {
-    pageTitle.textContent = `Kerja Counter: ${currentUser ? currentUser.name : ''}`;
-    pageSubtitle.textContent = `Daftar dokumen antrean pelayanan yang membutuhkan tindakan Anda.`;
+    if (pageTitle) pageTitle.textContent = `Kerja Counter: ${currentUser ? currentUser.name : ''}`;
+    if (pageSubtitle) pageSubtitle.textContent = `Daftar dokumen antrean pelayanan yang membutuhkan tindakan Anda.`;
   } else if (pageId === 'input-form') {
-    pageTitle.textContent = `Pendaftaran Berkas Baru`;
-    pageSubtitle.textContent = `Operator ${currentUser ? currentUser.fasilitasi : ''} - Input formulir digital pelayanan.`;
+    if (pageTitle) pageTitle.textContent = `Pendaftaran Berkas Baru`;
+    if (pageSubtitle) pageSubtitle.textContent = `Operator ${currentUser ? currentUser.fasilitasi : ''} - Input formulir digital pelayanan.`;
   } else if (pageId === 'monitoring') {
-    pageTitle.textContent = `Monitoring Alur Pelayanan`;
-    pageSubtitle.textContent = `Lacak perjalanan dan verifikasi dokumen secara real-time.`;
+    if (pageTitle) pageTitle.textContent = `Monitoring Alur Pelayanan`;
+    if (pageSubtitle) pageSubtitle.textContent = `Lacak perjalanan dan verifikasi dokumen secara real-time.`;
     renderMonitoringTable();
   } else if (pageId === 'rekapitulasi') {
-    pageTitle.textContent = `Rekapitulasi Pelayanan`;
-    pageSubtitle.textContent = `Laporan statistik berkas masuk, dalam alur, dan selesai dicetak.`;
+    if (pageTitle) pageTitle.textContent = `Rekapitulasi Pelayanan`;
+    if (pageSubtitle) pageSubtitle.textContent = `Laporan statistik berkas masuk, dalam alur, dan selesai dicetak.`;
     renderRekapitulasi();
   }
 }
@@ -427,21 +408,14 @@ function updateConnectionIndicator() {
   }
 }
 
-// Check Single Device Token Online
+// Check Single Device Token Online via GET
 async function checkSessionTokenOnline() {
   if (!currentUser || API_URL === 'local' || !currentUser.sessionToken || !currentUser.username) {
     return true;
   }
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'check_session',
-        username: currentUser.username,
-        sessionToken: currentUser.sessionToken
-      })
-    });
+    const checkUrl = `${API_URL}?action=check_session&username=${encodeURIComponent(currentUser.username)}&sessionToken=${encodeURIComponent(currentUser.sessionToken)}`;
+    const response = await fetch(checkUrl);
     const result = await response.json();
     if (result.status === 'expired') {
       showToast('Akun Anda telah masuk di perangkat lain! Menutup sesi...', 'error');
@@ -540,14 +514,84 @@ function populateFasilitasiFilterOptions() {
   filterFasilitasi.value = currentVal || "ALL";
 }
 
+// RENDER MEJA KERJA COUNTER
+function renderCounterDesk() {
+  if (!counterTableBody || !currentUser) return;
+  
+  const query = counterSearchInput ? counterSearchInput.value.toLowerCase().trim() : "";
+  const role = currentUser.role;
+  const fasilitasi = currentUser.fasilitasi || "Dinas";
+  
+  const filtered = allData.filter(item => {
+    const keyMatch = String(item.key || "").toLowerCase().includes(query);
+    const pemohonMatch = String(item.pemohon || "").toLowerCase().includes(query);
+    const jenisMatch = String(item.jenis_layanan || "").toLowerCase().includes(query);
+    const subMatch = String(item.sub_layanan || "").toLowerCase().includes(query);
+    
+    const matchesSearch = !query || keyMatch || pemohonMatch || jenisMatch || subMatch;
+    if (!matchesSearch) return false;
+
+    const statusAlur = String(item.status_alur || "");
+    const itemFas = String(item.fasilitasi || "");
+    const itemJenis = String(item.jenis_layanan || "").trim().toLowerCase();
+
+    // Filter Meja Kerja berdasarkan Peran
+    if (role === 'operator') {
+      return statusAlur === 'PENDING_OPERATOR';
+    } else if (role === 'petugas_scan') {
+      if (fasilitasi === 'UPT') return statusAlur === '1_PETUGAS_SCAN' && itemFas.toLowerCase().includes('upt');
+      return statusAlur === '1_PETUGAS_SCAN' && !itemFas.toLowerCase().includes('upt');
+    } else if (role === 'kasie_dafduk') {
+      return statusAlur === '2_VERIFIKASI_KASIE' && itemJenis === 'pendaftaran penduduk';
+    } else if (role === 'kasie_capil') {
+      return statusAlur === '2_VERIFIKASI_KASIE' && itemJenis !== 'pendaftaran penduduk';
+    } else if (role === 'kepala_upt') {
+      return statusAlur === '2_VERIFIKASI_UPT';
+    } else if (role === 'kabid_dafduk') {
+      return statusAlur === '3_VALIDASI_KABID' && itemJenis === 'pendaftaran penduduk';
+    } else if (role === 'kabid_capil') {
+      return statusAlur === '3_VALIDASI_KABID' && itemJenis !== 'pendaftaran penduduk';
+    } else if (role === 'kadis') {
+      const isSelectedFas = (filterFasilitasi && filterFasilitasi.value !== 'ALL') ? 
+        itemFas.toLowerCase().includes(filterFasilitasi.value.toLowerCase()) : true;
+      return statusAlur === '4_SERTIFIKASI_KADIS' && isSelectedFas;
+    } else if (role === 'petugas_tte') {
+      return statusAlur === '5_TTE';
+    } else if (role === 'petugas_pencetakan') {
+      if (fasilitasi === 'UPT') return statusAlur === '6_PENCETAKAN_UPT';
+      return statusAlur === '6_PENCETAKAN_DINAS';
+    }
+    
+    return true;
+  });
+
+  if (counterEntriesCount) counterEntriesCount.textContent = filtered.length;
+
+  if (filtered.length === 0) {
+    counterTableBody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">
+          ✨ Tidak ada antrean dokumen yang membutuhkan tindakan Anda saat ini.
         </td>
-        <td style="font-weight: 600; color: #a78bfa;">${escapeHTML(row.stage)}</td>
-        <td>
-          <span class="badge ${statusClass}">${escapeHTML(row.status)}</span>
-        </td>
-        <td style="font-size: 0.9rem; color: var(--text-muted);">${escapeHTML(row.keterangan) || '-'}</td>
+      </tr>
+    `;
+    return;
+  }
+
+  counterTableBody.innerHTML = filtered.map(row => {
+    const isPending = row.status_alur === 'PENDING_OPERATOR';
+    const rowStyle = isPending ? 'background: rgba(239, 68, 68, 0.08);' : '';
+    
+    return `
+      <tr style="${rowStyle}">
+        <td><strong style="color: var(--primary-light);">${escapeHTML(row.key)}</strong></td>
+        <td>${escapeHTML(row.pemohon)}<br><small style="color:var(--text-muted);">${escapeHTML(row.no_hp || '-')}</small></td>
+        <td><span class="badge ${row.fasilitasi && row.fasilitasi.includes('UPT') ? 'badge-upt' : 'fasilitasi-dinas'}">${escapeHTML(row.fasilitasi)}</span></td>
+        <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small></td>
+        <td style="font-weight: 600; color: #a78bfa;">${escapeHTML(row.status_alur)}</td>
+        <td><span class="badge ${isPending ? 'pending' : 'selesai'}">${isPending ? '⚠️ Perlu Perbaikan' : 'Menunggu Tindakan'}</span></td>
         <td class="text-center">
-          <button class="btn btn-secondary btn-xs" onclick="openActionModal('${row.key}', '${escapeHTML(row.nama)}', '${escapeHTML(row.noAntrian)}', '${escapeHTML(row.fasilitasi)}', '${escapeHTML(row.stage)}', '${escapeHTML(row.status)}', '${escapeHTML(row.keterangan)}')">
+          <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
             ✏️ Tindak Lanjut
           </button>
         </td>
@@ -556,93 +600,297 @@ function populateFasilitasiFilterOptions() {
   }).join('');
 }
 
-// RENDER MONITORING ALUR KANBAN PIPELINE BOARD
-function renderAlurBoard(data) {
-  const containerOperator = document.getElementById('cardsOperator');
-  const containerKasie = document.getElementById('cardsKasie');
-  const containerKabid = document.getElementById('cardsKabid');
-  const containerKadis = document.getElementById('cardsKadis');
-  const containerSelesai = document.getElementById('cardsSelesai');
+// RENDER MONITORING ALUR TABLE
+function renderMonitoringTable() {
+  if (!monitoringTableBody) return;
   
-  const countOp = document.getElementById('countStageOperator');
-  const countKasie = document.getElementById('countStageKasie');
-  const countKabid = document.getElementById('countStageKabid');
-  const countKadis = document.getElementById('countStageKadis');
-  const countSelesai = document.getElementById('countStageSelesai');
+  const query = monitoringSearchInput ? monitoringSearchInput.value.toLowerCase().trim() : "";
+  const filterFas = filterFasilitasi ? filterFasilitasi.value : "ALL";
 
-  const groups = {
-    Operator: [],
-    Kasie: [],
-    Kabid: [],
-    Kadis: [],
-    Selesai: []
-  };
-
-  data.forEach(item => {
-    const st = String(item.stage).toLowerCase();
-    if (st.includes('op')) groups.Operator.push(item);
-    else if (st.includes('kasie')) groups.Kasie.push(item);
-    else if (st.includes('kabid')) groups.Kabid.push(item);
-    else if (st.includes('kadis')) groups.Kadis.push(item);
-    else groups.Selesai.push(item);
+  const filtered = allData.filter(item => {
+    const keyMatch = String(item.key || "").toLowerCase().includes(query);
+    const pemohonMatch = String(item.pemohon || "").toLowerCase().includes(query);
+    const jenisMatch = String(item.jenis_layanan || "").toLowerCase().includes(query);
+    const subMatch = String(item.sub_layanan || "").toLowerCase().includes(query);
+    const matchesSearch = !query || keyMatch || pemohonMatch || jenisMatch || subMatch;
+    
+    let matchesFas = true;
+    if (filterFas !== 'ALL') {
+      matchesFas = String(item.fasilitasi || "").toLowerCase().includes(filterFas.toLowerCase());
+    }
+    
+    return matchesSearch && matchesFas;
   });
 
-  countOp.textContent = groups.Operator.length;
-  countKasie.textContent = groups.Kasie.length;
-  countKabid.textContent = groups.Kabid.length;
-  countKadis.textContent = groups.Kadis.length;
-  countSelesai.textContent = groups.Selesai.length;
+  if (monitoringCount) monitoringCount.textContent = filtered.length;
 
-  containerOperator.innerHTML = renderKanbanCardGroup(groups.Operator);
-  containerKasie.innerHTML = renderKanbanCardGroup(groups.Kasie);
-  containerKabid.innerHTML = renderKanbanCardGroup(groups.Kabid);
-  containerKadis.innerHTML = renderKanbanCardGroup(groups.Kadis);
-  containerSelesai.innerHTML = renderKanbanCardGroup(groups.Selesai);
-}
-
-function renderKanbanCardGroup(items) {
-  if (items.length === 0) {
-    return `<div style="text-align:center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem;">Kosong</div>`;
+  if (filtered.length === 0) {
+    monitoringTableBody.innerHTML = `
+      <tr>
+        <td colspan="6" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">
+          Tidak ditemukan data dokumen.
+        </td>
+      </tr>
+    `;
+    return;
   }
 
-  return items.map(row => {
-    const statusClass = String(row.status).trim().toLowerCase() === 'selesai' ? 'selesai' : 'pending';
-    const fasilitasiClass = String(row.fasilitasi).trim().toLowerCase().includes('upt') ? 'badge-upt' : 'fasilitasi-dinas';
+  monitoringTableBody.innerHTML = filtered.map(row => {
+    const isSelesai = row.status_alur === '7_SELESAI';
+    const isPending = row.status_alur === 'PENDING_OPERATOR';
+    const statusBadge = isSelesai ? '<span class="badge selesai">✅ Selesai</span>' : 
+                        isPending ? '<span class="badge pending">⚠️ Pending Operator</span>' : 
+                        '<span class="badge" style="background:rgba(59,130,246,0.2); color:#60a5fa;">⏳ Dalam Alur</span>';
 
     return `
-      <div class="kanban-card-item">
-        <div class="card-top">
-          <span class="card-antrean">${escapeHTML(row.noAntrian)}</span>
-          <span class="badge ${fasilitasiClass}">${escapeHTML(row.fasilitasi)}</span>
-        </div>
-        <div class="card-nama">${escapeHTML(row.nama)}</div>
-        <div class="card-layanan">${escapeHTML(row.layanan)}</div>
-        <div class="card-footer">
-          <span class="badge ${statusClass}">${escapeHTML(row.status)}</span>
-          <button class="btn btn-secondary btn-xs" onclick="openActionModal('${row.key}', '${escapeHTML(row.nama)}', '${escapeHTML(row.noAntrian)}', '${escapeHTML(row.fasilitasi)}', '${escapeHTML(row.stage)}', '${escapeHTML(row.status)}', '${escapeHTML(row.keterangan)}')">
-            ✏️
-          </button>
-        </div>
-      </div>
+      <tr>
+        <td><strong style="color: var(--primary-light);">${escapeHTML(row.key)}</strong></td>
+        <td>${escapeHTML(row.pemohon)}</td>
+        <td><span class="badge ${row.fasilitasi && row.fasilitasi.includes('UPT') ? 'badge-upt' : 'fasilitasi-dinas'}">${escapeHTML(row.fasilitasi)}</span></td>
+        <td>${escapeHTML(row.jenis_layanan)} - ${escapeHTML(row.sub_layanan)}</td>
+        <td style="font-weight: 500;">${escapeHTML(row.status_alur)}</td>
+        <td class="text-center">${statusBadge}</td>
+      </tr>
     `;
   }).join('');
 }
 
-window.openActionModal = function(key, nama, noAntrian, fasilitasi, stage, status, keterangan) {
-  modalKey.value = key;
-  modalNama.textContent = nama;
-  modalNoAntrean.textContent = noAntrian;
-  modalFasilitasi.value = fasilitasi || 'Fasilitasi Dinas';
-  modalStage.value = stage || 'Kadis';
-  modalStatus.value = status || 'Pending';
-  modalKeterangan.value = (keterangan === 'undefined' || !keterangan) ? '' : keterangan;
+// RENDER REKAPITULASI
+function renderRekapitulasi() {
+  if (!rekapTableBody) return;
+
+  const total = allData.length;
+  const selesai = allData.filter(d => d.status_alur === '7_SELESAI').length;
+  const proses = total - selesai;
+
+  if (rekapTotal) rekapTotal.textContent = total;
+  if (rekapSelesai) rekapSelesai.textContent = selesai;
+  if (rekapProses) rekapProses.textContent = proses;
+
+  const statsByLayanan = {};
+  allData.forEach(item => {
+    const lay = item.jenis_layanan || "Lainnya";
+    if (!statsByLayanan[lay]) statsByLayanan[lay] = { total: 0, selesai: 0, proses: 0 };
+    statsByLayanan[lay].total++;
+    if (item.status_alur === '7_SELESAI') statsByLayanan[lay].selesai++;
+    else statsByLayanan[lay].proses++;
+  });
+
+  const keys = Object.keys(statsByLayanan);
+  if (keys.length === 0) {
+    rekapTableBody.innerHTML = `<tr><td colspan="4" class="text-center" style="padding:2rem;">Belum ada data rekapitulasi</td></tr>`;
+    return;
+  }
+
+  rekapTableBody.innerHTML = keys.map(k => {
+    const s = statsByLayanan[k];
+    return `
+      <tr>
+        <td><strong>${escapeHTML(k)}</strong></td>
+        <td class="text-center"><span class="badge" style="background:rgba(255,255,255,0.1);">${s.total}</span></td>
+        <td class="text-center"><span class="badge selesai">${s.selesai}</span></td>
+        <td class="text-center"><span class="badge" style="background:rgba(59,130,246,0.2); color:#60a5fa;">${s.proses}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// MODAL ACTION & TINDAK LANJUT
+window.openActionModal = function(key) {
+  const item = allData.find(d => String(d.key) === String(key));
+  if (!item || !actionModal) return;
+
+  modalKey.value = item.key;
+  if (modalKodeText) modalKodeText.textContent = item.key;
+  if (modalPemohonText) modalPemohonText.textContent = item.pemohon || '-';
+  if (modalLayananText) modalLayananText.textContent = `${item.jenis_layanan || ''} (${item.sub_layanan || ''})`;
+
+  const role = currentUser ? currentUser.role : '';
   
+  if (tteStatusGroup) tteStatusGroup.style.display = (role === 'petugas_tte') ? 'block' : 'none';
+  if (penerimaGroup) penerimaGroup.style.display = (role === 'petugas_pencetakan') ? 'block' : 'none';
+  if (modalNotes) modalNotes.value = '';
+
   actionModal.style.display = 'flex';
 };
 
+if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+if (cancelModalBtn) cancelModalBtn.addEventListener('click', closeModal);
+
 function closeModal() {
-  actionModal.style.display = 'none';
-  actionForm.reset();
+  if (actionModal) actionModal.style.display = 'none';
+  if (actionForm) actionForm.reset();
+}
+
+if (actionForm) {
+  actionForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const key = modalKey.value;
+    const executeAction = modalExecuteAction ? modalExecuteAction.value : 'approve';
+    const notes = modalNotes ? modalNotes.value.trim() : '';
+    const statusTteVal = tteStatus ? tteStatus.value : '';
+    const penerimaVal = modalPenerima ? modalPenerima.value.trim() : '';
+
+    const submitBtn = actionForm.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      if (API_URL === 'local') {
+        const item = allData.find(d => String(d.key) === String(key));
+        if (item) {
+          if (executeAction === 'pending') {
+            item.status_alur = 'PENDING_OPERATOR';
+            item.riwayat_pending = `PENDING by ${currentUser.role}: ${notes}\n${item.riwayat_pending || ''}`;
+          } else {
+            item.status_alur = '7_SELESAI';
+          }
+        }
+        showToast('Berkas berhasil diperbarui (Local)', 'success');
+        closeModal();
+        renderCounterDesk();
+        renderMonitoringTable();
+        renderRekapitulasi();
+      } else {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'update',
+            key: key,
+            role: currentUser.role,
+            userName: currentUser.name,
+            executeAction: executeAction,
+            notes: notes,
+            status_tte: statusTteVal,
+            penerima: penerimaVal
+          })
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+          showToast(result.message || 'Berkas berhasil diperbarui!', 'success');
+          closeModal();
+          loadData();
+        } else {
+          showToast(result.message || 'Gagal memperbarui berkas!', 'error');
+        }
+      }
+    } catch (err) {
+      console.error('Error update berkas:', err);
+      showToast('Terjadi kesalahan saat memproses berkas!', 'error');
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+}
+
+// FORM INPUT OPERATOR SUBMIT
+if (berkasForm) {
+  berkasForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const pemohon = formPemohon ? formPemohon.value.trim() : '';
+    const noHp = formNoHp ? formNoHp.value.trim() : '';
+    const email = formEmail ? formEmail.value.trim() : '';
+    const alamat = formAlamat ? formAlamat.value.trim() : '';
+    const jenisLayanan = formJenisLayanan ? formJenisLayanan.value : '';
+    const subLayanan = formSubLayanan ? formSubLayanan.value : '';
+    const integrasi = formIntegrasi ? formIntegrasi.value : 'SIAK Terintegrasi';
+
+    if (!pemohon || !jenisLayanan || !subLayanan) {
+      showToast('Silakan lengkapi nama pemohon dan jenis/sub layanan!', 'error');
+      return;
+    }
+
+    const payloadData = {
+      fasilitasi: currentUser ? currentUser.fasilitasi || 'Dinas' : 'Dinas',
+      operator: currentUser ? currentUser.name || currentUser.username : 'Operator',
+      pemohon: pemohon,
+      alamat: alamat,
+      no_hp: noHp,
+      email: email,
+      integrasi: integrasi,
+      jenis_layanan: jenisLayanan,
+      sub_layanan: subLayanan
+    };
+
+    try {
+      if (API_URL === 'local') {
+        const newKey = `SM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.random().toString(36).substr(2,4).toUpperCase()}`;
+        allData.unshift({ key: newKey, ...payloadData, status_alur: '1_PETUGAS_SCAN' });
+        showToast(`Berkas berhasil dibuat dengan Key: ${newKey}`, 'success');
+        berkasForm.reset();
+        switchPage('dashboard');
+      } else {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'create', data: payloadData })
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+          showToast(`Berkas berhasil dibuat dengan Key: ${result.data.key}`, 'success');
+          berkasForm.reset();
+          switchPage('dashboard');
+        } else {
+          showToast(result.message || 'Gagal menyimpan berkas!', 'error');
+        }
+      }
+    } catch (err) {
+      console.error('Error create berkas:', err);
+      showToast('Gagal terhubung ke server saat pendaftaran berkas!', 'error');
+    }
+  });
+}
+
+// Sub Layanan Options Handler
+if (formJenisLayanan) {
+  formJenisLayanan.addEventListener('change', () => {
+    const selectedLayanan = formJenisLayanan.value;
+    const options = SUB_LAYANAN_OPTIONS[selectedLayanan] || [];
+    if (formSubLayanan) {
+      formSubLayanan.innerHTML = '<option value="">-- Pilih Sub Layanan --</option>' + 
+        options.map(opt => `<option value="${opt}">${opt}">${opt}</option>`).join('');
+    }
+  });
+}
+
+// LOCAL DATABASE SIMULATION FALLBACK
+function getLocalDB() {
+  return [
+    {
+      key: "SM-20260906-A1B2",
+      tanggal: "2026-09-06",
+      fasilitasi: "Dinas",
+      operator: "Operator Dinas",
+      pemohon: "Budi Santoso",
+      alamat: "Jl. Merdeka No. 12",
+      no_hp: "081234567890",
+      email: "budi@gmail.com",
+      integrasi: "SIAK Terintegrasi",
+      jenis_layanan: "Pendaftaran Penduduk",
+      sub_layanan: "Kartu Keluarga (KK) Baru / Perubahan",
+      link_file: "",
+      status_alur: "1_PETUGAS_SCAN",
+      status_tte: "",
+      penerima: "",
+      catatan_scan: "",
+      catatan_kasie: "",
+      catatan_kabid: "",
+      catatan_kadis: "",
+      catatan_upt: "",
+      catatan_print: "",
+      riwayat_pending: ""
+    }
+  ];
+}
+
+// HELPER TOAST NOTIFICATION
+function showToast(message, type = 'info') {
+  if (!toast) return;
+  toast.textContent = message;
+  toast.className = `toast ${type} show`;
+  setTimeout(() => {
+    toast.className = 'toast';
+  }, 3500);
 }
 
 function formatDate(dateStr) {
@@ -650,11 +898,7 @@ function formatDate(dateStr) {
   try {
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
-    return date.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
+    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   } catch {
     return dateStr;
   }
@@ -673,4 +917,5 @@ function escapeHTML(str) {
   );
 }
 
+// Auto load data saat awal
 loadData();
