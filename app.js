@@ -1086,24 +1086,24 @@ function renderRekapitulasi() {
       const isWithinRange = (!filterStartDate || currentDayDate >= filterStartDate) && (!filterEndDate || currentDayDate <= filterEndDate);
       const redInfo = isHolidayOrWeekend(selectedYear, selectedMonth, d);
 
-      let dayStyle = 'text-align:center; min-width:28px; padding:4px; font-size:0.78rem;';
+      let dayStyle = 'text-align:center; min-width:20px; padding:4px 1px; font-size:0.75rem;';
       let colTitle = redInfo.label || '';
 
       if (redInfo.isRed) {
-        dayStyle = `text-align:center; min-width:28px; padding:4px; font-size:0.8rem; background:rgba(239, 68, 68, 0.4); color:#fca5a5; font-weight:800; border-bottom: 2px solid #ef4444;`;
+        dayStyle = `text-align:center; min-width:20px; padding:4px 1px; font-size:0.75rem; background:rgba(239, 68, 68, 0.4); color:#fca5a5; font-weight:800; border-bottom: 2px solid #ef4444;`;
       } else if (filterStartDate || filterEndDate) {
         if (isWithinRange) {
-          dayStyle = `text-align:center; min-width:28px; padding:4px; font-size:0.8rem; background:rgba(59, 130, 246, 0.35); color:#ffffff; font-weight:800; border-bottom: 2px solid #3b82f6;`;
+          dayStyle = `text-align:center; min-width:20px; padding:4px 1px; font-size:0.75rem; background:rgba(59, 130, 246, 0.35); color:#ffffff; font-weight:800; border-bottom: 2px solid #3b82f6;`;
         }
       }
 
       dayCols += `<th style="${dayStyle}" title="${escapeHTML(colTitle)}" class="${redInfo.isRed ? 'holiday-col' : ''}">${d}</th>`;
     }
     headerDaysRow.innerHTML = `
-      <th style="width:34px; text-align:center; padding:6px 4px;">No</th>
-      <th style="min-width:220px; width:auto; text-align:left; padding:6px 10px; white-space:normal; overflow-wrap:break-word;">Uraian (Sub Layanan)</th>
+      <th style="width:26px; text-align:center; padding:5px 2px;">NO</th>
+      <th style="min-width:110px; max-width:145px; text-align:left; padding:5px 6px; white-space:nowrap;">URAIAN (SUB LAYANAN)</th>
       ${dayCols}
-      <th style="width:50px; text-align:center; background:rgba(56,189,248,0.25); padding:6px 4px;">Jumlah</th>
+      <th style="width:42px; text-align:center; background:rgba(56,189,248,0.25); padding:5px 2px;">JUMLAH</th>
     `;
   }
 
@@ -1171,17 +1171,17 @@ function renderRekapitulasi() {
         cellBg = cnt > 0 ? 'font-weight:700; color:#38bdf8;' : 'color:rgba(255,255,255,0.25);';
       }
 
-      return `<td style="text-align:center; padding:4px; font-size:0.8rem; ${cellBg}">${cnt || 0}</td>`;
+      return `<td style="text-align:center; padding:3px 1px; font-size:0.78rem; ${cellBg}">${cnt || 0}</td>`;
     }).join('');
 
     grandTotal += rowSum;
 
     return `
       <tr>
-        <td style="text-align:center; font-size:0.8rem;">${index + 1}</td>
-        <td style="text-align:left; padding:5px 8px; font-weight:600; font-size:0.82rem; white-space:normal; overflow-wrap:break-word; word-break:normal;">${escapeHTML(sub)}</td>
+        <td style="text-align:center; font-size:0.78rem; padding:3px 2px;">${index + 1}</td>
+        <td style="text-align:left; padding:3px 6px; font-weight:600; font-size:0.78rem; white-space:nowrap;">${escapeHTML(sub)}</td>
         ${cells}
-        <td style="text-align:center; font-weight:700; background:rgba(56,189,248,0.15); color:#38bdf8; font-size:0.82rem;">${rowSum}</td>
+        <td style="text-align:center; font-weight:700; background:rgba(56,189,248,0.15); color:#38bdf8; font-size:0.78rem; padding:3px 2px;">${rowSum}</td>
       </tr>
     `;
   }).join('');
@@ -1190,16 +1190,16 @@ function renderRekapitulasi() {
     const dayNum = i + 1;
     const redInfo = isHolidayOrWeekend(selectedYear, selectedMonth, dayNum);
     const style = redInfo.isRed ? 
-      `text-align:center; padding:4px; font-weight:800; color:#fca5a5; background:rgba(239, 68, 68, 0.3); font-size:0.8rem;` : 
-      `text-align:center; padding:4px; font-weight:800; color:#34d399; background:rgba(16,185,129,0.1); font-size:0.8rem;`;
+      `text-align:center; padding:3px 1px; font-weight:800; color:#fca5a5; background:rgba(239, 68, 68, 0.3); font-size:0.78rem;` : 
+      `text-align:center; padding:3px 1px; font-weight:800; color:#34d399; background:rgba(16,185,129,0.1); font-size:0.78rem;`;
     return `<th style="${style}">${t}</th>`;
   }).join('');
 
   const footerRowHtml = `
     <tr style="background:rgba(15,23,42,0.95); font-weight:bold;">
-      <td colspan="2" style="text-align:right; padding:8px 12px; font-weight:800; color:#34d399; font-size:0.85rem;">TOTAL KESELURUHAN:</td>
+      <td colspan="2" style="text-align:right; padding:5px 8px; font-weight:800; color:#34d399; font-size:0.8rem;">TOTAL KESELURUHAN:</td>
       ${totalCells}
-      <th style="text-align:center; font-size:0.9rem; font-weight:800; color:#34d399; background:rgba(16,185,129,0.25);">${grandTotal}</th>
+      <th style="text-align:center; font-size:0.85rem; font-weight:800; color:#34d399; background:rgba(16,185,129,0.25); padding:5px 2px;">${grandTotal}</th>
     </tr>
   `;
 
@@ -1227,7 +1227,7 @@ window.exportRekapToPDF = function() {
   if (!printArea) return;
 
   if (typeof html2pdf !== 'undefined') {
-    showToast('Sedang membuat file PDF...', 'info');
+    showToast('Sedang membuat file PDF 1 Halaman...', 'info');
 
     // Clone area rekap & beri font yang disesuaikan presisi agar seluruh 34 kolom muat alami pada 1 kertas A4 Landscape
     const clone = printArea.cloneNode(true);
@@ -1235,7 +1235,7 @@ window.exportRekapToPDF = function() {
     clone.style.maxWidth = '1080px';
     clone.style.background = '#ffffff';
     clone.style.color = '#000000';
-    clone.style.padding = '8px 8px'; // Margin/padding simetris di kiri dan kanan
+    clone.style.padding = '6px 8px';
     clone.style.boxSizing = 'border-box';
     clone.style.borderRadius = '0px';
 
@@ -1244,9 +1244,9 @@ window.exportRekapToPDF = function() {
       infoBox.style.background = '#f8fafc';
       infoBox.style.border = '1px solid #94a3b8';
       infoBox.style.color = '#0f172a';
-      infoBox.style.padding = '6px 10px';
-      infoBox.style.marginBottom = '10px';
-      infoBox.style.fontSize = '8.5pt';
+      infoBox.style.padding = '5px 8px';
+      infoBox.style.marginBottom = '8px';
+      infoBox.style.fontSize = '8pt';
       infoBox.querySelectorAll('div, span, strong').forEach(sp => sp.style.color = '#0f172a');
     }
 
@@ -1256,11 +1256,11 @@ window.exportRekapToPDF = function() {
       table.style.maxWidth = '100%';
       table.style.tableLayout = 'auto'; // Layout proporsional alami tanpa pemaksaan lebar kolom
       table.style.borderCollapse = 'collapse';
-      table.style.fontSize = '6.5pt';
+      table.style.fontSize = '6.2pt';
 
       table.querySelectorAll('th, td').forEach(el => {
         el.style.borderColor = '#475569';
-        el.style.padding = '2px 2px';
+        el.style.padding = '1px 1px';
         el.style.boxSizing = 'border-box';
 
         if (el.classList.contains('holiday-col')) {
@@ -1270,36 +1270,47 @@ window.exportRekapToPDF = function() {
         } else if (el.tagName === 'TH') {
           el.style.background = '#e2e8f0';
           el.style.color = '#0f172a';
-          el.style.fontSize = '6.8pt';
+          el.style.fontSize = '6.5pt';
         } else {
           el.style.color = '#0f172a';
-          el.style.fontSize = '6.5pt';
+          el.style.fontSize = '6.2pt';
           if (el.textContent.trim() === '0') {
             el.style.color = '#94a3b8';
           }
         }
       });
 
-      // ✏️ PENYESUAIAN KHUSUS KOLOM URAIAN SUB LAYANAN:
-      // Sesuaikan lebar dengan panjang kalimat agar kalimat terbaca penuh dan pembungkusan kata proporsional
+      // ✏️ PENYESUAIAN KETAT KOLOM URAIAN SUB LAYANAN:
+      // Diperkecil mengikuti lebar maksimal karakter (max-width 135px) agar seluruh 31 hari & Jumlah MUAT 1 HALAMAN!
       table.querySelectorAll('th:nth-child(2), td:nth-child(2)').forEach(el => {
         el.style.textAlign = 'left';
-        el.style.whiteSpace = 'normal';
-        el.style.wordBreak = 'normal';
-        el.style.overflowWrap = 'break-word';
-        el.style.paddingLeft = '6px';
+        el.style.whiteSpace = 'nowrap';
+        el.style.paddingLeft = '4px';
         el.style.paddingRight = '6px';
-        el.style.minWidth = '210px'; // Memberikan ruang lebar kalimat Uraian yang proporsional
-        el.style.maxWidth = '270px';
-        el.style.fontSize = '7.5pt';
-        el.style.fontWeight = '600';
+        el.style.width = 'auto';
+        el.style.minWidth = '110px';
+        el.style.maxWidth = '140px';
+        el.style.fontSize = '6.8pt';
+        el.style.fontWeight = '700';
         el.style.color = '#0f172a';
+      });
+
+      // Kolom No & Jumlah
+      table.querySelectorAll('th:first-child, td:first-child').forEach(el => {
+        el.style.width = '22px';
+        el.style.padding = '1px 1px';
+        el.style.textAlign = 'center';
+      });
+      table.querySelectorAll('th:last-child, td:last-child').forEach(el => {
+        el.style.width = '35px';
+        el.style.padding = '1px 1px';
+        el.style.textAlign = 'center';
       });
     }
 
     const ttdBlock = clone.querySelector('.rekap-signature-block');
     if (ttdBlock) {
-      ttdBlock.style.marginTop = '20px';
+      ttdBlock.style.marginTop = '14px';
       ttdBlock.style.pageBreakInside = 'avoid';
       ttdBlock.style.breakInside = 'avoid';
       ttdBlock.querySelectorAll('div, span').forEach(d => d.style.color = '#0f172a');
@@ -1310,16 +1321,16 @@ window.exportRekapToPDF = function() {
       footnote.style.display = 'flex';
       footnote.style.justifyContent = 'space-between';
       footnote.style.width = '100%';
-      footnote.style.marginTop = '15px';
-      footnote.style.paddingTop = '6px';
+      footnote.style.marginTop = '10px';
+      footnote.style.paddingTop = '4px';
       footnote.style.borderTop = '1px dashed #475569';
       footnote.style.color = '#0f172a';
-      footnote.style.fontSize = '0.75rem';
+      footnote.style.fontSize = '0.7rem';
       footnote.style.pageBreakInside = 'avoid';
       footnote.style.breakInside = 'avoid';
       footnote.querySelectorAll('div, span').forEach(d => {
         d.style.color = '#0f172a';
-        d.style.fontSize = '0.75rem';
+        d.style.fontSize = '0.7rem';
       });
     }
 

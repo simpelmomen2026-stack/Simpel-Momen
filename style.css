@@ -1067,15 +1067,16 @@ td {
   }
   #rekapPrintArea th:nth-child(2), #rekapPrintArea td:nth-child(2) {
     text-align: left !important;
-    white-space: normal !important;
-    word-break: normal !important;
-    overflow-wrap: break-word !important;
-    min-width: 200px !important;
-    font-weight: 600 !important;
+    white-space: nowrap !important;
+    min-width: 110px !important;
+    max-width: 140px !important;
+    font-weight: 700 !important;
+    padding-left: 4px !important;
+    padding-right: 6px !important;
   }
   @page {
     size: A4 landscape;
-    margin: 6mm;
+    margin: 5mm;
   }
 }
 
