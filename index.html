@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=20260906_05">
+  <link rel="stylesheet" href="style.css?v=20260906_06">
 </head>
 <body>
 
@@ -183,81 +183,105 @@
 
         <!-- ================= PAGE 2: FORM PENDAFTARAN BERKAS (OPERATOR) ================= -->
         <div class="page-container" id="page-input-form" style="display: none;">
-          <div class="card form-card">
-            <div class="card-header">
-              <h2>Formulir Pendaftaran Berkas Baru</h2>
-              <p>Isikan data permohonan pemohon dengan akurat untuk memulai alur pelayanan berjenjang.</p>
+          <div class="card form-card" style="max-width: 900px; margin: 0 auto; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 20px; padding: 2rem;">
+            <div class="card-header" style="border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 1.25rem; margin-bottom: 1.75rem; display: flex; align-items: center; gap: 1rem;">
+              <div style="font-size: 2.2rem; background: linear-gradient(135deg, #3b82f6, #8b5cf6); border-radius: 14px; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(59,130,246,0.3);">📝</div>
+              <div>
+                <h2 style="font-family: var(--font-title); font-size: 1.45rem; font-weight: 800; color: #fff; margin: 0;">Formulir Pendaftaran Berkas Digital</h2>
+                <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 2px;">Input data permohonan warga secara resmi untuk memulai alur pelayanan berjenjang.</p>
+              </div>
             </div>
             
             <form id="berkasForm">
               <input type="hidden" id="formKey">
               <input type="hidden" id="formRiwayatPending">
               
-              <div class="form-grid">
-                <div class="form-group">
-                  <label for="formTanggal">Tanggal Permohonan *</label>
-                  <input type="date" id="formTanggal" required>
+              <!-- Section 1: Tanggal & Informasi Petugas -->
+              <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 1.25rem; margin-bottom: 1.5rem;">
+                <div style="font-size: 0.82rem; font-weight: 700; color: #60a5fa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; display: flex; align-items: center; gap: 6px;">
+                  ⏱️ INFORMASI SISTEM & PETUGAS (DIKUNCI SINKRON WAKTU SISTEM)
                 </div>
-                
-                <div class="form-group">
-                  <label for="formOperator">Nama Operator *</label>
-                  <input type="text" id="formOperator" readonly style="width: 100%; padding: 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.9rem;" required>
-                </div>
-                
-                <div class="form-group">
-                  <label for="formPemohon">Nama Pemohon / Warga *</label>
-                  <input type="text" id="formPemohon" placeholder="Masukkan nama lengkap pemohon..." required>
-                </div>
-                
-                <div class="form-group">
-                  <label for="formNoHp">Nomor HP / WA Pemohon *</label>
-                  <input type="text" id="formNoHp" placeholder="08xxxxxxxxxx" required>
-                </div>
-                
-                <div class="form-group">
-                  <label for="formEmail">Alamat Email (Opsional)</label>
-                  <input type="email" id="formEmail" placeholder="contoh@email.com">
-                </div>
-                
-                <div class="form-group">
-                  <label for="formIntegrasi">Status Integrasi Berkas *</label>
-                  <select id="formIntegrasi" required>
-                    <option value="Non Integrasi">Non Integrasi (Single Dokumentasi)</option>
-                    <option value="Integrasi">Integrasi Paket (Multi Dokumen)</option>
-                  </select>
+                <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem;">
+                  <div class="form-group">
+                    <label for="formWaktuSistem" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">📅 Waktu Penginputan (Sistem) *</label>
+                    <input type="text" id="formWaktuSistem" readonly style="width: 100%; padding: 11px 14px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 10px; color: #38bdf8; font-weight: 700; font-family: monospace; font-size: 0.9rem;" title="Tanggal & Waktu dikunci otomatis oleh sistem">
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="formOperator" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">👤 Nama Operator Penginput *</label>
+                    <input type="text" id="formOperator" readonly style="width: 100%; padding: 11px 14px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-weight: 600; font-size: 0.9rem;" required>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="formFasilitasiDisplay" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">🏛️ Lokasi Fasilitasi *</label>
+                    <input type="text" id="formFasilitasiDisplay" readonly style="width: 100%; padding: 11px 14px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); border-radius: 10px; color: #c084fc; font-weight: 600; font-size: 0.9rem;">
+                  </div>
                 </div>
               </div>
 
-              <div class="form-group" style="margin-top: 15px;">
-                <label for="formAlamat">Alamat Pemohon *</label>
-                <textarea id="formAlamat" rows="2" placeholder="Isikan alamat lengkap pemohon..." required></textarea>
-              </div>
-
-              <div class="form-grid" style="margin-top: 15px;">
-                <div class="form-group">
-                  <label for="formJenisLayanan">Kategori Utama Layanan *</label>
-                  <select id="formJenisLayanan" required>
-                    <option value="Pendaftaran Penduduk">Pendaftaran Penduduk (Dafduk)</option>
-                    <option value="Pencatatan Sipil">Pencatatan Sipil (Capil)</option>
-                  </select>
+              <!-- Section 2: Data Pemohon & Warga -->
+              <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 1.25rem; margin-bottom: 1.5rem;">
+                <div style="font-size: 0.82rem; font-weight: 700; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; display: flex; align-items: center; gap: 6px;">
+                  👤 DATA DIRI PEMOHON / WARGA
                 </div>
-                
-                <div class="form-group">
-                  <label for="formSubLayanan">Sub Jenis Layanan *</label>
-                  <select id="formSubLayanan" required>
-                    <!-- Populated dynamically -->
-                  </select>
+                <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem;">
+                  <div class="form-group">
+                    <label for="formPemohon" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Nama Lengkap Pemohon *</label>
+                    <input type="text" id="formPemohon" placeholder="Isikan nama lengkap pemohon..." required style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="formNoHp" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Nomor HP / WhatsApp Active *</label>
+                    <input type="text" id="formNoHp" placeholder="08xxxxxxxxxx" required style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="formEmail" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Alamat Email (Opsional)</label>
+                    <input type="email" id="formEmail" placeholder="pemohon@email.com" style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="formIntegrasi" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Status Paket Integrasi *</label>
+                    <select id="formIntegrasi" required style="width: 100%; padding: 11px 14px; background: rgba(17, 24, 39, 0.9); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+                      <option value="Non Integrasi">Single Dokumentasi (Non Integrasi)</option>
+                      <option value="Integrasi Paket">Paket Integrasi (Multi Dokumen)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 1.25rem;">
+                  <label for="formAlamat" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Alamat Lengkap Pemohon *</label>
+                  <textarea id="formAlamat" rows="2" placeholder="Isikan alamat domisili lengkap pemohon..." required style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem; resize: vertical;"></textarea>
                 </div>
               </div>
 
-              <div class="form-group" style="margin-top: 15px;">
-                <label for="formLinkFile">Link Berkas Scan PDF / Cloud (Opsional)</label>
-                <input type="url" id="formLinkFile" placeholder="https://drive.google.com/file/d/...">
+              <!-- Section 3: Kategori & Sub Layanan Dropdown -->
+              <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 1.25rem; margin-bottom: 1.75rem;">
+                <div style="font-size: 0.82rem; font-weight: 700; color: #34d399; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; display: flex; align-items: center; gap: 6px;">
+                  📄 SPESIFIKASI LAYANAN DUKCAPIL
+                </div>
+                <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem;">
+                  <div class="form-group">
+                    <label for="formJenisLayanan" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Kategori Utama Layanan *</label>
+                    <select id="formJenisLayanan" required style="width: 100%; padding: 11px 14px; background: rgba(17, 24, 39, 0.9); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+                      <option value="Pendaftaran Penduduk">Pendaftaran Penduduk (Dafduk)</option>
+                      <option value="Pencatatan Sipil">Pencatatan Sipil (Capil)</option>
+                    </select>
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="formSubLayanan" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Sub Jenis Layanan (Dropdown) *</label>
+                    <select id="formSubLayanan" required style="width: 100%; padding: 11px 14px; background: rgba(17, 24, 39, 0.9); border: 1px solid var(--primary); border-radius: 10px; color: #fff; font-size: 0.9rem; font-weight: 600;">
+                      <!-- Dynamically populated via JavaScript -->
+                    </select>
+                  </div>
+                </div>
               </div>
 
-              <div class="form-actions" style="margin-top: 25px; display: flex; gap: 10px;">
-                <button type="submit" class="btn btn-primary" id="btnSubmitForm">🚀 Daftarkan & Kirim ke Scan</button>
-                <button type="button" class="btn btn-secondary" id="btnResetForm">🔄 Reset Formulir</button>
+              <!-- Form Action Buttons -->
+              <div class="form-actions" style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" id="btnResetForm" style="padding: 12px 20px;">🔄 Reset Formulir</button>
+                <button type="submit" class="btn btn-primary" id="btnSubmitForm" style="padding: 12px 24px; font-size: 0.95rem; box-shadow: 0 4px 15px rgba(59,130,246,0.35);">🚀 Daftarkan & Kirim ke Scan</button>
               </div>
             </form>
           </div>
@@ -375,6 +399,13 @@
           <div><strong>Layanan:</strong> <span id="modalLayananText">-</span></div>
         </div>
 
+        <!-- Khusus Petugas Scan: Input Link File PDF Hasil Scan -->
+        <div class="form-group" id="scanLinkGroup" style="display: none; margin-bottom: 15px;">
+          <label for="modalLinkFile" style="color: #60a5fa;">📄 Link File Scan PDF / Cloud (Wajib Diisi Petugas Scan) *</label>
+          <input type="url" id="modalLinkFile" placeholder="https://drive.google.com/file/d/... atau Cloud URL" style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.3); border:1px solid var(--primary); border-radius:8px; color:#fff;">
+          <small style="color: var(--text-muted); font-size: 0.78rem;">Masukkan link URL berkas PDF hasil scan berkas fisik pemohon.</small>
+        </div>
+
         <!-- Opsi Status TTE (Khusus Petugas TTE) -->
         <div class="form-group" id="tteStatusGroup" style="display: none; margin-bottom: 15px;">
           <label for="tteStatus">Status TTE / SIAK *</label>
@@ -420,6 +451,6 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="app.js?v=20260906_05"></script>
+  <script src="app.js?v=20260906_06"></script>
 </body>
 </html>

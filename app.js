@@ -71,11 +71,13 @@ const counterEntriesCount = document.getElementById('counterEntriesCount');
 const counterTableBody = document.getElementById('counterTableBody');
 const counterSearchInput = document.getElementById('counterSearchInput');
 
+// Form elements
 const berkasForm = document.getElementById('berkasForm');
 const formKey = document.getElementById('formKey');
 const formRiwayatPending = document.getElementById('formRiwayatPending');
-const formTanggal = document.getElementById('formTanggal');
+const formWaktuSistem = document.getElementById('formWaktuSistem');
 const formOperator = document.getElementById('formOperator');
+const formFasilitasiDisplay = document.getElementById('formFasilitasiDisplay');
 const formPemohon = document.getElementById('formPemohon');
 const formNoHp = document.getElementById('formNoHp');
 const formEmail = document.getElementById('formEmail');
@@ -83,7 +85,6 @@ const formIntegrasi = document.getElementById('formIntegrasi');
 const formAlamat = document.getElementById('formAlamat');
 const formJenisLayanan = document.getElementById('formJenisLayanan');
 const formSubLayanan = document.getElementById('formSubLayanan');
-const formLinkFile = document.getElementById('formLinkFile');
 const btnSubmitForm = document.getElementById('btnSubmitForm');
 const btnResetForm = document.getElementById('btnResetForm');
 
@@ -106,6 +107,8 @@ const modalKey = document.getElementById('modalKey');
 const modalKodeText = document.getElementById('modalKodeText');
 const modalPemohonText = document.getElementById('modalPemohonText');
 const modalLayananText = document.getElementById('modalLayananText');
+const scanLinkGroup = document.getElementById('scanLinkGroup');
+const modalLinkFile = document.getElementById('modalLinkFile');
 const standardActionGroup = document.getElementById('standardActionGroup');
 const modalExecuteAction = document.getElementById('modalExecuteAction');
 const tteStatusGroup = document.getElementById('tteStatusGroup');
@@ -227,7 +230,7 @@ if (loginForm) {
           showToast('Username atau password tidak ditemukan!', 'error');
         }
       } else {
-        // Login Online via Google Sheets Apps Script API (GET Parameter anti-redirect cross origin)
+        // Login Online via Google Sheets Apps Script API
         try {
           const loginUrl = `${API_URL}?action=login&username=${encodeURIComponent(usernameVal)}&password=${encodeURIComponent(passwordVal)}`;
           const response = await fetch(loginUrl, { method: 'GET' });
@@ -301,7 +304,7 @@ function setupLoggedInUI() {
   const initials = String(displayName).trim().split(/\s+/).map(n => n[0]).join('').slice(0, 2).toUpperCase();
   if (userAvatar) userAvatar.textContent = initials || 'OP';
 
-  const fasilitasiStr = currentUser.fasilitasi || '';
+  const fasilitasiStr = currentUser.fasilitasi || 'Dinas';
   const uptCodeStr = currentUser.uptCode || '';
 
   const roleTitleMap = {
@@ -324,11 +327,13 @@ function setupLoggedInUI() {
     if (currentUser.role === 'operator') {
       menuInputForm.style.display = 'flex';
       if (formOperator) formOperator.value = displayName;
+      if (formFasilitasiDisplay) formFasilitasiDisplay.value = fasilitasiStr === 'UPT' ? `🏛️ ${uptCodeStr || 'UPT'}` : '🏢 Fasilitasi Dinas';
     } else {
       menuInputForm.style.display = 'none';
     }
   }
 
+  updateSubLayananOptions();
   switchPage('dashboard');
   loadData();
 }
@@ -357,6 +362,12 @@ function switchPage(pageId) {
   } else if (pageId === 'input-form') {
     if (pageTitle) pageTitle.textContent = `Pendaftaran Berkas Baru`;
     if (pageSubtitle) pageSubtitle.textContent = `Operator ${currentUser ? currentUser.fasilitasi : ''} - Input formulir digital pelayanan.`;
+    if (formWaktuSistem) formWaktuSistem.value = getLocalDateTimeString();
+    if (formOperator && currentUser) formOperator.value = currentUser.name || currentUser.username;
+    if (formFasilitasiDisplay && currentUser) {
+      formFasilitasiDisplay.value = currentUser.fasilitasi === 'UPT' ? `🏛️ ${currentUser.uptCode || 'UPT'}` : '🏢 Fasilitasi Dinas';
+    }
+    updateSubLayananOptions();
   } else if (pageId === 'monitoring') {
     if (pageTitle) pageTitle.textContent = `Monitoring Alur Pelayanan`;
     if (pageSubtitle) pageSubtitle.textContent = `Lacak perjalanan dan verifikasi dokumen secara real-time.`;
@@ -366,6 +377,18 @@ function switchPage(pageId) {
     if (pageSubtitle) pageSubtitle.textContent = `Laporan statistik berkas masuk, dalam alur, dan selesai dicetak.`;
     renderRekapitulasi();
   }
+}
+
+// Sub Layanan Options Handler (Dropdown Otomatis)
+function updateSubLayananOptions() {
+  if (!formJenisLayanan || !formSubLayanan) return;
+  const selectedLayanan = formJenisLayanan.value || "Pendaftaran Penduduk";
+  const options = SUB_LAYANAN_OPTIONS[selectedLayanan] || [];
+  formSubLayanan.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+}
+
+if (formJenisLayanan) {
+  formJenisLayanan.addEventListener('change', updateSubLayananOptions);
 }
 
 navLinks.forEach(link => {
@@ -624,7 +647,12 @@ function renderCounterDesk() {
     const isSelesai = row.status_alur === '7_SELESAI';
     const rowStyle = isPending ? 'background: rgba(239, 68, 68, 0.08);' : (isSelesai ? 'background: rgba(16, 185, 129, 0.04);' : '');
     
-    // Tentukan Tombol Akses Langsung
+    // Link file scan jika ada
+    const hasLink = row.link_file && row.link_file.trim().startsWith('http');
+    const linkBtnHtml = hasLink ? 
+      `<br><a href="${escapeHTML(row.link_file.trim())}" target="_blank" class="btn btn-secondary btn-xs" style="color:#60a5fa; margin-top:4px; font-size:0.75rem; padding:2px 8px;">📄 Buka Scan PDF</a>` : '';
+
+    // Tombol Akses Tindakan
     let actionBtnHtml = '';
     if (isSelesai) {
       actionBtnHtml = `
@@ -643,6 +671,12 @@ function renderCounterDesk() {
           🛠️ Perbaiki & Kirim Ulang
         </button>
       `;
+    } else if (role === 'petugas_scan') {
+      actionBtnHtml = `
+        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+          📄 Scan & Kirim Berkas
+        </button>
+      `;
     } else {
       actionBtnHtml = `
         <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
@@ -656,7 +690,7 @@ function renderCounterDesk() {
         <td><span class="code-key-badge">${escapeHTML(row.key)}</span></td>
         <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
         <td><strong>${escapeHTML(row.pemohon)}</strong><br><small style="color:var(--text-muted);">${escapeHTML(row.no_hp || '-')}</small></td>
-        <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small></td>
+        <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small>${linkBtnHtml}</td>
         <td><span class="badge ${row.integrasi && row.integrasi.includes('Non') ? 'badge-upt' : 'fasilitasi-dinas'}">${escapeHTML(row.integrasi || 'SIAK')}</span></td>
         <td style="font-weight: 600; color: #a78bfa;">${escapeHTML(row.status_alur)}</td>
         <td class="text-center">${actionBtnHtml}</td>
@@ -707,12 +741,16 @@ function renderMonitoringTable() {
                         isPending ? '<span class="badge pending">⚠️ Pending Operator</span>' : 
                         '<span class="badge" style="background:rgba(59,130,246,0.2); color:#60a5fa;">⏳ Dalam Alur</span>';
 
+    const hasLink = row.link_file && row.link_file.trim().startsWith('http');
+    const linkBtnHtml = hasLink ? 
+      `<br><a href="${escapeHTML(row.link_file.trim())}" target="_blank" class="btn btn-secondary btn-xs" style="color:#60a5fa; margin-top:4px; font-size:0.75rem; padding:2px 8px;">📄 Buka Scan PDF</a>` : '';
+
     return `
       <tr>
         <td><span class="code-key-badge">${escapeHTML(row.key)}</span></td>
         <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
         <td><strong>${escapeHTML(row.pemohon)}</strong></td>
-        <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small></td>
+        <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small>${linkBtnHtml}</td>
         <td>${escapeHTML(row.operator || '-')}</td>
         <td style="font-weight: 500;">${escapeHTML(row.status_alur)}</td>
         <td><small style="color:var(--text-muted);">${escapeHTML(row.riwayat_pending || row.catatan_print || row.catatan_kadis || '-')}</small></td>
@@ -775,13 +813,25 @@ window.openActionModal = function(key) {
 
   const role = currentUser ? currentUser.role : '';
   
+  if (scanLinkGroup) {
+    if (role === 'petugas_scan') {
+      scanLinkGroup.style.display = 'block';
+      if (modalLinkFile) modalLinkFile.value = item.link_file || '';
+    } else {
+      scanLinkGroup.style.display = 'none';
+    }
+  }
+
   if (tteStatusGroup) tteStatusGroup.style.display = (role === 'petugas_tte') ? 'block' : 'none';
   if (penerimaGroup) penerimaGroup.style.display = (role === 'petugas_pencetakan') ? 'block' : 'none';
   if (modalNotes) modalNotes.value = '';
 
   // Dinamiskan nama tombol eksekusi
   if (saveModalBtn) {
-    if (role === 'petugas_pencetakan') {
+    if (role === 'petugas_scan') {
+      saveModalBtn.textContent = '📄 Simpan Link & Kirim ke Verifikasi';
+      saveModalBtn.className = 'btn btn-primary';
+    } else if (role === 'petugas_pencetakan') {
       saveModalBtn.textContent = '🎉 Simpan & Selesaikan Cetak Dokumen';
       saveModalBtn.className = 'btn btn-success';
     } else if (role === 'operator') {
@@ -812,6 +862,7 @@ if (actionForm) {
     const notes = modalNotes ? modalNotes.value.trim() : '';
     const statusTteVal = tteStatus ? tteStatus.value : '';
     const penerimaVal = modalPenerima ? modalPenerima.value.trim() : '';
+    const linkFileVal = modalLinkFile ? modalLinkFile.value.trim() : '';
 
     const submitBtn = actionForm.querySelector('button[type="submit"]');
     if (submitBtn) submitBtn.disabled = true;
@@ -820,6 +871,9 @@ if (actionForm) {
       if (API_URL === 'local') {
         const item = allData.find(d => String(d.key) === String(key));
         if (item) {
+          if (currentUser.role === 'petugas_scan') {
+            item.link_file = linkFileVal;
+          }
           if (executeAction === 'pending') {
             item.status_alur = 'PENDING_OPERATOR';
             item.riwayat_pending = `PENDING by ${currentUser.role}: ${notes}\n${item.riwayat_pending || ''}`;
@@ -844,7 +898,8 @@ if (actionForm) {
             executeAction: executeAction,
             notes: notes,
             status_tte: statusTteVal,
-            penerima: penerimaVal
+            penerima: penerimaVal,
+            link_file: linkFileVal
           })
         });
         const result = await response.json();
@@ -865,17 +920,18 @@ if (actionForm) {
   });
 }
 
-// FORM INPUT OPERATOR SUBMIT
+// FORM INPUT OPERATOR SUBMIT (Ter-sinkron Waktu Sistem Presisi)
 if (berkasForm) {
   berkasForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const currentSystemTime = getLocalDateTimeString();
     const pemohon = formPemohon ? formPemohon.value.trim() : '';
     const noHp = formNoHp ? formNoHp.value.trim() : '';
     const email = formEmail ? formEmail.value.trim() : '';
     const alamat = formAlamat ? formAlamat.value.trim() : '';
     const jenisLayanan = formJenisLayanan ? formJenisLayanan.value : '';
     const subLayanan = formSubLayanan ? formSubLayanan.value : '';
-    const integrasi = formIntegrasi ? formIntegrasi.value : 'SIAK Terintegrasi';
+    const integrasi = formIntegrasi ? formIntegrasi.value : 'Non Integrasi';
 
     if (!pemohon || !jenisLayanan || !subLayanan) {
       showToast('Silakan lengkapi nama pemohon dan jenis/sub layanan!', 'error');
@@ -883,6 +939,7 @@ if (berkasForm) {
     }
 
     const payloadData = {
+      tanggal: currentSystemTime.slice(0, 10),
       fasilitasi: currentUser ? currentUser.fasilitasi || 'Dinas' : 'Dinas',
       operator: currentUser ? currentUser.name || currentUser.username : 'Operator',
       pemohon: pemohon,
@@ -894,12 +951,16 @@ if (berkasForm) {
       sub_layanan: subLayanan
     };
 
+    const submitBtn = berkasForm.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+
     try {
       if (API_URL === 'local') {
         const newKey = `SM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.random().toString(36).substr(2,4).toUpperCase()}`;
         allData.unshift({ key: newKey, ...payloadData, status_alur: '1_PETUGAS_SCAN' });
         showToast(`Berkas berhasil dibuat dengan Key: ${newKey}`, 'success');
         berkasForm.reset();
+        if (formWaktuSistem) formWaktuSistem.value = getLocalDateTimeString();
         switchPage('dashboard');
       } else {
         const response = await fetch(API_URL, {
@@ -911,6 +972,7 @@ if (berkasForm) {
         if (result.status === 'success') {
           showToast(`Berkas berhasil dibuat dengan Key: ${result.data.key}`, 'success');
           berkasForm.reset();
+          if (formWaktuSistem) formWaktuSistem.value = getLocalDateTimeString();
           switchPage('dashboard');
         } else {
           showToast(result.message || 'Gagal menyimpan berkas!', 'error');
@@ -919,19 +981,22 @@ if (berkasForm) {
     } catch (err) {
       console.error('Error create berkas:', err);
       showToast('Gagal terhubung ke server saat pendaftaran berkas!', 'error');
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
     }
   });
 }
 
-// Sub Layanan Options Handler
-if (formJenisLayanan) {
-  formJenisLayanan.addEventListener('change', () => {
-    const selectedLayanan = formJenisLayanan.value;
-    const options = SUB_LAYANAN_OPTIONS[selectedLayanan] || [];
-    if (formSubLayanan) {
-      formSubLayanan.innerHTML = '<option value="">-- Pilih Sub Layanan --</option>' + 
-        options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+// Reset form event
+if (btnResetForm) {
+  btnResetForm.addEventListener('click', () => {
+    if (berkasForm) berkasForm.reset();
+    if (formWaktuSistem) formWaktuSistem.value = getLocalDateTimeString();
+    if (formOperator && currentUser) formOperator.value = currentUser.name || currentUser.username;
+    if (formFasilitasiDisplay && currentUser) {
+      formFasilitasiDisplay.value = currentUser.fasilitasi === 'UPT' ? `🏛️ ${currentUser.uptCode || 'UPT'}` : '🏢 Fasilitasi Dinas';
     }
+    updateSubLayananOptions();
   });
 }
 
@@ -998,6 +1063,13 @@ function escapeHTML(str) {
     }[tag] || tag)
   );
 }
+
+// Tick clock every second
+setInterval(() => {
+  if (formWaktuSistem && document.activeElement !== formWaktuSistem) {
+    formWaktuSistem.value = getLocalDateTimeString();
+  }
+}, 1000);
 
 // Auto load data saat awal
 loadData();
