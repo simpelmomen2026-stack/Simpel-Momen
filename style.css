@@ -738,6 +738,9 @@ td {
   max-width: 100%;
   height: auto;
   object-fit: contain;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .sidebar-logo {
@@ -746,8 +749,9 @@ td {
   max-width: 44px;
   max-height: 44px;
   object-fit: contain;
+  background: transparent !important;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.4));
-  border-radius: 8px;
+  border-radius: 0 !important;
   flex-shrink: 0;
 }
 
@@ -761,17 +765,16 @@ td {
   font-family: var(--font-title);
   font-size: 1.15rem;
   font-weight: 800;
-  color: #fff;
+  color: #ffffff !important;
   letter-spacing: -0.01em;
-  background: linear-gradient(135deg, #60a5fa, #a78bfa);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  background: none !important;
+  -webkit-text-fill-color: #ffffff !important;
   white-space: nowrap;
 }
 
 .brand-tagline {
   font-size: 0.72rem;
-  color: var(--text-muted);
+  color: #f8fafc !important;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -1036,29 +1039,35 @@ td {
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
-    color: #000 !important;
-    background: #fff !important;
+    color: #000000 !important;
+    background: #ffffff !important;
     padding: 10px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .rekap-signature-block, #rekapFootnote {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
   #rekapPrintArea div {
-    color: #000 !important;
+    color: #000000 !important;
     background: transparent !important;
-    border-color: #000 !important;
+    border-color: #64748b !important;
   }
   #rekapPrintArea table {
     border-collapse: collapse !important;
     width: 100% !important;
   }
   #rekapPrintArea th, #rekapPrintArea td {
-    border: 1px solid #000 !important;
-    color: #000 !important;
+    border: 1px solid #475569 !important;
+    color: #000000 !important;
     padding: 3px 4px !important;
     font-size: 8pt !important;
     background: transparent !important;
   }
   @page {
     size: A4 landscape;
-    margin: 10mm;
+    margin: 8mm;
   }
 }
 

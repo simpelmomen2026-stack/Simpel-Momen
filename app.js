@@ -944,6 +944,30 @@ window.exportMonitoringToPDF = function() {
   }
 };
 
+// Daftar Tanggal Merah / Libur Nasional (Format: MM-DD)
+const NATIONAL_HOLIDAYS = {
+  "01-01": "Tahun Baru Masehi",
+  "05-01": "Hari Buruh Internasional",
+  "06-01": "Hari Lahir Pancasila",
+  "08-17": "Hari Kemerdekaan RI",
+  "12-25": "Hari Raya Natal",
+  "12-26": "Cuti Bersama Natal"
+};
+
+function isHolidayOrSunday(year, monthIndex, dayNum) {
+  const d = new Date(year, monthIndex, dayNum);
+  const isSunday = d.getDay() === 0; // 0 = Minggu
+
+  const mStr = String(monthIndex + 1).padStart(2, '0');
+  const dStr = String(dayNum).padStart(2, '0');
+  const dateKey = `${mStr}-${dStr}`;
+  const holidayName = NATIONAL_HOLIDAYS[dateKey];
+
+  if (isSunday) return { isRed: true, label: "Hari Minggu" };
+  if (holidayName) return { isRed: true, label: holidayName };
+  return { isRed: false, label: "" };
+}
+
 // RENDER REKAPITULASI (Format Matriks Harian Bulan 1-31 Sesuai Referensi Google Sheets)
 function renderRekapitulasi() {
   const rekapMatrixBody = document.getElementById('rekapMatrixBody');
@@ -963,21 +987,29 @@ function renderRekapitulasi() {
   const monthSelect = document.getElementById('rekapMonthSelect');
   const yearSelect = document.getElementById('rekapYearSelect');
   const catSelect = document.getElementById('rekapCategorySelect');
-  const dateFilterInput = document.getElementById('rekapDateFilter');
+  const dateStartInput = document.getElementById('rekapDateStart');
+  const dateEndInput = document.getElementById('rekapDateEnd');
 
   const now = new Date();
-  const specificDateStr = dateFilterInput ? dateFilterInput.value : "";
-  let selectedMonth, selectedYear, specificDay = null;
+  const startDateStr = dateStartInput ? dateStartInput.value : "";
+  const endDateStr = dateEndInput ? dateEndInput.value : "";
 
-  if (specificDateStr) {
-    const parts = specificDateStr.split('-');
-    if (parts.length === 3) {
-      selectedYear = parseInt(parts[0]);
-      selectedMonth = parseInt(parts[1]) - 1;
-      specificDay = parseInt(parts[2]);
-      if (monthSelect) monthSelect.value = selectedMonth;
-      if (yearSelect) yearSelect.value = selectedYear;
-    }
+  let filterStartDate = null;
+  let filterEndDate = null;
+
+  if (startDateStr) {
+    filterStartDate = new Date(startDateStr + "T00:00:00");
+  }
+  if (endDateStr) {
+    filterEndDate = new Date(endDateStr + "T23:59:59");
+  }
+
+  let selectedMonth, selectedYear;
+  if (filterStartDate) {
+    selectedMonth = filterStartDate.getMonth();
+    selectedYear = filterStartDate.getFullYear();
+    if (monthSelect) monthSelect.value = selectedMonth;
+    if (yearSelect) yearSelect.value = selectedYear;
   } else {
     selectedMonth = monthSelect ? parseInt(monthSelect.value) : now.getMonth();
     selectedYear = yearSelect ? parseInt(yearSelect.value) : now.getFullYear();
@@ -998,26 +1030,48 @@ function renderRekapitulasi() {
   const rekapPeriodeText = document.getElementById('rekapPeriodeText');
   const rekapTglAkhir = document.getElementById('rekapTglAkhir');
   const rekapNamaTTD = document.getElementById('rekapNamaTTD');
+  const downloadTimeEl = document.getElementById('rekapDownloadTime');
 
   if (rekapOperatorName) rekapOperatorName.textContent = displayName;
-  if (specificDay) {
-    if (rekapPeriodeText) rekapPeriodeText.textContent = `Tanggal Khusus: ${specificDay} ${monthName} ${selectedYear}`;
+  
+  if (startDateStr && endDateStr) {
+    if (rekapPeriodeText) rekapPeriodeText.textContent = `${formatDate(startDateStr)} s/d ${formatDate(endDateStr)}`;
+    if (rekapTglAkhir) rekapTglAkhir.textContent = formatDate(endDateStr);
+  } else if (startDateStr) {
+    if (rekapPeriodeText) rekapPeriodeText.textContent = `Mulai ${formatDate(startDateStr)}`;
+    if (rekapTglAkhir) rekapTglAkhir.textContent = formatDate(startDateStr);
   } else {
     if (rekapPeriodeText) rekapPeriodeText.textContent = `1 ${monthName} ${selectedYear} s/d ${daysInMonth} ${monthName} ${selectedYear}`;
+    if (rekapTglAkhir) rekapTglAkhir.textContent = `${daysInMonth} ${monthName} ${selectedYear}`;
   }
-  if (rekapTglAkhir) rekapTglAkhir.textContent = specificDay ? `${specificDay} ${monthName} ${selectedYear}` : `${daysInMonth} ${monthName} ${selectedYear}`;
+
   if (rekapNamaTTD) rekapNamaTTD.textContent = displayName;
+  if (downloadTimeEl) {
+    const nowStr = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+    downloadTimeEl.textContent = `${nowStr} WITA`;
+  }
 
   // Render Table Header (No, Uraian, 1..daysInMonth, Total)
   const headerDaysRow = document.getElementById('rekapHeaderDaysRow');
   if (headerDaysRow) {
     let dayCols = '';
     for (let d = 1; d <= daysInMonth; d++) {
-      const isSelectedDay = specificDay && d === specificDay;
-      const dayStyle = isSelectedDay ? 
-        `text-align:center; min-width:28px; padding:4px; font-size:0.8rem; background:#2563eb; color:#ffffff; font-weight:800; border: 1px solid #60a5fa;` : 
-        `text-align:center; min-width:28px; padding:4px; font-size:0.78rem;`;
-      dayCols += `<th style="${dayStyle}">${d}</th>`;
+      const currentDayDate = new Date(selectedYear, selectedMonth, d);
+      const isWithinRange = (!filterStartDate || currentDayDate >= filterStartDate) && (!filterEndDate || currentDayDate <= filterEndDate);
+      const redInfo = isHolidayOrSunday(selectedYear, selectedMonth, d);
+
+      let dayStyle = 'text-align:center; min-width:28px; padding:4px; font-size:0.78rem;';
+      let colTitle = redInfo.label || '';
+
+      if (redInfo.isRed) {
+        dayStyle = `text-align:center; min-width:28px; padding:4px; font-size:0.8rem; background:rgba(239, 68, 68, 0.4); color:#fca5a5; font-weight:800; border-bottom: 2px solid #ef4444;`;
+      } else if (filterStartDate || filterEndDate) {
+        if (isWithinRange) {
+          dayStyle = `text-align:center; min-width:28px; padding:4px; font-size:0.8rem; background:rgba(59, 130, 246, 0.35); color:#ffffff; font-weight:800; border-bottom: 2px solid #3b82f6;`;
+        }
+      }
+
+      dayCols += `<th style="${dayStyle}" title="${escapeHTML(colTitle)}" class="${redInfo.isRed ? 'holiday-col' : ''}">${d}</th>`;
     }
     headerDaysRow.innerHTML = `
       <th style="width:36px; text-align:center; padding:6px 4px;">No</th>
@@ -1027,13 +1081,20 @@ function renderRekapitulasi() {
     `;
   }
 
-  // Filter Data menurut Bulan & Tahun yang Dipilih
+  // Filter Data menurut Bulan/Tahun & Rentang Tanggal
   const monthData = targetData.filter(item => {
     const rawDate = item.tanggal || item.tgl_operator || item.tgl_scan;
     if (!rawDate) return false;
     const d = new Date(rawDate);
     if (isNaN(d.getTime())) return false;
-    return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+
+    if (filterStartDate && d < filterStartDate) return false;
+    if (filterEndDate && d > filterEndDate) return false;
+
+    if (!filterStartDate && !filterEndDate) {
+      return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+    }
+    return true;
   });
 
   // Tentukan Daftar Uraian Sub Layanan
@@ -1082,8 +1143,14 @@ function renderRekapitulasi() {
       rowSum += cnt;
       dailyTotals[i] += cnt;
       const dayNum = i + 1;
-      const isSelectedDay = specificDay && dayNum === specificDay;
-      const cellBg = isSelectedDay ? (cnt > 0 ? 'background:rgba(59,130,246,0.3); font-weight:800; color:#ffffff;' : 'background:rgba(59,130,246,0.15); color:rgba(255,255,255,0.4);') : (cnt > 0 ? 'font-weight:700; color:#38bdf8;' : 'color:rgba(255,255,255,0.25);');
+      const redInfo = isHolidayOrSunday(selectedYear, selectedMonth, dayNum);
+
+      let cellBg = '';
+      if (redInfo.isRed) {
+        cellBg = cnt > 0 ? 'background:rgba(239, 68, 68, 0.25); font-weight:800; color:#ffffff;' : 'background:rgba(239, 68, 68, 0.1); color:rgba(252,165,165,0.4);';
+      } else {
+        cellBg = cnt > 0 ? 'font-weight:700; color:#38bdf8;' : 'color:rgba(255,255,255,0.25);';
+      }
 
       return `<td style="text-align:center; padding:4px; font-size:0.8rem; ${cellBg}">${cnt || 0}</td>`;
     }).join('');
@@ -1102,9 +1169,9 @@ function renderRekapitulasi() {
 
   const totalCells = dailyTotals.map((t, i) => {
     const dayNum = i + 1;
-    const isSelectedDay = specificDay && dayNum === specificDay;
-    const style = isSelectedDay ? 
-      `text-align:center; padding:4px; font-weight:800; color:#ffffff; background:#2563eb; font-size:0.85rem;` : 
+    const redInfo = isHolidayOrSunday(selectedYear, selectedMonth, dayNum);
+    const style = redInfo.isRed ? 
+      `text-align:center; padding:4px; font-weight:800; color:#fca5a5; background:rgba(239, 68, 68, 0.3); font-size:0.8rem;` : 
       `text-align:center; padding:4px; font-weight:800; color:#34d399; background:rgba(16,185,129,0.1); font-size:0.8rem;`;
     return `<th style="${style}">${t}</th>`;
   }).join('');
@@ -1125,12 +1192,14 @@ window.exportRekapToPDF = function() {
   if (!currentUser) return;
   const monthSelect = document.getElementById('rekapMonthSelect');
   const yearSelect = document.getElementById('rekapYearSelect');
-  const dateFilterInput = document.getElementById('rekapDateFilter');
+  const dateStartInput = document.getElementById('rekapDateStart');
+  const dateEndInput = document.getElementById('rekapDateEnd');
 
   const now = new Date();
   const selectedMonth = monthSelect ? parseInt(monthSelect.value) : now.getMonth();
   const selectedYear = yearSelect ? parseInt(yearSelect.value) : now.getFullYear();
-  const specificDate = dateFilterInput ? dateFilterInput.value : "";
+  const startDateStr = dateStartInput ? dateStartInput.value : "";
+  const endDateStr = dateEndInput ? dateEndInput.value : "";
 
   const monthNames = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni", 
@@ -1140,7 +1209,11 @@ window.exportRekapToPDF = function() {
   const displayName = (currentUser.name || currentUser.username || "Operator").trim();
   const cleanName = displayName.replace(/\s+/g, '_');
 
-  const fileName = specificDate ? `Laporan_Rekap_User_${cleanName}_Tgl_${specificDate}.pdf` : `Laporan_Rekap_User_${cleanName}_${monthName}_${selectedYear}.pdf`;
+  let fileName = `Laporan_Rekap_User_${cleanName}_${monthName}_${selectedYear}.pdf`;
+  if (startDateStr && endDateStr) {
+    fileName = `Laporan_Rekap_User_${cleanName}_Periode_${startDateStr}_sd_${endDateStr}.pdf`;
+  }
+
   const printArea = document.getElementById('rekapPrintArea');
   if (!printArea) return;
 
@@ -1167,7 +1240,10 @@ window.exportRekapToPDF = function() {
       table.style.color = '#000000';
       table.querySelectorAll('th, td').forEach(el => {
         el.style.borderColor = '#475569';
-        if (el.tagName === 'TH') {
+        if (el.classList.contains('holiday-col')) {
+          el.style.background = '#fee2e2';
+          el.style.color = '#991b1b';
+        } else if (el.tagName === 'TH') {
           el.style.background = '#e2e8f0';
           el.style.color = '#0f172a';
         } else {
@@ -1179,9 +1255,19 @@ window.exportRekapToPDF = function() {
       });
     }
 
-    const ttdBlock = clone.querySelector('div[style*="justify-content: flex-end"]');
+    const ttdBlock = clone.querySelector('.rekap-signature-block');
     if (ttdBlock) {
+      ttdBlock.style.pageBreakInside = 'avoid';
+      ttdBlock.style.breakInside = 'avoid';
       ttdBlock.querySelectorAll('div, span').forEach(d => d.style.color = '#0f172a');
+    }
+
+    const footnote = clone.querySelector('#rekapFootnote');
+    if (footnote) {
+      footnote.style.pageBreakInside = 'avoid';
+      footnote.style.breakInside = 'avoid';
+      footnote.style.borderColor = '#94a3b8';
+      footnote.querySelectorAll('div, span').forEach(d => d.style.color = '#475569');
     }
 
     const wrapper = document.createElement('div');
@@ -1234,14 +1320,17 @@ if (btnResetMonitoringDateEl) {
   });
 }
 
-const rekapDateFilterEl = document.getElementById('rekapDateFilter');
-const btnResetRekapDateEl = document.getElementById('btnResetRekapDate');
-if (rekapDateFilterEl) {
-  rekapDateFilterEl.addEventListener('change', renderRekapitulasi);
-}
-if (btnResetRekapDateEl) {
-  btnResetRekapDateEl.addEventListener('click', () => {
-    if (rekapDateFilterEl) rekapDateFilterEl.value = '';
+const rekapDateStartEl = document.getElementById('rekapDateStart');
+const rekapDateEndEl = document.getElementById('rekapDateEnd');
+const btnResetRekapRangeEl = document.getElementById('btnResetRekapRange');
+
+if (rekapDateStartEl) rekapDateStartEl.addEventListener('change', renderRekapitulasi);
+if (rekapDateEndEl) rekapDateEndEl.addEventListener('change', renderRekapitulasi);
+
+if (btnResetRekapRangeEl) {
+  btnResetRekapRangeEl.addEventListener('click', () => {
+    if (rekapDateStartEl) rekapDateStartEl.value = '';
+    if (rekapDateEndEl) rekapDateEndEl.value = '';
     renderRekapitulasi();
   });
 }
