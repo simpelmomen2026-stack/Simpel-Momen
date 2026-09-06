@@ -15,23 +15,122 @@
  * 6. Klik tombol "Deploy" > "New deployment".
  * 7. Pilih type: "Web app".
  * 8. Konfigurasi:
- *    - Description: Simpel Momen Database API (Dengan Auto-Expand Kolom)
+ *    - Description: Simpel Momen Database API (Dengan WA Gateway Fonnte Enhanced)
  *    - Execute as: Me (email Anda)
  *    - Who has access: Anyone
- * 9. Klik "Deploy". Salin (copy) "Web app URL" yang muncul dan tempelkan ke panel konfigurasi API di aplikasi web.
+ * 9. Klik "Deploy" / "New Version". Salin Web app URL yang muncul.
  */
 
+// CONFIGURASI DATABASE & NOTIFIKASI WHATSAPP (Via Fonnte Gateway)
+var SPREADSHEET_ID = ""; // Diisi otomatis / opsional jika skrip terpisah
+var FONNTE_TOKEN = "miMYecGgHMbMw3kZPmCM"; 
+var WA_GROUP_DINAS = "120363417098026103@g.us"; // Group JID Resmi Grup Dinas ("TEKNIS PELAYANAN DOKUMEN")
+var WA_GROUP_UPT = "120363409941075173@g.us"; // Group JID Resmi Grup UPT
+var WA_ADMIN_NUMBER = "082397724667"; // Nomor WA Admin (Ter-format ke 6282397724667)
 
+// FUNGSI KHUSUS UNTUK MEMICU POPUP OTORISASI IZIN GOOGLE
+function authorizePermissions() {
+  try {
+    var options = {
+      method: "post",
+      headers: { "Authorization": FONNTE_TOKEN },
+      muteHttpExceptions: true
+    };
+    var res = UrlFetchApp.fetch("https://api.fonnte.com/device", options);
+    Logger.log("✅ OTORISASI GOOGLE APPS SCRIPT BERHASIL!");
+    Logger.log("Respon Status Fonnte Device: " + res.getContentText());
+  } catch (e) {
+    Logger.log("Pemicu Otorisasi: " + e.toString());
+  }
+}
 
-// CONFIGURASI NOTIFIKASI WHATSAPP GRUP (Opsional via Fonnte Gateway)
-// Isi FONNTE_TOKEN dan WA_GROUP_TARGET untuk mengaktifkan notifikasi grup otomatis
-var FONNTE_TOKEN = "miMYecGgHMbMw3kZPmCM"; // Salin Token API Fonnte Anda di sini (misal: "8x9aBC...")
-var WA_GROUP_TARGET = "TEKNIS PELAYANAN DOKUMEN"; // Nama Grup WA atau ID Grup (misal: "Grup Pelayanan Dukcapil" atau "1203630xxx@g.us")
+// FUNGSI UTAMA AKSES SPREADSHEET (Otomatis Deteksi Active Spreadsheet)
+function getSpreadsheet() {
+  var ss = null;
+  try {
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+  } catch (e) {
+    ss = null;
+  }
+  if (ss) return ss;
+  
+  if (typeof SPREADSHEET_ID !== "undefined" && SPREADSHEET_ID && SPREADSHEET_ID.trim() !== "") {
+    var cleanId = SPREADSHEET_ID.trim();
+    try {
+      if (cleanId.indexOf("docs.google.com") !== -1) {
+        return SpreadsheetApp.openByUrl(cleanId);
+      }
+      return SpreadsheetApp.openById(cleanId);
+    } catch (errId) {
+      Logger.log("Gagal openById: " + errId.toString());
+    }
+  }
+  
+  throw new Error("Spreadsheet tidak terhubung! Silakan buka Apps Script dari menu Extensions > Apps Script pada file Google Sheet Anda.");
+}
 
-// Menangani permintaan GET (Membaca seluruh data dari spreadsheet)
+// FUNGSI UJI COBA WA GATEWAY LANGSUNG DARI APPS SCRIPT EDITOR
+function testSendWA() {
+  var testMsgDinas = "🧪 *[SIMPEL MOMEN - TEST WA GATEWAY DINAS]*\n" +
+                     "Halo! Notifikasi WhatsApp dari Simpel Momen Dukcapil terhubung ke Grup Dinas (120363417098026103@g.us) & Admin (082397724667).";
+  var testMsgUpt = "🧪 *[SIMPEL MOMEN - TEST WA GATEWAY UPT]*\n" +
+                   "Halo! Notifikasi WhatsApp dari Simpel Momen Dukcapil terhubung ke Grup UPT (120363409941075173@g.us) & Admin (082397724667).";
+  
+  sendWhatsAppNotification(testMsgDinas, "Dinas");
+  sendWhatsAppNotification(testMsgUpt, "UPT");
+}
+
+// FUNGSI CEK DAFTAR NAMA & ID GRUP WA DARI FONNTE
+function getFonnteGroups() {
+  var url = "https://api.fonnte.com/get-whatsapp-group";
+  var options = {
+    method: "post",
+    headers: {
+      "Authorization": FONNTE_TOKEN
+    },
+    muteHttpExceptions: true
+  };
+  try {
+    var response = UrlFetchApp.fetch(url, options);
+    Logger.log("=== DAFTAR GRUP WHATSAPP TERHUBUNG DI FONNTE ===");
+    Logger.log(response.getContentText());
+  } catch (e) {
+    Logger.log("Gagal mengambil grup dari Fonnte: " + e.toString());
+  }
+}
+
+function sendWhatsAppNotification(waMsg, fasilitasi) {
+  if (!FONNTE_TOKEN) return;
+  
+  var isUpt = false;
+  if (fasilitasi) {
+    isUpt = fasilitasi.toString().toUpperCase().indexOf("UPT") !== -1;
+  } else if (waMsg) {
+    isUpt = waMsg.indexOf("Fasilitasi: *UPT*") !== -1 || waMsg.indexOf("Fasilitasi: UPT") !== -1 || waMsg.indexOf("UPT") !== -1;
+  }
+  
+  var targetGroup = isUpt ? WA_GROUP_UPT : WA_GROUP_DINAS;
+  
+  if (targetGroup) sendWhatsAppMessage(targetGroup, waMsg);
+  if (WA_ADMIN_NUMBER) sendWhatsAppMessage(WA_ADMIN_NUMBER, waMsg);
+}
+
+// Menangani permintaan GET (Membaca seluruh data dari spreadsheet OR Autentikasi Login/CheckSession via GET query string)
 function doGet(e) {
   try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var params = (e && e.parameter) ? e.parameter : {};
+    var action = params.action || "";
+    
+    // Autentikasi via GET URL Parameters (Bebas dari masalah 302 POST CORS cross-origin redirect browser)
+    if (action === 'login') {
+      return handleLogin(params.username, params.password);
+    }
+    
+    if (action === 'check_session') {
+      return handleCheckSession(params.username, params.sessionToken);
+    }
+
+    var sheet = getSpreadsheet().getActiveSheet();
     ensureColumns(sheet, 30); // Pastikan memiliki minimal 30 kolom
     var lastRow = sheet.getLastRow();
     
@@ -97,171 +196,24 @@ function doGet(e) {
 // Menangani permintaan POST (Menyimpan data baru & memperbarui status/meja alur berkas)
 function doPost(e) {
   try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Pengujian doPost langsung dari editor memerlukan data payload JSON. Silakan uji coba melalui aplikasi web atau jalankan fungsi testSendWA." }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
     var payload = JSON.parse(e.postData.contents);
     
-    // 0. AUTENTIKASI PETUGAS (Ultra-Flexible Matching: Username, Role, Nama Lengkap, Partial Name & Dynamic Columns)
+    // 0. AUTENTIKASI PETUGAS
     if (payload.action === 'login') {
-      var ss = SpreadsheetApp.getActiveSpreadsheet();
-      var petugasSheet = getOrCreatePetugasSheet(ss);
-      var lastRow = petugasSheet.getLastRow();
-      var lastCol = Math.max(petugasSheet.getLastColumn(), 6);
-      var colMap = getPetugasColumnMap(petugasSheet);
-      
-      var usernameInput = payload.username ? payload.username.toString().trim() : "";
-      var passwordInput = payload.password ? payload.password.toString().trim() : "";
-      
-      var cleanStr = function(s) { return s ? s.toString().toLowerCase().replace(/[^a-z0-9]/g, '') : ''; };
-      var inputClean = cleanStr(usernameInput);
-      
-      var userMatchedButWrongPass = false;
-      var matchedAccountName = "";
-      var foundUser = null;
-      
-      if (lastRow > 1) {
-        var userRange = petugasSheet.getRange(2, 1, lastRow - 1, lastCol);
-        var userValues = userRange.getValues();
-        
-        for (var i = 0; i < userValues.length; i++) {
-          var userRow = userValues[i];
-          var username = userRow[colMap.username] ? userRow[colMap.username].toString().trim() : "";
-          var password = userRow[colMap.password] ? userRow[colMap.password].toString().trim() : "";
-          var rawRole = userRow[colMap.role] ? userRow[colMap.role].toString().trim() : "";
-          var uptCode = userRow[colMap.upt] ? userRow[colMap.upt].toString().trim() : "";
-          var name = userRow[colMap.name] ? userRow[colMap.name].toString().trim() : "";
-          
-          var normRole = normalizeUserRole(rawRole);
-          
-          var uClean = cleanStr(username);
-          var nClean = cleanStr(name);
-          var rClean = cleanStr(rawRole);
-          var nrClean = cleanStr(normRole);
-          
-          // Ultra-Flexible user matching (Username, Name, Raw Role, Normalized Role, or Partial Name)
-          var isUserMatch = (uClean === inputClean) || 
-                            (nClean === inputClean) || 
-                            (rClean === inputClean) ||
-                            (nrClean === inputClean) ||
-                            (inputClean.length >= 3 && nClean.indexOf(inputClean) !== -1);
-          
-          if (isUserMatch) {
-            userMatchedButWrongPass = true;
-            matchedAccountName = username || name || rawRole;
-            
-            // Password matching: exact, clean decimal, or empty password in sheet defaults to 123456
-            var cleanPass = password.replace(/\.0$/, '');
-            var isPassMatch = (password === passwordInput) || 
-                              (cleanPass === passwordInput) ||
-                              (password === "" && passwordInput === "123456");
-            
-            if (isPassMatch) {
-              var sessionToken = Utilities.getUuid() || Math.random().toString(36).substr(2, 9);
-              petugasSheet.getRange(i + 2, colMap.token + 1).setValue(sessionToken);
-              SpreadsheetApp.flush(); // Pastikan token sesi langsung tersimpan ke spreadsheet
-              
-              foundUser = {
-                username: username || usernameInput,
-                name: name || usernameInput,
-                role: normRole,
-                uptCode: (uptCode === "Dinas" || !uptCode) ? null : uptCode,
-                fasilitasi: (uptCode === "Dinas" || !uptCode) ? "Dinas" : "UPT",
-                sessionToken: sessionToken
-              };
-              break;
-            }
-          }
-        }
-      }
-      
-      if (!foundUser && !userMatchedButWrongPass) {
-        // Auto-provision standard accounts if missing from the user's Petugas sheet
-        var defaultAccounts = [
-          { username: "operator_dinas", password: "123456", role: "operator", uptCode: "Dinas", name: "Operator Dinas" },
-          { username: "operator_upt1", password: "123456", role: "operator", uptCode: "UPT-01", name: "Operator UPT 01" },
-          { username: "scan_dinas", password: "123456", role: "petugas_scan", uptCode: "Dinas", name: "Petugas Scan Dinas" },
-          { username: "scan_upt1", password: "123456", role: "petugas_scan", uptCode: "UPT-01", name: "Petugas Scan UPT 01" },
-          { username: "kepala_upt1", password: "123456", role: "kepala_upt", uptCode: "UPT-01", name: "Kepala UPT 01" },
-          { username: "kasie_dafduk", password: "123456", role: "kasie_dafduk", uptCode: "Dinas", name: "Kasie Dafduk" },
-          { username: "kasie_capil", password: "123456", role: "kasie_capil", uptCode: "Dinas", name: "Kasie Capil" },
-          { username: "kabid_dafduk", password: "123456", role: "kabid_dafduk", uptCode: "Dinas", name: "Kabid Dafduk" },
-          { username: "kabid_capil", password: "123456", role: "kabid_capil", uptCode: "Dinas", name: "Kabid Capil" },
-          { username: "kadis", password: "123456", role: "kadis", uptCode: "Dinas", name: "Kepala Dinas (Kadis)" },
-          { username: "tte_dinas", password: "123456", role: "petugas_tte", uptCode: "Dinas", name: "Petugas TTE Dinas" },
-          { username: "print_dinas", password: "123456", role: "petugas_pencetakan", uptCode: "Dinas", name: "Petugas Cetak Dinas" },
-          { username: "print_upt1", password: "123456", role: "petugas_pencetakan", uptCode: "UPT-01", name: "Petugas Cetak UPT 01" }
-        ];
-
-        for (var d = 0; d < defaultAccounts.length; d++) {
-          var acc = defaultAccounts[d];
-          var uClean = cleanStr(acc.username);
-          var nClean = cleanStr(acc.name);
-          var rClean = cleanStr(acc.role);
-
-          if (uClean === inputClean || nClean === inputClean || rClean === inputClean || (inputClean.length >= 3 && (uClean.indexOf(inputClean) !== -1 || inputClean.indexOf(uClean) !== -1))) {
-            if (passwordInput === acc.password || passwordInput === '123456' || passwordInput === '') {
-              var sessionToken = Utilities.getUuid() || Math.random().toString(36).substr(2, 9);
-              var normRole = normalizeUserRole(acc.role);
-
-              // Auto-append missing account row to Petugas sheet so it exists in Google Sheets
-              petugasSheet.appendRow([acc.username, acc.password, acc.role, acc.uptCode, acc.name, sessionToken]);
-              SpreadsheetApp.flush();
-
-              foundUser = {
-                username: acc.username,
-                name: acc.name,
-                role: normRole,
-                uptCode: (acc.uptCode === "Dinas" || !acc.uptCode) ? null : acc.uptCode,
-                fasilitasi: (acc.uptCode === "Dinas" || !acc.uptCode) ? "Dinas" : "UPT",
-                sessionToken: sessionToken
-              };
-              break;
-            }
-          }
-        }
-      }
-      
-      if (foundUser) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "success", data: foundUser }))
-          .setMimeType(ContentService.MimeType.JSON);
-      } else if (userMatchedButWrongPass) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Password salah untuk akun '" + matchedAccountName + "'!" }))
-          .setMimeType(ContentService.MimeType.JSON);
-      } else {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Username / Peran '" + usernameInput + "' tidak ditemukan di sheet Petugas! Silakan periksa daftar akun di sheet Petugas." }))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
+      return handleLogin(payload.username, payload.password);
     }
     
     // 0.5 CHECK SESSION LOGIN (PREVENT MULTI DEVICE LOGIN)
     if (payload.action === 'check_session') {
-      var ss = SpreadsheetApp.getActiveSpreadsheet();
-      var petugasSheet = getOrCreatePetugasSheet(ss);
-      var lastRow = petugasSheet.getLastRow();
-      var lastCol = Math.max(petugasSheet.getLastColumn(), 6);
-      var colMap = getPetugasColumnMap(petugasSheet);
-      
-      var tokenInput = payload.sessionToken ? payload.sessionToken.toString().trim() : "";
-      
-      var isValid = false;
-      if (lastRow > 1 && tokenInput !== "") {
-        var userRange = petugasSheet.getRange(2, 1, lastRow - 1, lastCol);
-        var userValues = userRange.getValues();
-        
-        for (var i = 0; i < userValues.length; i++) {
-          var userRow = userValues[i];
-          var token = userRow[colMap.token] ? userRow[colMap.token].toString().trim() : "";
-          
-          if (token === tokenInput) {
-            isValid = true;
-            break;
-          }
-        }
-      }
-      
-      return ContentService.createTextOutput(JSON.stringify({ status: isValid ? "success" : "expired" }))
-        .setMimeType(ContentService.MimeType.JSON);
+      return handleCheckSession(payload.username, payload.sessionToken);
     }
     
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var sheet = getSpreadsheet().getActiveSheet();
     ensureColumns(sheet, 30); // Pastikan memiliki minimal 30 kolom
     
     // 1. TAMBAH BARU (OPERATOR INPUT)
@@ -307,24 +259,29 @@ function doPost(e) {
       // Cari jika data key sudah ada (mengupdate berkas pending yang diperbaiki operator)
       var foundRow = findRowByKey(sheet, key);
       if (foundRow !== -1) {
-        // Update baris yang sudah ada dan reset alur kembali ke Scan
         sheet.getRange(foundRow, 1, 1, 30).setValues([values]);
       } else {
-        // Masukkan data baru di baris ke-2 (di bawah header agar urutan terbaru di atas)
         sheet.insertRowBefore(2);
         sheet.getRange(2, 1, 1, 30).setValues([values]);
       }
       
-      // Kirim Notifikasi WA Grup jika terkonfigurasi
+      // Kirim Notifikasi WA HANYA ke Grup Khusus Target
       try {
-        var waMsg = "🔔 *[SIMPEL MOMEN - BERKAS BARU]*\n" +
-                    "• *Nomor Antrean*: `" + key + "`\n" +
-                    "• *Pemohon*: " + data.pemohon + "\n" +
-                    "• *Layanan*: " + data.jenis_layanan + " (" + data.sub_layanan + ")\n" +
-                    "• *Operator*: " + data.operator + " (" + data.fasilitasi + ")\n" +
-                    "• *Status*: Menunggu Scan Berkas";
-        sendWhatsAppGroup(waMsg);
-      } catch(waErr) {}
+        var ss = getSpreadsheet();
+        var userDetails = getUserDetailsFromPetugasSheet(ss, data.operator || data.userName);
+        var namaLengkap = userDetails.name || data.operator || data.userName || "Operator";
+        var roleTitle = userDetails.role || "Operator";
+        var fasTag = (data.fasilitasi && data.fasilitasi.indexOf("UPT") !== -1) ? "Fasilitasi: *UPT*" : "Fasilitasi: *Dinas*";
+        
+        var waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + data.sub_layanan + "* (" + fasTag + ") atas nama *" + data.pemohon + "* telah di input.\n" +
+                    "Selanjutnya mohon petugas scan proses lanjut.\n\n" +
+                    "Terima Kasih";
+        
+        // Kirim Notifikasi WA ke Grup Target (Dinas/UPT) & Admin 082397724667
+        sendWhatsAppNotification(waMsg, data.fasilitasi);
+      } catch(waErr) {
+        Logger.log("WA Error saat create: " + waErr.toString());
+      }
       
       return ContentService.createTextOutput(JSON.stringify({ status: "success", data: { key: key } }))
         .setMimeType(ContentService.MimeType.JSON);
@@ -348,17 +305,17 @@ function doPost(e) {
       var currentLayanan = sheet.getRange(foundRow, 10).getValue().toString(); // Column J (Jenis Layanan)
       var currentFasilitasi = sheet.getRange(foundRow, 3).getValue().toString(); // Column C (Fasilitasi)
       var riwayatPending = sheet.getRange(foundRow, 22).getValue().toString(); // Column V (Riwayat Pending)
+      var pemohonNoHp = sheet.getRange(foundRow, 7).getValue().toString().trim(); // Column G (No HP)
       
       var nextStatus = "";
       
-      if (executeAction === 'pending') {
+      if (executeAction === 'pending' && role !== 'petugas_tte') {
         // Alur Pending: Kembalikan berkas ke operator
         nextStatus = "PENDING_OPERATOR";
         var logMsg = "PENDING by " + role + " pada " + timeStr + ": " + notes;
         var newRiwayat = riwayatPending ? logMsg + "\n---\n" + riwayatPending : logMsg;
         sheet.getRange(foundRow, 22).setValue(newRiwayat); // Col V
         
-        // Simpan catatan ke kolom verifikator terkait dan rekam timestamp
         if (role === 'kasie_dafduk' || role === 'kasie_capil') {
           sheet.getRange(foundRow, 17).setValue(notes); // Col Q
           sheet.getRange(foundRow, 25).setValue(timeStr); // Col Y (tgl_kasie)
@@ -381,7 +338,7 @@ function doPost(e) {
           sheet.getRange(foundRow, 12).setValue(linkFile); // Col L (Link File)
           sheet.getRange(foundRow, 16).setValue(notes); // Col P (Catatan Scan)
           sheet.getRange(foundRow, 24).setValue(timeStr); // Col X (tgl_scan)
-          nextStatus = (currentFasilitasi === "Dinas") ? "2_VERIFIKASI_KASIE" : "2_VERIFIKASI_UPT";
+          nextStatus = (currentFasilitasi === "UPT" || currentFasilitasi.indexOf("UPT") !== -1) ? "2_VERIFIKASI_UPT" : "2_VERIFIKASI_KASIE";
         } 
         
         else if (role === 'kasie_dafduk' || role === 'kasie_capil') {
@@ -396,7 +353,6 @@ function doPost(e) {
           if (currentLayanan.trim().toLowerCase() === "pendaftaran penduduk") {
             nextStatus = "3_VALIDASI_KABID";
           } else {
-            // Layanan Pencatatan Sipil di UPT langsung ke Pencetakan UPT (Lompat Kabid, Kadis, TTE)
             nextStatus = "6_PENCETAKAN_UPT";
           }
         } 
@@ -406,7 +362,7 @@ function doPost(e) {
           sheet.getRange(foundRow, 27).setValue(timeStr); // Col AA (tgl_kabid)
           
           var currentTteStatus = sheet.getRange(foundRow, 14).getValue().toString().trim().toLowerCase(); // Column N (Status TTE)
-          if (currentTteStatus === "belum diajukan siak" || currentTteStatus === "belum verifikasi siak") {
+          if (currentTteStatus === "belum diajukan siak" || currentTteStatus === "belum verifikasi siak" || currentTteStatus.indexOf("belum") !== -1) {
             nextStatus = "5_TTE";
           } else {
             nextStatus = "4_SERTIFIKASI_KADIS";
@@ -424,20 +380,37 @@ function doPost(e) {
           sheet.getRange(foundRow, 14).setValue(statusTteVal); // Col N (Status TTE)
           sheet.getRange(foundRow, 29).setValue(timeStr); // Col AC (tgl_tte)
           
+          var isUptFas = (currentFasilitasi === "UPT" || currentFasilitasi.indexOf("UPT") !== -1);
+          var isPendaftaran = (currentLayanan.trim().toLowerCase() === "pendaftaran penduduk");
+          
           if (statusTteVal === 'Belum diajukan SIAK') {
-            nextStatus = (currentFasilitasi === "UPT") ? "2_VERIFIKASI_UPT" : "2_VERIFIKASI_KASIE";
-            var logMsg = "PENDING by TTE pada " + timeStr + ": " + notes;
+            if (isUptFas && isPendaftaran) {
+              nextStatus = "2_VERIFIKASI_UPT"; // Kembali ke Kepala UPT (khusus Fasilitasi UPT Pendaftaran Penduduk)
+            } else {
+              nextStatus = "2_VERIFIKASI_KASIE"; // Kembali ke Kasie (Fasilitasi Dinas semua jenis layanan & UPT non-pendaftaran)
+            }
+            var logMsg = "BELUM DIAJUKAN SIAK by TTE pada " + timeStr + ": " + (notes || "Belum diajukan SIAK");
             var newRiwayat = riwayatPending ? logMsg + "\n---\n" + riwayatPending : logMsg;
             sheet.getRange(foundRow, 22).setValue(newRiwayat); // Col V (riwayat pending)
           } else if (statusTteVal === 'Belum Verifikasi SIAK') {
             nextStatus = "3_VALIDASI_KABID";
-            var logMsg = "PENDING by TTE pada " + timeStr + ": " + notes;
+            var logMsg = "BELUM VERIFIKASI SIAK by TTE pada " + timeStr + ": " + (notes || "Belum Verifikasi SIAK");
             var newRiwayat = riwayatPending ? logMsg + "\n---\n" + riwayatPending : logMsg;
             sheet.getRange(foundRow, 22).setValue(newRiwayat); // Col V (riwayat pending)
           } else {
-            nextStatus = (currentFasilitasi === "UPT") ? "6_PENCETAKAN_UPT" : "6_PENCETAKAN_DINAS";
+            nextStatus = (isUptFas) ? "6_PENCETAKAN_UPT" : "6_PENCETAKAN_DINAS";
           }
         } 
+        
+        else if (role === 'operator') {
+          sheet.getRange(foundRow, 23).setValue(timeStr); // Col W (tgl_operator)
+          if (notes) {
+            var logMsg = "PERBAIKAN OPERATOR pada " + timeStr + ": " + notes;
+            var newRiwayat = riwayatPending ? logMsg + "\n---\n" + riwayatPending : logMsg;
+            sheet.getRange(foundRow, 22).setValue(newRiwayat); // Col V (riwayat_pending)
+          }
+          nextStatus = "1_PETUGAS_SCAN";
+        }
         
         else if (role === 'petugas_pencetakan') {
           var penerimaVal = payload.penerima || "";
@@ -453,43 +426,96 @@ function doPost(e) {
         sheet.getRange(foundRow, 13).setValue(nextStatus); // Col M
       }
       
-      // Kirim Notifikasi WA Grup jika terkonfigurasi
+      // Kirim Notifikasi WA Berdasarkan Tingkatan User (Role Templates)
       try {
+        var ss = getSpreadsheet();
+        var userDetails = getUserDetailsFromPetugasSheet(ss, payload.userName);
+        var namaLengkap = userDetails.name || payload.userName || getRoleDisplayName(role);
+        var roleTitle = userDetails.role || getRoleDisplayName(role);
+        
         var pemohonName = sheet.getRange(foundRow, 5).getValue().toString().trim();
         var subLayanan = sheet.getRange(foundRow, 11).getValue().toString().trim();
-        var execUserName = payload.userName ? payload.userName : getRoleDisplayName(role);
+        var currentFasilitasi = sheet.getRange(foundRow, 3).getValue().toString().trim();
+        var fasTag = (currentFasilitasi && currentFasilitasi.indexOf("UPT") !== -1) ? "Fasilitasi: *UPT*" : "Fasilitasi: *Dinas*";
         var waMsg = "";
         
-        if (executeAction === 'pending') {
-          waMsg = "⚠️ *[SIMPEL MOMEN - BERKAS PENDING]*\n" +
-                  "• *Nomor Antrean*: `" + key + "`\n" +
-                  "• *Pemohon*: " + pemohonName + "\n" +
-                  "• *Ditunda Oleh*: " + getRoleDisplayName(role) + "\n" +
-                  "• *Alasan*: " + notes + "\n" +
-                  "• *Petugas*: " + execUserName;
-        } else {
-          if (role === 'petugas_pencetakan') {
-            var penerimaVal = payload.penerima || "-";
-            waMsg = "🎉 *[SIMPEL MOMEN - SELESAI DICETAK]*\n" +
-                    "• *Nomor Antrean*: `" + key + "`\n" +
-                    "• *Pemohon*: " + pemohonName + "\n" +
-                    "• *Layanan*: " + subLayanan + "\n" +
-                    "• *Status*: SELESAI DICETAK & SIAP DIAMBIL\n" +
-                    "• *Penerima*: " + penerimaVal + "\n" +
-                    "• *Petugas*: " + execUserName;
-          } else {
-            var nextDeskName = getStatusDeskDisplayName(nextStatus);
-            waMsg = "🔔 *[SIMPEL MOMEN - UPDATE ALUR]*\n" +
-                    "• *Nomor Antrean*: `" + key + "`\n" +
-                    "• *Pemohon*: " + pemohonName + "\n" +
-                    "• *Dari Meja*: " + getRoleDisplayName(role) + "\n" +
-                    "• *Ke Meja*: " + nextDeskName + "\n" +
-                    "• *Catatan*: " + (notes || "Disetujui") + "\n" +
-                    "• *Petugas*: " + execUserName;
-          }
+        if (role === 'operator') {
+          waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* yang sebelumnya dipending telah kami PERBAIKI (" + (notes || "perbaikan berkas") + ").\n" +
+                  "Selanjutnya mohon Petugas Scan dapat memproses berkas ke alur berikutnya.\n\n" +
+                  "Terima Kasih.";
         }
-        sendWhatsAppGroup(waMsg);
-      } catch (waErr) {}
+        else if (role === 'petugas_scan') {
+          var targetVerifikasi = (currentFasilitasi && currentFasilitasi.indexOf("UPT") !== -1) ? "Kepala UPT" : "Kepala Seksi";
+          waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami tambahkan link filenya.\n" +
+                  "Mohon " + targetVerifikasi + " dapat melakukan verifikasi dokumen.\n\n" +
+                  "Terima Kasih";
+        } 
+        else if (role === 'kasie_dafduk' || role === 'kasie_capil' || role === 'kepala_upt') {
+          if (executeAction === 'pending') {
+            waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami verifikasi dan dokumen tersebut harus di PENDING untuk melengkapi *" + (notes || "kelengkapan berkas") + "*.\n" +
+                    "Operator tolong disesuaikan kembali\n\n" +
+                    "Terima Kasih.";
+          } else {
+            waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami verifikasi.\n" +
+                    "Mohon selanjutnya Kepala Bidang dapat memvalidasi dokumen tersebut.\n\n" +
+                    "Terima Kasih.";
+          }
+        } 
+        else if (role === 'kabid_dafduk' || role === 'kabid_capil') {
+          var currentTteStatus = sheet.getRange(foundRow, 14).getValue().toString().trim().toLowerCase();
+          if (executeAction === 'pending') {
+            waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami validasi dan dokumen tersebut harus di PENDING untuk melengkapi *" + (notes || "kelengkapan berkas") + "*.\n" +
+                    "Operator tolong disesuaikan kembali\n\n" +
+                    "Terima Kasih.";
+          } else if (currentTteStatus === "belum diajukan siak" || currentTteStatus === "belum verifikasi siak" || currentTteStatus.indexOf("belum") !== -1) {
+            waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa perbaikan berkas SIAK dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami validasi.\n" +
+                    "Petugas TTE, dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* silahkan di TTE.\n\n" +
+                    "Terima Kasih.";
+          } else {
+            waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami verifikasi.\n" +
+                    "Mohon selanjutnya Kepala Dinas dapat melakukan sertifikasi dokumen tersebut.\n\n" +
+                    "Terima Kasih.";
+          }
+        } 
+        else if (role === 'kadis') {
+          if (executeAction === 'pending') {
+            waMsg = "Saya selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami uji petik dan dokumen tersebut harus di PENDING untuk melengkapi *" + (notes || "kelengkapan berkas") + "*.\n" +
+                    "Operator tolong disesuaikan.\n\n" +
+                    "Terima Kasih.";
+          } else {
+            waMsg = "Petugas TTE, dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* silahkan di TTE.\n\n" +
+                    "Terima Kasih.";
+          }
+        } 
+        else if (role === 'petugas_tte') {
+          var statusTteVal = payload.status_tte;
+          if (statusTteVal === 'Belum diajukan SIAK') {
+            waMsg = "dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* BELUM DIAJUKAN SIAK.\n\n" +
+                    "Terima Kasih";
+          } else if (statusTteVal === 'Belum Verifikasi SIAK') {
+            waMsg = "Mohon izin pimpinan, dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* BELUM DIAJUKAN SIAK.\n\n" +
+                    "Terima Kasih";
+          } else {
+            waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah di TTE.\n" +
+                    "Silahkan petugas pencetakan mencetak dokumen tersebut.\n\n" +
+                    "Terima Kasih.";
+          }
+        } 
+        else if (role === 'petugas_pencetakan') {
+          var penerimaVal = payload.penerima || notes || "-";
+          waMsg = "Mohon Izin Pimpinan. Dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah dicetak dan diserahkan kepada *" + penerimaVal + "*\n\n" +
+                  "Terima Kasih";
+        } 
+        else {
+          waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah diproses.\n\n" +
+                  "Terima Kasih";
+        }
+        
+        // Kirim Notifikasi WA ke Grup Target (Dinas/UPT) & Admin 082397724667
+        sendWhatsAppNotification(waMsg, currentFasilitasi);
+      } catch (waErr) {
+        Logger.log("WA Error saat update: " + waErr.toString());
+      }
       
       return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Berkas berhasil diperbarui" }))
         .setMimeType(ContentService.MimeType.JSON);
@@ -503,6 +529,157 @@ function doPost(e) {
   }
 }
 
+// FUNGSI PEMBANTU AUTENTIKASI UTAMA
+function handleLogin(usernameInput, passwordInput) {
+  usernameInput = usernameInput ? usernameInput.toString().trim() : "";
+  passwordInput = passwordInput ? passwordInput.toString().trim() : "";
+  
+  var ss = getSpreadsheet();
+  var petugasSheet = getOrCreatePetugasSheet(ss);
+  var lastRow = petugasSheet.getLastRow();
+  var lastCol = Math.max(petugasSheet.getLastColumn(), 6);
+  var colMap = getPetugasColumnMap(petugasSheet);
+  
+  var cleanStr = function(s) { return s ? s.toString().toLowerCase().replace(/[^a-z0-9]/g, '') : ''; };
+  var inputClean = cleanStr(usernameInput);
+  
+  var userMatchedButWrongPass = false;
+  var matchedAccountName = "";
+  var foundUser = null;
+  
+  if (lastRow > 1) {
+    var userRange = petugasSheet.getRange(2, 1, lastRow - 1, lastCol);
+    var userValues = userRange.getValues();
+    
+    for (var i = 0; i < userValues.length; i++) {
+      var userRow = userValues[i];
+      var username = userRow[colMap.username] ? userRow[colMap.username].toString().trim() : "";
+      var password = userRow[colMap.password] ? userRow[colMap.password].toString().trim() : "";
+      var rawRole = userRow[colMap.role] ? userRow[colMap.role].toString().trim() : "";
+      var uptCode = userRow[colMap.upt] ? userRow[colMap.upt].toString().trim() : "";
+      var name = userRow[colMap.name] ? userRow[colMap.name].toString().trim() : "";
+      
+      var normRole = normalizeUserRole(rawRole);
+      
+      var uClean = cleanStr(username);
+      var nClean = cleanStr(name);
+      var rClean = cleanStr(rawRole);
+      var nrClean = cleanStr(normRole);
+      
+      var isUserMatch = (uClean === inputClean) || 
+                        (nClean === inputClean) || 
+                        (rClean === inputClean) ||
+                        (nrClean === inputClean) ||
+                        (inputClean.length >= 3 && nClean.indexOf(inputClean) !== -1);
+      
+      if (isUserMatch) {
+        userMatchedButWrongPass = true;
+        matchedAccountName = username || name || rawRole;
+        
+        var cleanPass = password.replace(/\.0$/, '');
+        var isPassMatch = (password === passwordInput) || 
+                          (cleanPass === passwordInput) ||
+                          (password === "" && passwordInput === "123456");
+        
+        if (isPassMatch) {
+          var sessionToken = Utilities.getUuid() || Math.random().toString(36).substr(2, 9);
+          petugasSheet.getRange(i + 2, colMap.token + 1).setValue(sessionToken);
+          SpreadsheetApp.flush();
+          
+          foundUser = {
+            username: username || usernameInput,
+            name: name || usernameInput,
+            role: normRole,
+            uptCode: (uptCode === "Dinas" || !uptCode) ? null : uptCode,
+            fasilitasi: (uptCode === "Dinas" || !uptCode) ? "Dinas" : "UPT",
+            sessionToken: sessionToken
+          };
+          break;
+        }
+      }
+    }
+  }
+  
+  if (foundUser) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", data: foundUser }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } else if (userMatchedButWrongPass) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Password salah untuk akun '" + matchedAccountName + "'!" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } else {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Username / Akun '" + usernameInput + "' belum terdaftar di sheet Petugas! Silakan daftarkan akun pada sheet Petugas terlebih dahulu." }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// FUNGSI PEMBANTU CEK SESI LOGIN SINGLE DEVICE
+function handleCheckSession(usernameInput, tokenInput) {
+  var ss = getSpreadsheet();
+  var petugasSheet = getOrCreatePetugasSheet(ss);
+  var lastRow = petugasSheet.getLastRow();
+  var lastCol = Math.max(petugasSheet.getLastColumn(), 6);
+  var colMap = getPetugasColumnMap(petugasSheet);
+  
+  tokenInput = tokenInput ? tokenInput.toString().trim() : "";
+  
+  var isValid = false;
+  if (lastRow > 1 && tokenInput !== "") {
+    var userRange = petugasSheet.getRange(2, 1, lastRow - 1, lastCol);
+    var userValues = userRange.getValues();
+    
+    for (var i = 0; i < userValues.length; i++) {
+      var userRow = userValues[i];
+      var token = userRow[colMap.token] ? userRow[colMap.token].toString().trim() : "";
+      
+      if (token === tokenInput) {
+        isValid = true;
+        break;
+      }
+    }
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({ status: isValid ? "success" : "expired" }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// FUNGSI PEMBANTU MENGAMBIL NAMA LENGKAP & ROLE DARI SHEET PETUGAS
+function getUserDetailsFromPetugasSheet(ss, searchUser) {
+  var result = { name: "", role: "" };
+  if (!searchUser) return result;
+  
+  try {
+    var petugasSheet = getOrCreatePetugasSheet(ss);
+    var lastRow = petugasSheet.getLastRow();
+    var lastCol = Math.max(petugasSheet.getLastColumn(), 6);
+    var colMap = getPetugasColumnMap(petugasSheet);
+    
+    var searchClean = searchUser.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    if (lastRow > 1) {
+      var values = petugasSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+      for (var i = 0; i < values.length; i++) {
+        var row = values[i];
+        var uName = row[colMap.username] ? row[colMap.username].toString().trim() : "";
+        var name = row[colMap.name] ? row[colMap.name].toString().trim() : "";
+        var role = row[colMap.role] ? row[colMap.role].toString().trim() : "";
+        
+        var uClean = uName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        var nClean = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        if (uClean === searchClean || nClean === searchClean || (searchClean.length >= 3 && nClean.indexOf(searchClean) !== -1)) {
+          result.name = name || uName;
+          result.role = role;
+          return result;
+        }
+      }
+    }
+  } catch(e) {
+    Logger.log("Error lookup petugas: " + e.toString());
+  }
+  
+  return result;
+}
+
 // Fungsi Pembantu: Cari nomor baris berdasarkan nilai Key
 function findRowByKey(sheet, key) {
   var lastRow = sheet.getLastRow();
@@ -511,7 +688,7 @@ function findRowByKey(sheet, key) {
   var keys = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
   for (var i = 0; i < keys.length; i++) {
     if (keys[i][0].toString() === key) {
-      return i + 2; // Index baris spreadsheet (+2 karena 1-based index dan melewati header)
+      return i + 2;
     }
   }
   return -1;
@@ -567,13 +744,11 @@ function getOrCreatePetugasSheet(ss) {
   if (!petugasSheet) {
     petugasSheet = ss.insertSheet("Petugas");
   }
+  ensureColumns(petugasSheet, 6);
   
-  // Jika sheet kosong atau hanya ada 1 baris header saja
   if (petugasSheet.getLastRow() <= 1) {
     petugasSheet.clear();
-    // Write headers: Username, Password, Role, UPT_Code, Nama_Lengkap, Session_Token
     petugasSheet.getRange(1, 1, 1, 6).setValues([["Username", "Password", "Role", "UPT_Code", "Nama_Lengkap", "Session_Token"]]);
-    // Write default accounts
     var defaultAccounts = [
       ["operator_dinas", "123456", "operator", "Dinas", "Operator Dinas", ""],
       ["operator_upt1", "123456", "operator", "UPT-01", "Operator UPT 01", ""],
@@ -602,7 +777,6 @@ function getPetugasColumnMap(petugasSheet) {
   var map = { username: 0, password: 1, role: 2, upt: 3, name: 4, token: 5 };
   var found = { username: false, password: false, role: false, upt: false, name: false, token: false };
   
-  // 1. Pass Pertama: Pencocokan Eksak (Exact Match)
   for (var c = 0; c < headers.length; c++) {
     var h = headers[c] ? headers[c].toString().trim().toLowerCase() : "";
     if (h === 'username' || h === 'user' || h === 'nama pengguna' || h === 'id_user' || h === 'id user') { map.username = c; found.username = true; }
@@ -613,7 +787,6 @@ function getPetugasColumnMap(petugasSheet) {
     else if (h === 'session_token' || h === 'session' || h === 'token' || h === 'token_sesi' || h === 'session token') { map.token = c; found.token = true; }
   }
   
-  // 2. Pass Kedua: Fallback Substring jika belum terpetakan
   for (var c = 0; c < headers.length; c++) {
     var h = headers[c] ? headers[c].toString().trim().toLowerCase() : "";
     if (!found.username && h.indexOf('user') !== -1 && h.indexOf('nama') === -1) { map.username = c; found.username = true; }
@@ -654,14 +827,20 @@ function normalizeUserRole(rawRole) {
   return str.replace(/\s+/g, '_');
 }
 
-// Fungsi Pembantu: Mengirim Pesan ke Grup WhatsApp via Fonnte API
-function sendWhatsAppGroup(message) {
-  if (!FONNTE_TOKEN || !WA_GROUP_TARGET) return; // Abaikan jika token/grup belum dikonfigurasi
+// FUNGSI UTAMA PENGIRIMAN WA VIA FONNTE API (Dengan Logging Respon Lengkap & Resolusi Otomatis ID Grup)
+function sendWhatsAppMessage(target, message) {
+  if (!FONNTE_TOKEN || !target) {
+    Logger.log("Gagal WA: Token Fonnte atau Target kosong.");
+    return "Token/Target Kosong";
+  }
+  
+  var cleanTarget = resolveTargetGroupId(target);
   
   var url = "https://api.fonnte.com/send";
   var payload = {
-    target: WA_GROUP_TARGET,
-    message: message
+    target: cleanTarget,
+    message: message,
+    countryCode: "62"
   };
   
   var options = {
@@ -674,10 +853,31 @@ function sendWhatsAppGroup(message) {
   };
   
   try {
-    UrlFetchApp.fetch(url, options);
+    var response = UrlFetchApp.fetch(url, options);
+    var resText = response.getContentText();
+    Logger.log("Fonnte API Response untuk target (" + cleanTarget + "): " + resText);
+    return resText;
   } catch (e) {
-    Logger.log("Gagal mengirim WA Grup: " + e.toString());
+    Logger.log("Gagal HTTP Fetch ke Fonnte: " + e.toString());
+    return e.toString();
   }
+}
+
+// FUNGSI PEMBANTU UNTUK MENGUBAH NAMA GRUP TEKS MENJADI GROUP ID WA OTOMATIS
+function resolveTargetGroupId(target) {
+  if (!target) return "";
+  var cleanTarget = target.toString().trim();
+  
+  if (cleanTarget.substr(0, 2) === "08") {
+    return "628" + cleanTarget.substr(2);
+  }
+  
+  if (cleanTarget.indexOf("@g.us") !== -1 || /^[0-9+]+$/.test(cleanTarget)) {
+    return cleanTarget;
+  }
+  
+  // Pemetaan langsung ke Group ID JID resmi Fonnte untuk grup "TEKNIS PELAYANAN DOKUMEN"
+  return "120363417098026103@g.us";
 }
 
 function getRoleDisplayName(role) {
@@ -711,5 +911,3 @@ function getStatusDeskDisplayName(status) {
   };
   return mapping[status] || status;
 }
-
-
