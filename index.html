@@ -309,17 +309,28 @@
                 <h2 style="margin:0;">Lacak & Monitoring Alur Berkas</h2>
                 <span class="entries-count" id="monitoringCount">Menampilkan 0 berkas</span>
               </div>
-              <div style="display: flex; gap: 10px; flex-wrap: wrap; flex: 1; max-width: 600px; justify-content: flex-end;">
-                <select id="filterFasilitasi" title="Filter Lokasi Fasilitasi" style="padding: 8px 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; flex: 1; max-width: 820px; justify-content: flex-end; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="font-size: 0.8rem; color: var(--text-muted);">📅 Filter Tanggal:</span>
+                  <input type="date" id="monitoringDateFilter" title="Filter per Tanggal Spesifik" style="padding: 7px 10px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
+                  <button class="btn btn-secondary btn-xs" id="btnResetMonitoringDate" style="padding: 7px 10px; font-size: 0.78rem;" title="Reset Filter Tanggal">🔄 Semua Tanggal</button>
+                </div>
+                <select id="filterFasilitasi" title="Filter Lokasi Fasilitasi" style="padding: 7px 10px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
                   <option value="ALL">🌐 Semua Fasilitasi (Dinas & UPT)</option>
                   <option value="Dinas">🏢 Khusus Fasilitasi Dinas</option>
                   <option value="UPT">🏛️ Khusus Semua UPT</option>
                 </select>
-                <input type="text" id="monitoringSearchInput" placeholder="🔍 Cari nama / kode antrean..." style="flex: 1; min-width: 180px; padding: 8px 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
+                <input type="text" id="monitoringSearchInput" placeholder="🔍 Cari nama / kode antrean..." style="flex: 1; min-width: 150px; padding: 7px 10px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
+                <button class="btn btn-primary btn-xs" onclick="exportMonitoringToPDF()" style="padding: 7px 14px; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border: none;" title="Export Tabel Monitoring ke PDF">
+                  📄 Export PDF (.pdf)
+                </button>
+                <button class="btn btn-secondary btn-xs" onclick="window.print()" style="padding: 7px 12px; font-size: 0.85rem;" title="Cetak Tabel Monitoring">
+                  🖨️ Cetak
+                </button>
               </div>
             </div>
             
-            <div class="table-container">
+            <div class="table-container" id="monitoringPrintContainer">
               <table>
                 <thead>
                   <tr>
@@ -373,6 +384,12 @@
               <h2>📊 Laporan Rekapitulasi Pelayanan Per-Operator</h2>
               
               <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="font-size: 0.8rem; color: var(--text-muted);">📅 Per Tanggal:</span>
+                  <input type="date" id="rekapDateFilter" title="Filter Tanggal Spesifik (Opsional)" style="padding: 6px 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.82rem;">
+                  <button class="btn btn-secondary btn-xs" id="btnResetRekapDate" style="padding: 6px 8px; font-size: 0.78rem;" title="Reset Tanggal Spesifik">🔄 Reset Tanggal</button>
+                </div>
+
                 <select id="rekapCategorySelect" style="padding: 6px 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.85rem;">
                   <option value="ALL">🌐 Semua Layanan</option>
                   <option value="Pendaftaran Penduduk">🏠 Pendaftaran Penduduk</option>

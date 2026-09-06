@@ -807,11 +807,26 @@ function renderMonitoringTable() {
   if (!monitoringTableBody) return;
 
   const query = monitoringSearchInput ? monitoringSearchInput.value.toLowerCase().trim() : "";
+  const dateFilterInput = document.getElementById('monitoringDateFilter');
+  const selectedDate = dateFilterInput ? dateFilterInput.value : "";
+  const filterFas = filterFasilitasi ? filterFasilitasi.value : "ALL";
+
   const filtered = allData.filter(item => {
     // 🛑 Filter Utama UPT: Sembunyikan berkas Dinas dan berkas UPT lain bagi user tingkatan UPT
     if (isUserUpt(currentUser) && !matchItemToUserUpt(item, currentUser)) {
       return false;
     }
+
+    // Filter Fasilitasi Dropdown
+    if (filterFas === 'Dinas' && item.fasilitasi === 'UPT') return false;
+    if (filterFas === 'UPT' && item.fasilitasi !== 'UPT') return false;
+
+    // Filter per Tanggal (jika diisi)
+    if (selectedDate) {
+      const rawDate = item.tanggal || item.tgl_operator || item.tgl_scan || "";
+      if (!rawDate.startsWith(selectedDate)) return false;
+    }
+
     const keyMatch = String(item.key || "").toLowerCase().includes(query);
     const pemohonMatch = String(item.pemohon || "").toLowerCase().includes(query);
     const jenisMatch = String(item.jenis_layanan || "").toLowerCase().includes(query);
@@ -836,9 +851,6 @@ function renderMonitoringTable() {
   monitoringTableBody.innerHTML = filtered.map(row => {
     const isSelesai = row.status_alur === '7_SELESAI';
     const isPending = row.status_alur === 'PENDING_OPERATOR';
-    const statusBadge = isSelesai ? '<span class="badge selesai">✅ Selesai</span>' : 
-                        isPending ? '<span class="badge pending">⚠️ Pending Operator</span>' : 
-                        '<span class="badge" style="background:rgba(59,130,246,0.2); color:#60a5fa;">⏳ Dalam Alur</span>';
 
     const hasLink = row.link_file && row.link_file.trim().startsWith('http');
     const linkBtnHtml = hasLink ? 
@@ -857,6 +869,80 @@ function renderMonitoringTable() {
     `;
   }).join('');
 }
+
+// Export Tabel Monitoring Alur Berkas ke File PDF (.pdf)
+window.exportMonitoringToPDF = function() {
+  const container = document.getElementById('monitoringPrintContainer');
+  if (!container) return;
+
+  const dateFilterInput = document.getElementById('monitoringDateFilter');
+  const selectedDate = dateFilterInput ? dateFilterInput.value : "";
+  const dateStr = selectedDate ? selectedDate : "Semua_Tanggal";
+
+  const fileName = `Laporan_Monitoring_Dokumen_${dateStr}.pdf`;
+  showToast('Sedang membuat file PDF Monitoring...', 'info');
+
+  const clone = container.cloneNode(true);
+  clone.style.background = '#ffffff';
+  clone.style.color = '#000000';
+  clone.style.padding = '15px';
+
+  const table = clone.querySelector('table');
+  if (table) {
+    table.style.color = '#000000';
+    table.style.borderCollapse = 'collapse';
+    table.style.width = '100%';
+    table.querySelectorAll('th, td').forEach(el => {
+      el.style.border = '1px solid #475569';
+      el.style.padding = '6px';
+      if (el.tagName === 'TH') {
+        el.style.background = '#e2e8f0';
+        el.style.color = '#0f172a';
+      } else {
+        el.style.color = '#0f172a';
+      }
+    });
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.style.position = 'fixed';
+  wrapper.style.left = '-9999px';
+  wrapper.style.top = '0';
+
+  const titleDiv = document.createElement('div');
+  titleDiv.style.color = '#0f172a';
+  titleDiv.style.marginBottom = '12px';
+  titleDiv.style.fontFamily = 'sans-serif';
+  titleDiv.innerHTML = `
+    <h3 style="margin:0 0 4px 0;">Laporan Monitoring Alur Berkas Pelayanan</h3>
+    <div><strong>Tanggal Filter:</strong> ${selectedDate ? formatDate(selectedDate) : 'Semua Tanggal'}</div>
+  `;
+  wrapper.appendChild(titleDiv);
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  const opt = {
+    margin:       [10, 10, 10, 10],
+    filename:     fileName,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+  };
+
+  if (typeof html2pdf !== 'undefined') {
+    html2pdf().set(opt).from(wrapper).save().then(() => {
+      document.body.removeChild(wrapper);
+      showToast('File PDF Monitoring berhasil diunduh!', 'success');
+    }).catch(err => {
+      console.error(err);
+      if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
+      window.print();
+    });
+  } else {
+    document.body.removeChild(wrapper);
+    window.print();
+  }
+};
 
 // RENDER REKAPITULASI (Format Matriks Harian Bulan 1-31 Sesuai Referensi Google Sheets)
 function renderRekapitulasi() {
@@ -877,10 +963,26 @@ function renderRekapitulasi() {
   const monthSelect = document.getElementById('rekapMonthSelect');
   const yearSelect = document.getElementById('rekapYearSelect');
   const catSelect = document.getElementById('rekapCategorySelect');
+  const dateFilterInput = document.getElementById('rekapDateFilter');
 
   const now = new Date();
-  const selectedMonth = monthSelect ? parseInt(monthSelect.value) : now.getMonth();
-  const selectedYear = yearSelect ? parseInt(yearSelect.value) : now.getFullYear();
+  const specificDateStr = dateFilterInput ? dateFilterInput.value : "";
+  let selectedMonth, selectedYear, specificDay = null;
+
+  if (specificDateStr) {
+    const parts = specificDateStr.split('-');
+    if (parts.length === 3) {
+      selectedYear = parseInt(parts[0]);
+      selectedMonth = parseInt(parts[1]) - 1;
+      specificDay = parseInt(parts[2]);
+      if (monthSelect) monthSelect.value = selectedMonth;
+      if (yearSelect) yearSelect.value = selectedYear;
+    }
+  } else {
+    selectedMonth = monthSelect ? parseInt(monthSelect.value) : now.getMonth();
+    selectedYear = yearSelect ? parseInt(yearSelect.value) : now.getFullYear();
+  }
+
   const selectedCat = catSelect ? catSelect.value : "ALL";
 
   const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
@@ -898,8 +1000,12 @@ function renderRekapitulasi() {
   const rekapNamaTTD = document.getElementById('rekapNamaTTD');
 
   if (rekapOperatorName) rekapOperatorName.textContent = displayName;
-  if (rekapPeriodeText) rekapPeriodeText.textContent = `1 ${monthName} ${selectedYear} s/d ${daysInMonth} ${monthName} ${selectedYear}`;
-  if (rekapTglAkhir) rekapTglAkhir.textContent = `${daysInMonth} ${monthName} ${selectedYear}`;
+  if (specificDay) {
+    if (rekapPeriodeText) rekapPeriodeText.textContent = `Tanggal Khusus: ${specificDay} ${monthName} ${selectedYear}`;
+  } else {
+    if (rekapPeriodeText) rekapPeriodeText.textContent = `1 ${monthName} ${selectedYear} s/d ${daysInMonth} ${monthName} ${selectedYear}`;
+  }
+  if (rekapTglAkhir) rekapTglAkhir.textContent = specificDay ? `${specificDay} ${monthName} ${selectedYear}` : `${daysInMonth} ${monthName} ${selectedYear}`;
   if (rekapNamaTTD) rekapNamaTTD.textContent = displayName;
 
   // Render Table Header (No, Uraian, 1..daysInMonth, Total)
@@ -907,7 +1013,11 @@ function renderRekapitulasi() {
   if (headerDaysRow) {
     let dayCols = '';
     for (let d = 1; d <= daysInMonth; d++) {
-      dayCols += `<th style="text-align:center; min-width:28px; padding:4px; font-size:0.78rem;">${d}</th>`;
+      const isSelectedDay = specificDay && d === specificDay;
+      const dayStyle = isSelectedDay ? 
+        `text-align:center; min-width:28px; padding:4px; font-size:0.8rem; background:#2563eb; color:#ffffff; font-weight:800; border: 1px solid #60a5fa;` : 
+        `text-align:center; min-width:28px; padding:4px; font-size:0.78rem;`;
+      dayCols += `<th style="${dayStyle}">${d}</th>`;
     }
     headerDaysRow.innerHTML = `
       <th style="width:36px; text-align:center; padding:6px 4px;">No</th>
@@ -971,7 +1081,11 @@ function renderRekapitulasi() {
     const cells = counts.map((cnt, i) => {
       rowSum += cnt;
       dailyTotals[i] += cnt;
-      return `<td style="text-align:center; padding:4px; font-size:0.8rem; ${cnt > 0 ? 'font-weight:700; color:#38bdf8;' : 'color:rgba(255,255,255,0.25);'}">${cnt || 0}</td>`;
+      const dayNum = i + 1;
+      const isSelectedDay = specificDay && dayNum === specificDay;
+      const cellBg = isSelectedDay ? (cnt > 0 ? 'background:rgba(59,130,246,0.3); font-weight:800; color:#ffffff;' : 'background:rgba(59,130,246,0.15); color:rgba(255,255,255,0.4);') : (cnt > 0 ? 'font-weight:700; color:#38bdf8;' : 'color:rgba(255,255,255,0.25);');
+
+      return `<td style="text-align:center; padding:4px; font-size:0.8rem; ${cellBg}">${cnt || 0}</td>`;
     }).join('');
 
     grandTotal += rowSum;
@@ -986,9 +1100,14 @@ function renderRekapitulasi() {
     `;
   }).join('');
 
-  const totalCells = dailyTotals.map(t => 
-    `<th style="text-align:center; padding:4px; font-weight:800; color:#34d399; background:rgba(16,185,129,0.1); font-size:0.8rem;">${t}</th>`
-  ).join('');
+  const totalCells = dailyTotals.map((t, i) => {
+    const dayNum = i + 1;
+    const isSelectedDay = specificDay && dayNum === specificDay;
+    const style = isSelectedDay ? 
+      `text-align:center; padding:4px; font-weight:800; color:#ffffff; background:#2563eb; font-size:0.85rem;` : 
+      `text-align:center; padding:4px; font-weight:800; color:#34d399; background:rgba(16,185,129,0.1); font-size:0.8rem;`;
+    return `<th style="${style}">${t}</th>`;
+  }).join('');
 
   const footerRowHtml = `
     <tr style="background:rgba(15,23,42,0.95); font-weight:bold;">
@@ -1006,10 +1125,12 @@ window.exportRekapToPDF = function() {
   if (!currentUser) return;
   const monthSelect = document.getElementById('rekapMonthSelect');
   const yearSelect = document.getElementById('rekapYearSelect');
+  const dateFilterInput = document.getElementById('rekapDateFilter');
 
   const now = new Date();
   const selectedMonth = monthSelect ? parseInt(monthSelect.value) : now.getMonth();
   const selectedYear = yearSelect ? parseInt(yearSelect.value) : now.getFullYear();
+  const specificDate = dateFilterInput ? dateFilterInput.value : "";
 
   const monthNames = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni", 
@@ -1019,7 +1140,7 @@ window.exportRekapToPDF = function() {
   const displayName = (currentUser.name || currentUser.username || "Operator").trim();
   const cleanName = displayName.replace(/\s+/g, '_');
 
-  const fileName = `Laporan_Rekap_User_${cleanName}_${monthName}_${selectedYear}.pdf`;
+  const fileName = specificDate ? `Laporan_Rekap_User_${cleanName}_Tgl_${specificDate}.pdf` : `Laporan_Rekap_User_${cleanName}_${monthName}_${selectedYear}.pdf`;
   const printArea = document.getElementById('rekapPrintArea');
   if (!printArea) return;
 
@@ -1083,7 +1204,7 @@ window.exportRekapToPDF = function() {
       showToast('File PDF berhasil diexport dan didownload!', 'success');
     }).catch(err => {
       console.error('HTML2PDF Error:', err);
-      document.body.removeChild(wrapper);
+      if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
       window.print();
     });
   } else {
@@ -1092,7 +1213,7 @@ window.exportRekapToPDF = function() {
   }
 };
 
-// Event Listeners Filter Rekap Matriks
+// Event Listeners Filter Rekap Matriks & Monitoring Tanggal
 const rekapMonthSelectEl = document.getElementById('rekapMonthSelect');
 const rekapYearSelectEl = document.getElementById('rekapYearSelect');
 const rekapCatSelectEl = document.getElementById('rekapCategorySelect');
@@ -1100,6 +1221,30 @@ const rekapCatSelectEl = document.getElementById('rekapCategorySelect');
 if (rekapMonthSelectEl) rekapMonthSelectEl.addEventListener('change', renderRekapitulasi);
 if (rekapYearSelectEl) rekapYearSelectEl.addEventListener('change', renderRekapitulasi);
 if (rekapCatSelectEl) rekapCatSelectEl.addEventListener('change', renderRekapitulasi);
+
+const monitoringDateFilterEl = document.getElementById('monitoringDateFilter');
+const btnResetMonitoringDateEl = document.getElementById('btnResetMonitoringDate');
+if (monitoringDateFilterEl) {
+  monitoringDateFilterEl.addEventListener('change', renderMonitoringTable);
+}
+if (btnResetMonitoringDateEl) {
+  btnResetMonitoringDateEl.addEventListener('click', () => {
+    if (monitoringDateFilterEl) monitoringDateFilterEl.value = '';
+    renderMonitoringTable();
+  });
+}
+
+const rekapDateFilterEl = document.getElementById('rekapDateFilter');
+const btnResetRekapDateEl = document.getElementById('btnResetRekapDate');
+if (rekapDateFilterEl) {
+  rekapDateFilterEl.addEventListener('change', renderRekapitulasi);
+}
+if (btnResetRekapDateEl) {
+  btnResetRekapDateEl.addEventListener('click', () => {
+    if (rekapDateFilterEl) rekapDateFilterEl.value = '';
+    renderRekapitulasi();
+  });
+}
 
 // MODAL ACTION & TINDAK LANJUT
 window.openActionModal = function(key) {
