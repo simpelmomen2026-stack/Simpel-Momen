@@ -295,7 +295,9 @@ if (loginForm) {
 
 // Event: Logout
 if (logoutBtn) {
-  logoutBtn.addEventListener('click', () => {
+  logoutBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeModal();
     sessionStorage.removeItem('simpel_momen_user');
     currentUser = null;
     appWrapper.style.display = 'none';
@@ -934,7 +936,9 @@ if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
 if (cancelModalBtn) cancelModalBtn.addEventListener('click', closeModal);
 
 function closeModal() {
-  if (actionModal) actionModal.style.display = 'none';
+  if (actionModal) {
+    actionModal.style.setProperty('display', 'none', 'important');
+  }
   if (actionForm) actionForm.reset();
 }
 
@@ -1156,5 +1160,6 @@ setInterval(() => {
   }
 }, 1000);
 
-// Auto load data saat awal
+// Auto load data saat awal & pastikan modal tertutup
+closeModal();
 loadData();

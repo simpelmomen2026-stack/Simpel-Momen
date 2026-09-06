@@ -954,7 +954,7 @@ td {
   margin-bottom: 1rem;
 }
 
-/* Modal Backdrop & Centered Overlay Fix (Lembar Kerja Disesuaikan Ukuran Layar) */
+/* Modal Backdrop & Centered Overlay Fix (Hidden by Default, Active via JS) */
 #actionModal, .modal-backdrop, .modal {
   position: fixed !important;
   top: 0 !important;
@@ -967,12 +967,12 @@ td {
   backdrop-filter: blur(14px) !important;
   -webkit-backdrop-filter: blur(14px) !important;
   z-index: 999999 !important;
-  display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   padding: 1.25rem !important;
   overflow-y: auto !important;
   box-sizing: border-box !important;
+  display: none;
 }
 
 #actionModal .modal-card, .modal-card, .modal-content {
