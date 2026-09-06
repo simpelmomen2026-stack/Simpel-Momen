@@ -892,19 +892,27 @@ window.openActionModal = function(key) {
   // Penanganan Khusus User Monitoring vs Petugas/Eksekutor Biasa
   if (role === 'monitoring') {
     if (modalTitle) modalTitle.textContent = '👁️ Detail & Rekam Jejak Dokumen';
-    if (standardActionGroup) standardActionGroup.style.display = 'none';
-    if (scanLinkGroup) scanLinkGroup.style.display = 'none';
-    if (tteStatusGroup) tteStatusGroup.style.display = 'none';
-    if (tteNotesGroup) tteNotesGroup.style.display = 'none';
-    if (penerimaGroup) penerimaGroup.style.display = 'none';
     if (modalNotesGroup) modalNotesGroup.style.display = 'none';
     if (saveModalBtn) saveModalBtn.style.display = 'none';
     if (cancelModalBtn) cancelModalBtn.textContent = '❌ Tutup';
+  } else if (role === 'operator') {
+    // Mode Operator Perbaikan Pending
+    if (modalTitle) modalTitle.textContent = '🛠️ Perbaiki & Kirim Ulang Berkas Pending';
+    if (standardActionGroup) standardActionGroup.style.display = 'none';
+    if (saveModalBtn) {
+      saveModalBtn.style.display = 'inline-flex';
+      saveModalBtn.textContent = '🚀 Kirim ke Petugas Scan';
+    }
+    if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
+    if (modalNotesGroup) modalNotesGroup.style.display = 'block';
   } else {
     // Mode Petugas/Eksekutor Biasa
     if (modalTitle) modalTitle.textContent = 'Tindak Lanjut Berkas Antrean';
     if (standardActionGroup) standardActionGroup.style.display = 'block';
-    if (saveModalBtn) saveModalBtn.style.display = 'inline-flex';
+    if (saveModalBtn) {
+      saveModalBtn.style.display = 'inline-flex';
+      saveModalBtn.textContent = '💾 Eksekusi Tindakan';
+    }
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
     if (modalNotesGroup) modalNotesGroup.style.display = 'block';
   }
