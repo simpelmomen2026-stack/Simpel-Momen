@@ -1,4 +1,4 @@
-// Simpel Momen Web Logic - Version 2026.09.06.1930
+// Simpel Momen Web Logic - Version 2026.09.06.1951
 // ================= CONFIG & STATE =================
 // Hapus cache API_URL lama dari localStorage agar selalu terhubung 100% ONLINE ke Google Sheets
 localStorage.removeItem('simpel_momen_api_url');
@@ -975,6 +975,19 @@ window.openActionModal = function(key) {
     }
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
     if (modalNotesGroup) modalNotesGroup.style.display = 'block';
+  } else if (role === 'petugas_scan') {
+    // Mode Khusus Petugas Scan (Dinas & UPT): Sembunyikan Keputusan Tindakan (Disetujui/Pending) karena tidak ada pekerjaan opsional
+    if (modalTitle) modalTitle.textContent = '📄 Upload Link Scan PDF';
+    if (standardActionGroup) standardActionGroup.style.display = 'none'; // HAPUS / SEMBUNYIKAN KEPUTUSAN TINDAKAN
+    if (scanLinkGroup) scanLinkGroup.style.display = 'block';
+    if (tteStatusGroup) tteStatusGroup.style.display = 'none';
+    if (tteNotesGroup) tteNotesGroup.style.display = 'none';
+    if (modalNotesGroup) modalNotesGroup.style.display = 'block';
+    if (saveModalBtn) {
+      saveModalBtn.style.display = 'inline-flex';
+      saveModalBtn.textContent = '🚀 Upload & Kirim Berkas';
+    }
+    if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
   } else if (role === 'petugas_tte') {
     // Mode Khusus Petugas TTE: Sembunyikan Keputusan Tindakan (Lanjut/Pending), tampilkan hanya Status TTE / SIAK
     if (modalTitle) modalTitle.textContent = '✍️ Tindak Lanjut Petugas TTE / SIAK';
@@ -1047,10 +1060,21 @@ if (actionForm) {
     const penerimaVal = modalPenerima ? modalPenerima.value.trim() : '';
     const linkFileVal = modalLinkFile ? modalLinkFile.value.trim() : '';
 
+    if (currentUser && (currentUser.role === 'petugas_scan' || currentUser.role === 'petugas_tte')) {
+      executeAction = 'approve'; // Selalu jadikan executeAction 'approve'
+    }
+
+    if (currentUser && currentUser.role === 'petugas_scan') {
+      if (!linkFileVal) {
+        showToast('Silakan isi link file scan PDF terlebih dahulu!', 'error');
+        const submitBtn = actionForm.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+      }
+    }
+
     if (currentUser && currentUser.role === 'petugas_tte') {
-      executeAction = 'approve'; // Selalu jadikan executeAction 'approve' agar backend memproses via handler TTE & tidak mengembalikan ke operator
       notes = tteNotesVal;
-      
       if (statusTteVal !== 'SIAK' && !tteNotesVal) {
         showToast('Silakan isi Catatan TTE mengenai status SIAK!', 'error');
         const submitBtn = actionForm.querySelector('button[type="submit"]');
