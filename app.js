@@ -1204,7 +1204,7 @@ function renderRekapitulasi() {
   rekapMatrixBody.innerHTML = rowsHtml + footerRowHtml;
 }
 
-// Export Rekap Matriks Langsung ke File PDF (.pdf) dengan Fit Kolom 100% Pas
+// Export Rekap Matriks Langsung ke File PDF (.pdf) dengan Fit Presisi Halaman A4 Landscape
 window.exportRekapToPDF = function() {
   if (!currentUser) return;
   const dateStartInput = document.getElementById('rekapDateStart');
@@ -1227,13 +1227,15 @@ window.exportRekapToPDF = function() {
   if (typeof html2pdf !== 'undefined') {
     showToast('Sedang membuat file PDF...', 'info');
 
-    // Clone area rekap & atur lebar 1050px fixed agar 34 kolom (Hari 1..31 & Jumlah) muat 100% sempurna tanpa terpotong
+    // 🛑 KUNCI PERBAIKAN TERPOTONG DEPAN & HALAMAN BANYAK:
+    // Buat clone dengan koordinat (0,0) di layer paling belakang (z-index: -999999)
+    // agar html2canvas membaca dari titik X=0 paling kiri tanpa terpotong!
     const clone = printArea.cloneNode(true);
-    clone.style.width = '1050px';
-    clone.style.maxWidth = '1050px';
+    clone.style.width = '1120px';
+    clone.style.maxWidth = '1120px';
     clone.style.background = '#ffffff';
     clone.style.color = '#000000';
-    clone.style.padding = '15px';
+    clone.style.padding = '15px 20px';
     clone.style.boxSizing = 'border-box';
     clone.style.borderRadius = '0px';
 
@@ -1242,7 +1244,9 @@ window.exportRekapToPDF = function() {
       infoBox.style.background = '#f8fafc';
       infoBox.style.border = '1px solid #94a3b8';
       infoBox.style.color = '#0f172a';
-      infoBox.querySelectorAll('span').forEach(sp => sp.style.color = '#0f172a');
+      infoBox.style.padding = '8px 12px';
+      infoBox.style.marginBottom = '12px';
+      infoBox.querySelectorAll('div, span, strong').forEach(sp => sp.style.color = '#0f172a');
     }
 
     const table = clone.querySelector('table');
@@ -1253,22 +1257,23 @@ window.exportRekapToPDF = function() {
       table.style.borderCollapse = 'collapse';
       table.style.fontSize = '6.5pt';
 
+      // Atur presisi 34 kolom agar dari No, Uraian s/d Jumlah muat 100% dari X=0
       const trHeader = table.querySelector('tr');
       if (trHeader) {
         const ths = trHeader.querySelectorAll('th');
         if (ths.length >= 34) {
-          ths[0].style.width = '24px';  // No
-          ths[1].style.width = '200px'; // Uraian Sub Layanan
+          ths[0].style.width = '30px';  // No (Kiri terdepan)
+          ths[1].style.width = '210px'; // Uraian Sub Layanan
           for (let i = 2; i <= 32; i++) {
-            ths[i].style.width = '23px'; // Hari 1 s/d 31
+            ths[i].style.width = '25px'; // Hari 1 s/d 31
           }
-          ths[33].style.width = '42px'; // Jumlah
+          ths[33].style.width = '50px'; // Jumlah
         }
       }
 
       table.querySelectorAll('th, td').forEach(el => {
         el.style.borderColor = '#475569';
-        el.style.padding = '3px 1px';
+        el.style.padding = '2px 1px';
         el.style.wordBreak = 'break-word';
         el.style.overflow = 'hidden';
         el.style.boxSizing = 'border-box';
@@ -1290,6 +1295,7 @@ window.exportRekapToPDF = function() {
 
     const ttdBlock = clone.querySelector('.rekap-signature-block');
     if (ttdBlock) {
+      ttdBlock.style.marginTop = '20px';
       ttdBlock.style.pageBreakInside = 'avoid';
       ttdBlock.style.breakInside = 'avoid';
       ttdBlock.querySelectorAll('div, span').forEach(d => d.style.color = '#0f172a');
@@ -1298,9 +1304,10 @@ window.exportRekapToPDF = function() {
     const footnote = clone.querySelector('#rekapFootnote');
     if (footnote) {
       footnote.style.display = 'flex';
+      footnote.style.justifyContent = 'space-between';
       footnote.style.width = '100%';
-      footnote.style.marginTop = '20px';
-      footnote.style.paddingTop = '8px';
+      footnote.style.marginTop = '15px';
+      footnote.style.paddingTop = '6px';
       footnote.style.borderTop = '1px dashed #475569';
       footnote.style.color = '#0f172a';
       footnote.style.fontSize = '0.75rem';
@@ -1312,19 +1319,33 @@ window.exportRekapToPDF = function() {
       });
     }
 
+    // 🛑 POSISI STRATEGIS UNTUK HTML2CANVAS: Position absolute di X=0 Y=0 dengan z-index paling dasar (-999999)
     const wrapper = document.createElement('div');
-    wrapper.style.position = 'fixed';
-    wrapper.style.left = '-9999px';
-    wrapper.style.top = '0';
+    wrapper.style.position = 'absolute';
+    wrapper.style.left = '0px';
+    wrapper.style.top = '0px';
+    wrapper.style.zIndex = '-999999';
+    wrapper.style.opacity = '1';
+    wrapper.style.visibility = 'visible';
     wrapper.appendChild(clone);
     document.body.appendChild(wrapper);
 
     const opt = {
-      margin:       [6, 6, 6, 6],
+      margin:       [5, 5, 5, 5],
       filename:     fileName,
       image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 1100 },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+      html2canvas:  { 
+        scale: 2, 
+        useCORS: true, 
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0,
+        x: 0,
+        y: 0,
+        windowWidth: 1150
+      },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' },
+      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
     };
 
     html2pdf().set(opt).from(clone).save().then(() => {
