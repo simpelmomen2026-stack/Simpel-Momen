@@ -1227,15 +1227,13 @@ window.exportRekapToPDF = function() {
   if (typeof html2pdf !== 'undefined') {
     showToast('Sedang membuat file PDF...', 'info');
 
-    // 🛑 KUNCI PERBAIKAN TERPOTONG DEPAN & HALAMAN BANYAK:
-    // Buat clone dengan koordinat (0,0) di layer paling belakang (z-index: -999999)
-    // agar html2canvas membaca dari titik X=0 paling kiri tanpa terpotong!
+    // Clone area rekap & beri font yang disesuaikan presisi agar seluruh 34 kolom muat alami pada 1 kertas A4 Landscape
     const clone = printArea.cloneNode(true);
-    clone.style.width = '1120px';
-    clone.style.maxWidth = '1120px';
+    clone.style.width = '1080px';
+    clone.style.maxWidth = '1080px';
     clone.style.background = '#ffffff';
     clone.style.color = '#000000';
-    clone.style.padding = '15px 20px';
+    clone.style.padding = '12px 16px';
     clone.style.boxSizing = 'border-box';
     clone.style.borderRadius = '0px';
 
@@ -1244,8 +1242,9 @@ window.exportRekapToPDF = function() {
       infoBox.style.background = '#f8fafc';
       infoBox.style.border = '1px solid #94a3b8';
       infoBox.style.color = '#0f172a';
-      infoBox.style.padding = '8px 12px';
-      infoBox.style.marginBottom = '12px';
+      infoBox.style.padding = '6px 10px';
+      infoBox.style.marginBottom = '10px';
+      infoBox.style.fontSize = '8.5pt';
       infoBox.querySelectorAll('div, span, strong').forEach(sp => sp.style.color = '#0f172a');
     }
 
@@ -1253,43 +1252,37 @@ window.exportRekapToPDF = function() {
     if (table) {
       table.style.width = '100%';
       table.style.maxWidth = '100%';
-      table.style.tableLayout = 'fixed';
+      table.style.tableLayout = 'auto'; // Layout proporsional alami tanpa pemaksaan lebar kolom
       table.style.borderCollapse = 'collapse';
       table.style.fontSize = '6.5pt';
 
-      // Atur presisi 34 kolom agar dari No, Uraian s/d Jumlah muat 100% dari X=0
-      const trHeader = table.querySelector('tr');
-      if (trHeader) {
-        const ths = trHeader.querySelectorAll('th');
-        if (ths.length >= 34) {
-          ths[0].style.width = '30px';  // No (Kiri terdepan)
-          ths[1].style.width = '210px'; // Uraian Sub Layanan
-          for (let i = 2; i <= 32; i++) {
-            ths[i].style.width = '25px'; // Hari 1 s/d 31
-          }
-          ths[33].style.width = '50px'; // Jumlah
-        }
-      }
-
       table.querySelectorAll('th, td').forEach(el => {
         el.style.borderColor = '#475569';
-        el.style.padding = '2px 1px';
-        el.style.wordBreak = 'break-word';
-        el.style.overflow = 'hidden';
+        el.style.padding = '2px 2px';
         el.style.boxSizing = 'border-box';
 
         if (el.classList.contains('holiday-col')) {
           el.style.background = '#fee2e2';
           el.style.color = '#991b1b';
+          el.style.fontWeight = '800';
         } else if (el.tagName === 'TH') {
           el.style.background = '#e2e8f0';
           el.style.color = '#0f172a';
+          el.style.fontSize = '6.8pt';
         } else {
           el.style.color = '#0f172a';
+          el.style.fontSize = '6.5pt';
           if (el.textContent.trim() === '0') {
             el.style.color = '#94a3b8';
           }
         }
+      });
+
+      // Beri penyesuaian khusus teks Uraian Sub Layanan agar font lebih terbaca
+      table.querySelectorAll('td:nth-child(2)').forEach(el => {
+        el.style.fontSize = '7.2pt';
+        el.style.fontWeight = '600';
+        el.style.color = '#0f172a';
       });
     }
 
