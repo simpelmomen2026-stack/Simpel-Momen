@@ -4,7 +4,7 @@ if (localStorage.getItem('simpel_momen_api_url') && (localStorage.getItem('simpe
   localStorage.removeItem('simpel_momen_api_url');
 }
 
-let API_URL = 'https://script.google.com/macros/s/AKfycbwb-GMpH8UYImv4np9MDLHgeixCjGbCI4IXUF-8X3KASSZY7MQdv7cSmA-Vyiy5yVXTIg/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycby-RoYMJq-lFarD4KWcOTrCfTj93xze8ljDhvjGBT2faQ8WsYW0BSdqyPlpWxxg6ieqBg/exec';
 let currentUser = null;
 let allData = [];
 
