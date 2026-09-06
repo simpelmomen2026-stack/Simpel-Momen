@@ -4,7 +4,7 @@ if (localStorage.getItem('simpel_momen_api_url') && (localStorage.getItem('simpe
   localStorage.removeItem('simpel_momen_api_url');
 }
 
-let API_URL = 'https://script.google.com/macros/s/AKfycby-RoYMJq-lFarD4KWcOTrCfTj93xze8ljDhvjGBT2faQ8WsYW0BSdqyPlpWxxg6ieqBg/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbwb-GMpH8UYImv4np9MDLHgeixCjGbCI4IXUF-8X3KASSZY7MQdv7cSmA-Vyiy5yVXTIg/exec';
 let currentUser = null;
 let allData = [];
 
@@ -177,6 +177,8 @@ if (savedUser) {
 }
 
 const MOCK_PETUGAS = [
+  { username: 'dije', password: '123456', name: 'Davidson Djarang', role: 'kadis', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'operator01', password: '123456', name: 'User01', role: 'operator', uptCode: 'UPT-01', fasilitasi: 'UPT' },
   { username: 'operator_dinas', password: '123456', name: 'Operator Dinas', role: 'operator', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'operator_upt1', password: '123456', name: 'Operator UPT 01', role: 'operator', uptCode: 'UPT-01', fasilitasi: 'UPT' },
   { username: 'scan_dinas', password: '123456', name: 'Petugas Scan Dinas', role: 'petugas_scan', uptCode: null, fasilitasi: 'Dinas' },
@@ -310,35 +312,41 @@ if (logoutBtn) {
 function setupLoggedInUI() {
   if (!currentUser) return;
   
-  loginWrapper.style.display = 'none';
-  appWrapper.style.display = 'flex';
+  if (loginWrapper) loginWrapper.style.display = 'none';
+  if (appWrapper) appWrapper.style.display = 'flex';
   
-  userDisplayName.textContent = currentUser.name;
+  const displayName = currentUser.name || currentUser.username || 'User';
+  if (userDisplayName) userDisplayName.textContent = displayName;
   
-  const initials = currentUser.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-  userAvatar.textContent = initials || 'OP';
+  const initials = String(displayName).trim().split(/\s+/).map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  if (userAvatar) userAvatar.textContent = initials || 'OP';
+
+  const fasilitasiStr = currentUser.fasilitasi || '';
+  const uptCodeStr = currentUser.uptCode || '';
 
   const roleTitleMap = {
-    'operator': `Operator ${currentUser.fasilitasi} ${currentUser.uptCode || ''}`.trim(),
-    'petugas_scan': `Petugas Scan ${currentUser.fasilitasi} ${currentUser.uptCode || ''}`.trim(),
+    'operator': `Operator ${fasilitasiStr} ${uptCodeStr}`.trim(),
+    'petugas_scan': `Petugas Scan ${fasilitasiStr} ${uptCodeStr}`.trim(),
     'kasie_dafduk': 'Kasie Dafduk Dinas',
     'kasie_capil': 'Kasie Capil Dinas',
-    'kepala_upt': `Kepala ${currentUser.uptCode || 'UPT'}`,
+    'kepala_upt': `Kepala ${uptCodeStr || 'UPT'}`,
     'kabid_dafduk': 'Kabid Dafduk',
     'kabid_capil': 'Kabid Capil',
     'kadis': 'Kepala Dinas (Kadis)',
     'petugas_tte': 'Petugas TTE Dinas',
-    'petugas_pencetakan': `Petugas Cetak ${currentUser.fasilitasi} ${currentUser.uptCode || ''}`.trim(),
-    'monitoring': `Monitoring ${currentUser.fasilitasi}`
+    'petugas_pencetakan': `Petugas Cetak ${fasilitasiStr} ${uptCodeStr}`.trim(),
+    'monitoring': `Monitoring ${fasilitasiStr}`
   };
 
-  userRoleBadge.textContent = roleTitleMap[currentUser.role] || currentUser.role;
+  if (userRoleBadge) userRoleBadge.textContent = roleTitleMap[currentUser.role] || currentUser.role || 'Petugas';
 
-  if (currentUser.role === 'operator') {
-    menuInputForm.style.display = 'flex';
-    formOperator.value = currentUser.name;
-  } else {
-    menuInputForm.style.display = 'none';
+  if (menuInputForm) {
+    if (currentUser.role === 'operator') {
+      menuInputForm.style.display = 'flex';
+      if (formOperator) formOperator.value = displayName;
+    } else {
+      menuInputForm.style.display = 'none';
+    }
   }
 
   switchPage('dashboard');
