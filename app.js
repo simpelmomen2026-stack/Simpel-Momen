@@ -1,4 +1,4 @@
-// Simpel Momen Web Logic - Version 2026.09.06.1531
+// Simpel Momen Web Logic - Version 2026.09.06.1845
 // ================= CONFIG & STATE =================
 // Hapus cache API_URL lama dari localStorage agar selalu terhubung 100% ONLINE ke Google Sheets
 localStorage.removeItem('simpel_momen_api_url');
@@ -905,10 +905,24 @@ window.openActionModal = function(key) {
     }
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
     if (modalNotesGroup) modalNotesGroup.style.display = 'block';
+  } else if (role === 'petugas_tte') {
+    // Mode Khusus Petugas TTE: Sembunyikan Keputusan Tindakan (Lanjut/Pending), tampilkan hanya Status TTE / SIAK
+    if (modalTitle) modalTitle.textContent = '✍️ Tindak Lanjut Petugas TTE / SIAK';
+    if (standardActionGroup) standardActionGroup.style.display = 'none';
+    if (tteStatusGroup) tteStatusGroup.style.display = 'block';
+    if (tteNotesGroup) tteNotesGroup.style.display = 'block';
+    if (modalNotesGroup) modalNotesGroup.style.display = 'none';
+    if (saveModalBtn) {
+      saveModalBtn.style.display = 'inline-flex';
+      saveModalBtn.textContent = '💾 Eksekusi Status TTE';
+    }
+    if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
   } else {
     // Mode Petugas/Eksekutor Biasa
     if (modalTitle) modalTitle.textContent = 'Tindak Lanjut Berkas Antrean';
     if (standardActionGroup) standardActionGroup.style.display = 'block';
+    if (tteStatusGroup) tteStatusGroup.style.display = 'none';
+    if (tteNotesGroup) tteNotesGroup.style.display = 'none';
     if (saveModalBtn) {
       saveModalBtn.style.display = 'inline-flex';
       saveModalBtn.textContent = '💾 Eksekusi Tindakan';
@@ -956,11 +970,24 @@ if (actionForm) {
   actionForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const key = modalKey.value;
-    const executeAction = modalExecuteAction ? modalExecuteAction.value : 'approve';
-    const notes = modalNotes ? modalNotes.value.trim() : '';
+    let executeAction = modalExecuteAction ? modalExecuteAction.value : 'approve';
+    let notes = modalNotes ? modalNotes.value.trim() : '';
     const statusTteVal = tteStatus ? tteStatus.value : '';
+    const tteNotesVal = tteNotes ? tteNotes.value.trim() : '';
     const penerimaVal = modalPenerima ? modalPenerima.value.trim() : '';
     const linkFileVal = modalLinkFile ? modalLinkFile.value.trim() : '';
+
+    if (currentUser && currentUser.role === 'petugas_tte') {
+      executeAction = 'approve'; // Selalu jadikan executeAction 'approve' agar backend memproses via handler TTE & tidak mengembalikan ke operator
+      notes = tteNotesVal;
+      
+      if (statusTteVal !== 'SIAK' && !tteNotesVal) {
+        showToast('Silakan isi Catatan TTE mengenai status SIAK!', 'error');
+        const submitBtn = actionForm.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+      }
+    }
 
     const submitBtn = actionForm.querySelector('button[type="submit"]');
     if (submitBtn) submitBtn.disabled = true;
