@@ -1,3 +1,4 @@
+// Simpel Momen Web Logic - Version 2026.09.06.1531
 // ================= CONFIG & STATE =================
 // Hapus cache API_URL lama dari localStorage agar selalu terhubung 100% ONLINE ke Google Sheets
 localStorage.removeItem('simpel_momen_api_url');
