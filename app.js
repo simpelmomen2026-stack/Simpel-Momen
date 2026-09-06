@@ -15,20 +15,29 @@ function getLocalDateTimeString() {
 
 const SUB_LAYANAN_OPTIONS = {
   "Pendaftaran Penduduk": [
-    "Biodata Penduduk",
-    "Kartu Keluarga (KK) Baru / Perubahan",
-    "KTP-el Baru / Cetak Ulang",
-    "Kartu Identitas Anak (KIA)",
-    "Surat Pindah (SKPWNI) / Kedatangan",
-    "Identitas Kependudukan Digital (IKD)"
+    "KK Baru",
+    "KK Perubahan / Penggantian",
+    "KK Hilang",
+    "Rekam / Cetak KTP",
+    "KTP Ganti / Perubahan",
+    "KTP Hilang",
+    "KIA Baru",
+    "KIA Perubahan",
+    "KIA Hilang",
+    "Pindah Domisili"
   ],
   "Pencatatan Sipil": [
     "Akta Kelahiran",
     "Akta Kematian",
     "Akta Perkawinan",
     "Akta Perceraian",
-    "Akta Pengesahan / Pengakuan Anak",
-    "Pembetulan / Pembatalan Akta Pencatatan Sipil"
+    "Pengesahan Anak",
+    "Perubahan Nama / dsb",
+    "BAKAK",
+    "BPKAM",
+    "BPKAK",
+    "BPKAC",
+    "Akta Lainnya"
   ]
 };
 
@@ -931,7 +940,7 @@ if (berkasForm) {
     const alamat = formAlamat ? formAlamat.value.trim() : '';
     const jenisLayanan = formJenisLayanan ? formJenisLayanan.value : '';
     const subLayanan = formSubLayanan ? formSubLayanan.value : '';
-    const integrasi = formIntegrasi ? formIntegrasi.value : 'Non Integrasi';
+    const integrasi = formIntegrasi ? formIntegrasi.value : 'tunggal';
 
     if (!pemohon || !jenisLayanan || !subLayanan) {
       showToast('Silakan lengkapi nama pemohon dan jenis/sub layanan!', 'error');
