@@ -127,6 +127,8 @@ const tteNotes = document.getElementById('tteNotes');
 const penerimaGroup = document.getElementById('penerimaGroup');
 const modalPenerima = document.getElementById('modalPenerima');
 const modalNotes = document.getElementById('modalNotes');
+const modalNotesGroup = document.getElementById('modalNotesGroup');
+const monitoringHistoryBox = document.getElementById('monitoringHistoryBox');
 const saveModalBtn = document.getElementById('saveModalBtn');
 
 const toast = document.getElementById('toast');
@@ -663,7 +665,13 @@ function renderCounterDesk() {
 
     // Tombol Akses Tindakan
     let actionBtnHtml = '';
-    if (isSelesai) {
+    if (role === 'monitoring') {
+      actionBtnHtml = `
+        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+          👁️ Detail & Riwayat
+        </button>
+      `;
+    } else if (isSelesai) {
       actionBtnHtml = `
         <span class="badge selesai" style="margin-right:4px;">✅ Selesai</span>
         <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">👁️ Detail</button>
@@ -835,21 +843,57 @@ window.openActionModal = function(key) {
   if (penerimaGroup) penerimaGroup.style.display = (role === 'petugas_pencetakan') ? 'block' : 'none';
   if (modalNotes) modalNotes.value = '';
 
-  // Dinamiskan nama tombol eksekusi
-  if (saveModalBtn) {
-    if (role === 'petugas_scan') {
-      saveModalBtn.textContent = '📄 Simpan Link & Kirim ke Verifikasi';
-      saveModalBtn.className = 'btn btn-primary';
-    } else if (role === 'petugas_pencetakan') {
-      saveModalBtn.textContent = '🎉 Simpan & Selesaikan Cetak Dokumen';
-      saveModalBtn.className = 'btn btn-success';
-    } else if (role === 'operator') {
-      saveModalBtn.textContent = '🚀 Simpan & Kirim Ulang Berkas';
-      saveModalBtn.className = 'btn btn-primary';
-    } else {
-      saveModalBtn.textContent = '💾 Simpan & Setujui Verifikasi';
-      saveModalBtn.className = 'btn btn-primary';
+  // Penanganan Khusus User Monitoring (Read-Only Mode)
+  if (role === 'monitoring') {
+    if (modalTitle) modalTitle.textContent = '👁️ Detail & Rekam Jejak Dokumen';
+    if (standardActionGroup) standardActionGroup.style.display = 'none';
+    if (scanLinkGroup) scanLinkGroup.style.display = 'none';
+    if (tteStatusGroup) tteStatusGroup.style.display = 'none';
+    if (tteNotesGroup) tteNotesGroup.style.display = 'none';
+    if (penerimaGroup) penerimaGroup.style.display = 'none';
+    if (modalNotesGroup) modalNotesGroup.style.display = 'none';
+    if (saveModalBtn) saveModalBtn.style.display = 'none';
+    if (cancelModalBtn) cancelModalBtn.textContent = '❌ Tutup';
+
+    if (monitoringHistoryBox) {
+      monitoringHistoryBox.style.display = 'block';
+      const hasLink = item.link_file && item.link_file.trim().startsWith('http');
+      const linkHtml = hasLink ? `<a href="${escapeHTML(item.link_file.trim())}" target="_blank" style="color:#60a5fa; font-weight:600;">📄 Buka Scan PDF</a>` : 'Belum ada file scan';
+
+      monitoringHistoryBox.innerHTML = `
+        <div style="background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+          <div style="font-weight: 700; color: #a78bfa; font-size: 0.85rem; margin-bottom: 8px;">📊 STATUS ALUR DOKUMEN</div>
+          <div style="font-size: 0.9rem; color: #fff;">Status: <strong style="color:#60a5fa;">${escapeHTML(item.status_alur)}</strong></div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Fasilitasi: ${escapeHTML(item.fasilitasi || 'Dinas')} | Operator: ${escapeHTML(item.operator || '-')}</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Link File: ${linkHtml}</div>
+        </div>
+
+        ${item.riwayat_pending ? `
+        <div style="background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+          <div style="font-weight: 700; color: #f87171; font-size: 0.85rem; margin-bottom: 6px;">⚠️ RIWAYAT CATATAN PENDING OPERATOR</div>
+          <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.85rem; color: #fca5a5; margin: 0; line-height: 1.5;">${escapeHTML(item.riwayat_pending)}</pre>
+        </div>` : ''}
+
+        <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; font-size: 0.85rem; line-height: 1.6;">
+          <div style="font-weight: 700; color: #34d399; font-size: 0.85rem; margin-bottom: 8px;">📋 CATATAN LENGKAP SETIAP MEJA</div>
+          <div>• <strong>Catatan Scan:</strong> ${escapeHTML(item.catatan_scan || '-')} <small style="color:var(--text-muted);">${item.tgl_scan ? `(${item.tgl_scan})` : ''}</small></div>
+          <div>• <strong>Catatan Kasie / Seksi:</strong> ${escapeHTML(item.catatan_kasie || '-')} <small style="color:var(--text-muted);">${item.tgl_kasie ? `(${item.tgl_kasie})` : ''}</small></div>
+          <div>• <strong>Catatan Kepala UPT:</strong> ${escapeHTML(item.catatan_upt || '-')} <small style="color:var(--text-muted);">${item.tgl_upt ? `(${item.tgl_upt})` : ''}</small></div>
+          <div>• <strong>Catatan Kabid:</strong> ${escapeHTML(item.catatan_kabid || '-')} <small style="color:var(--text-muted);">${item.tgl_kabid ? `(${item.tgl_kabid})` : ''}</small></div>
+          <div>• <strong>Catatan Kadis:</strong> ${escapeHTML(item.catatan_kadis || '-')} <small style="color:var(--text-muted);">${item.tgl_kadis ? `(${item.tgl_kadis})` : ''}</small></div>
+          <div>• <strong>Status TTE:</strong> ${escapeHTML(item.status_tte || '-')} <small style="color:var(--text-muted);">${item.tgl_tte ? `(${item.tgl_tte})` : ''}</small></div>
+          <div>• <strong>Penerima & Catatan Print:</strong> ${escapeHTML(item.penerima ? `${item.penerima} (${item.catatan_print || ''})` : '-')} <small style="color:var(--text-muted);">${item.tgl_print ? `(${item.tgl_print})` : ''}</small></div>
+        </div>
+      `;
     }
+  } else {
+    // Mode Petugas/Eksekutor Biasa
+    if (modalTitle) modalTitle.textContent = 'Tindak Lanjut Berkas Antrean';
+    if (standardActionGroup) standardActionGroup.style.display = 'block';
+    if (saveModalBtn) saveModalBtn.style.display = 'inline-flex';
+    if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
+    if (monitoringHistoryBox) monitoringHistoryBox.style.display = 'none';
+    if (modalNotesGroup) modalNotesGroup.style.display = 'block';
   }
 
   actionModal.style.setProperty('position', 'fixed', 'important');

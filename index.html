@@ -437,10 +437,13 @@
           <input type="text" id="modalPenerima" placeholder="Isikan nama warga / perwakilan penerima dokumen...">
         </div>
 
-        <div class="form-group" style="margin-top: 15px;">
+        <div class="form-group" id="modalNotesGroup" style="margin-top: 15px;">
           <label for="modalNotes">Catatan / Keterangan Verifikasi</label>
           <textarea id="modalNotes" rows="3" placeholder="Tuliskan catatan verifikasi (opsional untuk persetujuan, wajib untuk pending)..."></textarea>
         </div>
+
+        <!-- Khusus User Monitoring: Container Riwayat Catatan Lengkap Read-Only -->
+        <div id="monitoringHistoryBox" style="display: none; margin-top: 15px;"></div>
 
         <div class="modal-footer" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
           <button type="button" class="btn btn-secondary" id="cancelModalBtn">Batal</button>
