@@ -5,6 +5,7 @@ localStorage.removeItem('simpel_momen_api_url');
 let API_URL = 'https://script.google.com/macros/s/AKfycby-RoYMJq-lFarD4KWcOTrCfTj93xze8ljDhvjGBT2faQ8WsYW0BSdqyPlpWxxg6ieqBg/exec';
 let currentUser = null;
 let allData = [];
+let currentDeskFilter = 'active'; // 'active', 'completed', 'all'
 
 function getLocalDateTimeString() {
   const d = new Date();
@@ -399,6 +400,26 @@ if (filterFasilitasi) {
   });
 }
 
+// Switch Desk Filter Tabs ('active', 'completed', 'all')
+window.setDeskFilter = function(filterMode) {
+  currentDeskFilter = filterMode;
+  ['tabMejaAktif', 'tabSelesai', 'tabSemua'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
+  if (filterMode === 'active') {
+    const activeEl = document.getElementById('tabMejaAktif');
+    if (activeEl) activeEl.classList.add('active');
+  } else if (filterMode === 'completed') {
+    const compEl = document.getElementById('tabSelesai');
+    if (compEl) compEl.classList.add('active');
+  } else if (filterMode === 'all') {
+    const allEl = document.getElementById('tabSemua');
+    if (allEl) allEl.classList.add('active');
+  }
+  renderCounterDesk();
+};
+
 function updateConnectionIndicator() {
   if (!connectionStatus) return;
   if (API_URL === 'local') {
@@ -514,28 +535,20 @@ function populateFasilitasiFilterOptions() {
   filterFasilitasi.value = currentVal || "ALL";
 }
 
-// RENDER MEJA KERJA COUNTER
+// RENDER MEJA KERJA COUNTER & PEMBARUAN METRIK AKUMULASI
 function renderCounterDesk() {
   if (!counterTableBody || !currentUser) return;
   
   const query = counterSearchInput ? counterSearchInput.value.toLowerCase().trim() : "";
   const role = currentUser.role;
   const fasilitasi = currentUser.fasilitasi || "Dinas";
-  
-  const filtered = allData.filter(item => {
-    const keyMatch = String(item.key || "").toLowerCase().includes(query);
-    const pemohonMatch = String(item.pemohon || "").toLowerCase().includes(query);
-    const jenisMatch = String(item.jenis_layanan || "").toLowerCase().includes(query);
-    const subMatch = String(item.sub_layanan || "").toLowerCase().includes(query);
-    
-    const matchesSearch = !query || keyMatch || pemohonMatch || jenisMatch || subMatch;
-    if (!matchesSearch) return false;
 
+  // Filter antrean khusus meja aktif user
+  const userActiveDeskItems = allData.filter(item => {
     const statusAlur = String(item.status_alur || "");
     const itemFas = String(item.fasilitasi || "");
     const itemJenis = String(item.jenis_layanan || "").trim().toLowerCase();
 
-    // Filter Meja Kerja berdasarkan Peran
     if (role === 'operator') {
       return statusAlur === 'PENDING_OPERATOR';
     } else if (role === 'petugas_scan') {
@@ -561,17 +574,45 @@ function renderCounterDesk() {
       if (fasilitasi === 'UPT') return statusAlur === '6_PENCETAKAN_UPT';
       return statusAlur === '6_PENCETAKAN_DINAS';
     }
-    
     return true;
   });
 
-  if (counterEntriesCount) counterEntriesCount.textContent = filtered.length;
+  // AKUMULASI NILAI METRIK PADA DASHBOARD
+  const countActiveDesk = userActiveDeskItems.length;
+  const countPendingAll = allData.filter(d => String(d.status_alur).includes('PENDING')).length;
+  const countCompletedAll = allData.filter(d => String(d.status_alur).includes('7_SELESAI')).length;
+
+  if (valMetric1) valMetric1.textContent = countActiveDesk;
+  if (valMetric2) valMetric2.textContent = countPendingAll;
+  if (valMetric3) valMetric3.textContent = countCompletedAll;
+
+  // Filter tampilan tabel berdasarkan Tab (Active, Completed, All) & Pencarian
+  const filtered = allData.filter(item => {
+    const keyMatch = String(item.key || "").toLowerCase().includes(query);
+    const pemohonMatch = String(item.pemohon || "").toLowerCase().includes(query);
+    const jenisMatch = String(item.jenis_layanan || "").toLowerCase().includes(query);
+    const subMatch = String(item.sub_layanan || "").toLowerCase().includes(query);
+    
+    const matchesSearch = !query || keyMatch || pemohonMatch || jenisMatch || subMatch;
+    if (!matchesSearch) return false;
+
+    if (currentDeskFilter === 'active') {
+      return userActiveDeskItems.includes(item);
+    } else if (currentDeskFilter === 'completed') {
+      return String(item.status_alur) === '7_SELESAI';
+    } else if (currentDeskFilter === 'all') {
+      return true;
+    }
+    return true;
+  });
+
+  if (counterEntriesCount) counterEntriesCount.textContent = `Menampilkan ${filtered.length} berkas`;
 
   if (filtered.length === 0) {
     counterTableBody.innerHTML = `
       <tr>
         <td colspan="7" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">
-          ✨ Tidak ada antrean dokumen yang membutuhkan tindakan Anda saat ini.
+          ✨ Tidak ada antrean dokumen yang sesuai dengan filter saat ini.
         </td>
       </tr>
     `;
@@ -580,21 +621,45 @@ function renderCounterDesk() {
 
   counterTableBody.innerHTML = filtered.map(row => {
     const isPending = row.status_alur === 'PENDING_OPERATOR';
-    const rowStyle = isPending ? 'background: rgba(239, 68, 68, 0.08);' : '';
+    const isSelesai = row.status_alur === '7_SELESAI';
+    const rowStyle = isPending ? 'background: rgba(239, 68, 68, 0.08);' : (isSelesai ? 'background: rgba(16, 185, 129, 0.04);' : '');
     
+    // Tentukan Tombol Akses Langsung
+    let actionBtnHtml = '';
+    if (isSelesai) {
+      actionBtnHtml = `
+        <span class="badge selesai" style="margin-right:4px;">✅ Selesai</span>
+        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">👁️ Detail</button>
+      `;
+    } else if (role === 'petugas_pencetakan') {
+      actionBtnHtml = `
+        <button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+          🎉 Cetak & Selesaikan
+        </button>
+      `;
+    } else if (role === 'operator' && isPending) {
+      actionBtnHtml = `
+        <button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+          🛠️ Perbaiki & Kirim Ulang
+        </button>
+      `;
+    } else {
+      actionBtnHtml = `
+        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+          ⚡ Setujui / Lanjutkan
+        </button>
+      `;
+    }
+
     return `
       <tr style="${rowStyle}">
-        <td><strong style="color: var(--primary-light);">${escapeHTML(row.key)}</strong></td>
-        <td>${escapeHTML(row.pemohon)}<br><small style="color:var(--text-muted);">${escapeHTML(row.no_hp || '-')}</small></td>
-        <td><span class="badge ${row.fasilitasi && row.fasilitasi.includes('UPT') ? 'badge-upt' : 'fasilitasi-dinas'}">${escapeHTML(row.fasilitasi)}</span></td>
+        <td><span class="code-key-badge">${escapeHTML(row.key)}</span></td>
+        <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
+        <td><strong>${escapeHTML(row.pemohon)}</strong><br><small style="color:var(--text-muted);">${escapeHTML(row.no_hp || '-')}</small></td>
         <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small></td>
+        <td><span class="badge ${row.integrasi && row.integrasi.includes('Non') ? 'badge-upt' : 'fasilitasi-dinas'}">${escapeHTML(row.integrasi || 'SIAK')}</span></td>
         <td style="font-weight: 600; color: #a78bfa;">${escapeHTML(row.status_alur)}</td>
-        <td><span class="badge ${isPending ? 'pending' : 'selesai'}">${isPending ? '⚠️ Perlu Perbaikan' : 'Menunggu Tindakan'}</span></td>
-        <td class="text-center">
-          <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
-            ✏️ Tindak Lanjut
-          </button>
-        </td>
+        <td class="text-center">${actionBtnHtml}</td>
       </tr>
     `;
   }).join('');
@@ -622,12 +687,12 @@ function renderMonitoringTable() {
     return matchesSearch && matchesFas;
   });
 
-  if (monitoringCount) monitoringCount.textContent = filtered.length;
+  if (monitoringCount) monitoringCount.textContent = `Menampilkan ${filtered.length} berkas`;
 
   if (filtered.length === 0) {
     monitoringTableBody.innerHTML = `
       <tr>
-        <td colspan="6" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">
+        <td colspan="7" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">
           Tidak ditemukan data dokumen.
         </td>
       </tr>
@@ -644,12 +709,13 @@ function renderMonitoringTable() {
 
     return `
       <tr>
-        <td><strong style="color: var(--primary-light);">${escapeHTML(row.key)}</strong></td>
-        <td>${escapeHTML(row.pemohon)}</td>
-        <td><span class="badge ${row.fasilitasi && row.fasilitasi.includes('UPT') ? 'badge-upt' : 'fasilitasi-dinas'}">${escapeHTML(row.fasilitasi)}</span></td>
-        <td>${escapeHTML(row.jenis_layanan)} - ${escapeHTML(row.sub_layanan)}</td>
+        <td><span class="code-key-badge">${escapeHTML(row.key)}</span></td>
+        <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
+        <td><strong>${escapeHTML(row.pemohon)}</strong></td>
+        <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small></td>
+        <td>${escapeHTML(row.operator || '-')}</td>
         <td style="font-weight: 500;">${escapeHTML(row.status_alur)}</td>
-        <td class="text-center">${statusBadge}</td>
+        <td><small style="color:var(--text-muted);">${escapeHTML(row.riwayat_pending || row.catatan_print || row.catatan_kadis || '-')}</small></td>
       </tr>
     `;
   }).join('');
@@ -678,18 +744,20 @@ function renderRekapitulasi() {
 
   const keys = Object.keys(statsByLayanan);
   if (keys.length === 0) {
-    rekapTableBody.innerHTML = `<tr><td colspan="4" class="text-center" style="padding:2rem;">Belum ada data rekapitulasi</td></tr>`;
+    rekapTableBody.innerHTML = `<tr><td colspan="5" class="text-center" style="padding:2rem;">Belum ada data rekapitulasi</td></tr>`;
     return;
   }
 
   rekapTableBody.innerHTML = keys.map(k => {
     const s = statsByLayanan[k];
+    const percentage = s.total > 0 ? Math.round((s.selesai / s.total) * 100) : 0;
     return `
       <tr>
         <td><strong>${escapeHTML(k)}</strong></td>
         <td class="text-center"><span class="badge" style="background:rgba(255,255,255,0.1);">${s.total}</span></td>
         <td class="text-center"><span class="badge selesai">${s.selesai}</span></td>
         <td class="text-center"><span class="badge" style="background:rgba(59,130,246,0.2); color:#60a5fa;">${s.proses}</span></td>
+        <td class="text-center"><strong>${percentage}%</strong></td>
       </tr>
     `;
   }).join('');
@@ -710,6 +778,20 @@ window.openActionModal = function(key) {
   if (tteStatusGroup) tteStatusGroup.style.display = (role === 'petugas_tte') ? 'block' : 'none';
   if (penerimaGroup) penerimaGroup.style.display = (role === 'petugas_pencetakan') ? 'block' : 'none';
   if (modalNotes) modalNotes.value = '';
+
+  // Dinamiskan nama tombol eksekusi
+  if (saveModalBtn) {
+    if (role === 'petugas_pencetakan') {
+      saveModalBtn.textContent = '🎉 Simpan & Selesaikan Cetak Dokumen';
+      saveModalBtn.className = 'btn btn-success';
+    } else if (role === 'operator') {
+      saveModalBtn.textContent = '🚀 Simpan & Kirim Ulang Berkas';
+      saveModalBtn.className = 'btn btn-primary';
+    } else {
+      saveModalBtn.textContent = '💾 Simpan & Setujui Verifikasi';
+      saveModalBtn.className = 'btn btn-primary';
+    }
+  }
 
   actionModal.style.display = 'flex';
 };
@@ -848,7 +930,7 @@ if (formJenisLayanan) {
     const options = SUB_LAYANAN_OPTIONS[selectedLayanan] || [];
     if (formSubLayanan) {
       formSubLayanan.innerHTML = '<option value="">-- Pilih Sub Layanan --</option>' + 
-        options.map(opt => `<option value="${opt}">${opt}">${opt}</option>`).join('');
+        options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
     }
   });
 }

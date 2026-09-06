@@ -149,8 +149,13 @@
                 <h2 style="margin:0;">Dokumen Antrean di Meja Anda</h2>
                 <span class="entries-count" id="counterEntriesCount">Menampilkan 0 berkas</span>
               </div>
-              <div style="flex: 1; max-width: 380px;">
-                <input type="text" id="counterSearchInput" placeholder="🔍 Cari nama pemohon, kode antrean, no HP..." style="width: 100%; padding: 9px 14px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                <button class="desk-tab active" id="tabMejaAktif" onclick="setDeskFilter('active')">⚡ Meja Kerja Saya</button>
+                <button class="desk-tab" id="tabSelesai" onclick="setDeskFilter('completed')">✅ Berkas Selesai</button>
+                <button class="desk-tab" id="tabSemua" onclick="setDeskFilter('all')">🌐 Semua Antrean</button>
+              </div>
+              <div style="flex: 1; max-width: 280px;">
+                <input type="text" id="counterSearchInput" placeholder="🔍 Cari nama, kode antrean..." style="width: 100%; padding: 8px 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.85rem;">
               </div>
             </div>
             <div class="table-container">
@@ -415,6 +420,6 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="app.js?v=20260906_03"></script>
+  <script src="app.js?v=20260906_04"></script>
 </body>
 </html>
