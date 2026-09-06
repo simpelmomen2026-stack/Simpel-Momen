@@ -953,8 +953,8 @@ td {
   margin-bottom: 1rem;
 }
 
-/* Modal Backdrop & Centered Overlay Fix (Langsung Terbuka di Tengah Layar Viewport) */
-.modal-backdrop {
+/* Modal Backdrop & Centered Overlay Fix (Langsung Terbuka di Tengah Layar Viewport Overlay) */
+#actionModal, .modal-backdrop, .modal {
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
@@ -962,25 +962,25 @@ td {
   bottom: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
-  background: rgba(11, 15, 25, 0.8) !important;
+  background: rgba(11, 15, 25, 0.85) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
   z-index: 999999 !important;
-  display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   padding: 1.25rem !important;
   overflow-y: auto !important;
 }
 
-.modal-card {
+#actionModal .modal-card, .modal-card, .modal-content {
+  position: relative !important;
   width: 100% !important;
   max-width: 540px !important;
-  background: rgba(17, 24, 39, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: rgba(17, 24, 39, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
   border-radius: 20px !important;
   padding: 1.75rem !important;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7) !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8) !important;
   max-height: 90vh !important;
   overflow-y: auto !important;
   animation: modalSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;

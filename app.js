@@ -852,22 +852,21 @@ window.openActionModal = function(key) {
     }
   }
 
-  actionModal.style.position = 'fixed';
-  actionModal.style.top = '0';
-  actionModal.style.left = '0';
-  actionModal.style.right = '0';
-  actionModal.style.bottom = '0';
-  actionModal.style.width = '100vw';
-  actionModal.style.height = '100vh';
-  actionModal.style.zIndex = '999999';
-  actionModal.style.background = 'rgba(11, 15, 25, 0.85)';
-  actionModal.style.backdropFilter = 'blur(12px)';
-  actionModal.style.webkitBackdropFilter = 'blur(12px)';
-  actionModal.style.display = 'flex';
-  actionModal.style.alignItems = 'center';
-  actionModal.style.justifyContent = 'center';
-  actionModal.style.padding = '1.5rem';
-  actionModal.style.overflowY = 'auto';
+  actionModal.style.setProperty('position', 'fixed', 'important');
+  actionModal.style.setProperty('top', '0', 'important');
+  actionModal.style.setProperty('left', '0', 'important');
+  actionModal.style.setProperty('right', '0', 'important');
+  actionModal.style.setProperty('bottom', '0', 'important');
+  actionModal.style.setProperty('width', '100vw', 'important');
+  actionModal.style.setProperty('height', '100vh', 'important');
+  actionModal.style.setProperty('z-index', '999999', 'important');
+  actionModal.style.setProperty('background', 'rgba(11, 15, 25, 0.85)', 'important');
+  actionModal.style.setProperty('backdrop-filter', 'blur(12px)', 'important');
+  actionModal.style.setProperty('display', 'flex', 'important');
+  actionModal.style.setProperty('align-items', 'center', 'important');
+  actionModal.style.setProperty('justify-content', 'center', 'important');
+  actionModal.style.setProperty('padding', '1.5rem', 'important');
+  actionModal.style.setProperty('overflow-y', 'auto', 'important');
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
   setTimeout(() => {
