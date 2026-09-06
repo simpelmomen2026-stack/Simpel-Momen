@@ -852,7 +852,28 @@ window.openActionModal = function(key) {
     }
   }
 
+  actionModal.style.position = 'fixed';
+  actionModal.style.top = '0';
+  actionModal.style.left = '0';
+  actionModal.style.right = '0';
+  actionModal.style.bottom = '0';
+  actionModal.style.width = '100vw';
+  actionModal.style.height = '100vh';
+  actionModal.style.zIndex = '999999';
+  actionModal.style.background = 'rgba(11, 15, 25, 0.85)';
+  actionModal.style.backdropFilter = 'blur(12px)';
+  actionModal.style.webkitBackdropFilter = 'blur(12px)';
   actionModal.style.display = 'flex';
+  actionModal.style.alignItems = 'center';
+  actionModal.style.justifyContent = 'center';
+  actionModal.style.padding = '1.5rem';
+  actionModal.style.overflowY = 'auto';
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => {
+    const firstFocusable = actionModal.querySelector('input:not([type="hidden"]), select, textarea, button');
+    if (firstFocusable) firstFocusable.focus();
+  }, 100);
 };
 
 if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
@@ -951,6 +972,7 @@ if (berkasForm) {
       tanggal: currentSystemTime.slice(0, 10),
       fasilitasi: currentUser ? currentUser.fasilitasi || 'Dinas' : 'Dinas',
       operator: currentUser ? currentUser.name || currentUser.username : 'Operator',
+      userName: currentUser ? currentUser.name || currentUser.username : 'Operator',
       pemohon: pemohon,
       alamat: alamat,
       no_hp: noHp,
