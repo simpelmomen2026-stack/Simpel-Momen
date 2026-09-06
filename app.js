@@ -909,6 +909,7 @@ window.openActionModal = function(key) {
     if (modalNotesGroup) modalNotesGroup.style.display = 'block';
   }
 
+  actionModal.classList.add('active');
   actionModal.style.setProperty('position', 'fixed', 'important');
   actionModal.style.setProperty('top', '0', 'important');
   actionModal.style.setProperty('left', '0', 'important');
@@ -937,6 +938,7 @@ if (cancelModalBtn) cancelModalBtn.addEventListener('click', closeModal);
 
 function closeModal() {
   if (actionModal) {
+    actionModal.classList.remove('active');
     actionModal.style.setProperty('display', 'none', 'important');
   }
   if (actionForm) actionForm.reset();
