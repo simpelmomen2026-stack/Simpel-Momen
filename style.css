@@ -1023,4 +1023,43 @@ td {
   }
 }
 
+/* Print styles for Rekapitulasi Laporan Matrix */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #rekapPrintArea, #rekapPrintArea * {
+    visibility: visible !important;
+  }
+  #rekapPrintArea {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    color: #000 !important;
+    background: #fff !important;
+    padding: 10px !important;
+  }
+  #rekapPrintArea div {
+    color: #000 !important;
+    background: transparent !important;
+    border-color: #000 !important;
+  }
+  #rekapPrintArea table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+  #rekapPrintArea th, #rekapPrintArea td {
+    border: 1px solid #000 !important;
+    color: #000 !important;
+    padding: 3px 4px !important;
+    font-size: 8pt !important;
+    background: transparent !important;
+  }
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+}
+
 

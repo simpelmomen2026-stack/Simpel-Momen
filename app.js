@@ -1,4 +1,4 @@
-// Simpel Momen Web Logic - Version 2026.09.06.1951
+// Simpel Momen Web Logic - Version 2026.09.06.2055
 // ================= CONFIG & STATE =================
 // Hapus cache API_URL lama dari localStorage agar selalu terhubung 100% ONLINE ke Google Sheets
 localStorage.removeItem('simpel_momen_api_url');
@@ -858,9 +858,10 @@ function renderMonitoringTable() {
   }).join('');
 }
 
-// RENDER REKAPITULASI
+// RENDER REKAPITULASI (Format Matriks Harian Bulan 1-31 Sesuai Referensi Google Sheets)
 function renderRekapitulasi() {
-  if (!rekapTableBody) return;
+  const rekapMatrixBody = document.getElementById('rekapMatrixBody');
+  if (!currentUser) return;
 
   const targetData = isUserUpt(currentUser) ? allData.filter(d => matchItemToUserUpt(d, currentUser)) : allData;
   const total = targetData.length;
@@ -871,35 +872,234 @@ function renderRekapitulasi() {
   if (rekapSelesai) rekapSelesai.textContent = selesai;
   if (rekapProses) rekapProses.textContent = proses;
 
-  const statsByLayanan = {};
-  targetData.forEach(item => {
-    const lay = item.jenis_layanan || "Lainnya";
-    if (!statsByLayanan[lay]) statsByLayanan[lay] = { total: 0, selesai: 0, proses: 0 };
-    statsByLayanan[lay].total++;
-    if (item.status_alur === '7_SELESAI') statsByLayanan[lay].selesai++;
-    else statsByLayanan[lay].proses++;
-  });
+  if (!rekapMatrixBody) return;
 
-  const keys = Object.keys(statsByLayanan);
-  if (keys.length === 0) {
-    rekapTableBody.innerHTML = `<tr><td colspan="5" class="text-center">Belum ada data rekapitulasi.</td></tr>`;
-    return;
+  const monthSelect = document.getElementById('rekapMonthSelect');
+  const yearSelect = document.getElementById('rekapYearSelect');
+  const catSelect = document.getElementById('rekapCategorySelect');
+
+  const now = new Date();
+  const selectedMonth = monthSelect ? parseInt(monthSelect.value) : now.getMonth();
+  const selectedYear = yearSelect ? parseInt(yearSelect.value) : now.getFullYear();
+  const selectedCat = catSelect ? catSelect.value : "ALL";
+
+  const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+  const monthNames = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+  const monthName = monthNames[selectedMonth];
+
+  // Header Info & Penandatangan
+  const displayName = currentUser.name || currentUser.username || "Operator";
+  const rekapOperatorName = document.getElementById('rekapOperatorName');
+  const rekapPeriodeText = document.getElementById('rekapPeriodeText');
+  const rekapTglAkhir = document.getElementById('rekapTglAkhir');
+  const rekapNamaTTD = document.getElementById('rekapNamaTTD');
+
+  if (rekapOperatorName) rekapOperatorName.textContent = displayName;
+  if (rekapPeriodeText) rekapPeriodeText.textContent = `1 ${monthName} ${selectedYear} s/d ${daysInMonth} ${monthName} ${selectedYear}`;
+  if (rekapTglAkhir) rekapTglAkhir.textContent = `${daysInMonth} ${monthName} ${selectedYear}`;
+  if (rekapNamaTTD) rekapNamaTTD.textContent = displayName;
+
+  // Render Table Header (No, Uraian, 1..daysInMonth, Total)
+  const headerDaysRow = document.getElementById('rekapHeaderDaysRow');
+  if (headerDaysRow) {
+    let dayCols = '';
+    for (let d = 1; d <= daysInMonth; d++) {
+      dayCols += `<th style="text-align:center; min-width:28px; padding:4px; font-size:0.78rem;">${d}</th>`;
+    }
+    headerDaysRow.innerHTML = `
+      <th style="width:36px; text-align:center; padding:6px 4px;">No</th>
+      <th style="min-width:220px; text-align:left; padding:6px 8px;">Uraian (Sub Layanan)</th>
+      ${dayCols}
+      <th style="width:55px; text-align:center; background:rgba(56,189,248,0.25); padding:6px 4px;">Jumlah</th>
+    `;
   }
 
-  rekapTableBody.innerHTML = keys.map(k => {
-    const s = statsByLayanan[k];
-    const percentage = s.total > 0 ? Math.round((s.selesai / s.total) * 100) : 0;
+  // Filter Data menurut Bulan & Tahun yang Dipilih
+  const monthData = targetData.filter(item => {
+    const rawDate = item.tanggal || item.tgl_operator || item.tgl_scan;
+    if (!rawDate) return false;
+    const d = new Date(rawDate);
+    if (isNaN(d.getTime())) return false;
+    return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+  });
+
+  // Tentukan Daftar Uraian Sub Layanan
+  let subLayananList = [];
+  if (selectedCat === "Pendaftaran Penduduk") {
+    subLayananList = [...SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"]];
+  } else if (selectedCat === "Pencatatan Sipil") {
+    subLayananList = [...SUB_LAYANAN_OPTIONS["Pencatatan Sipil"]];
+  } else {
+    subLayananList = [
+      ...SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"],
+      ...SUB_LAYANAN_OPTIONS["Pencatatan Sipil"]
+    ];
+  }
+
+  // Matriks Hitungan per Sub Layanan per Hari
+  const matrix = {};
+  subLayananList.forEach(sub => {
+    matrix[sub] = Array(daysInMonth).fill(0);
+  });
+
+  monthData.forEach(item => {
+    const sub = item.sub_layanan;
+    const rawDate = item.tanggal || item.tgl_operator || item.tgl_scan;
+    if (!rawDate) return;
+    const d = new Date(rawDate);
+    if (isNaN(d.getTime())) return;
+
+    const dayNum = d.getDate();
+    if (dayNum >= 1 && dayNum <= daysInMonth) {
+      if (!matrix[sub]) {
+        matrix[sub] = Array(daysInMonth).fill(0);
+        subLayananList.push(sub);
+      }
+      matrix[sub][dayNum - 1]++;
+    }
+  });
+
+  const dailyTotals = Array(daysInMonth).fill(0);
+  let grandTotal = 0;
+
+  const rowsHtml = subLayananList.map((sub, index) => {
+    const counts = matrix[sub] || Array(daysInMonth).fill(0);
+    let rowSum = 0;
+    const cells = counts.map((cnt, i) => {
+      rowSum += cnt;
+      dailyTotals[i] += cnt;
+      return `<td style="text-align:center; padding:4px; font-size:0.8rem; ${cnt > 0 ? 'font-weight:700; color:#38bdf8;' : 'color:rgba(255,255,255,0.25);'}">${cnt || 0}</td>`;
+    }).join('');
+
+    grandTotal += rowSum;
+
     return `
       <tr>
-        <td><strong>${escapeHTML(k)}</strong></td>
-        <td class="text-center"><span class="badge" style="background:rgba(255,255,255,0.1);">${s.total}</span></td>
-        <td class="text-center"><span class="badge selesai">${s.selesai}</span></td>
-        <td class="text-center"><span class="badge" style="background:rgba(59,130,246,0.2); color:#60a5fa;">${s.proses}</span></td>
-        <td class="text-center"><strong>${percentage}%</strong></td>
+        <td style="text-align:center; font-size:0.8rem;">${index + 1}</td>
+        <td style="font-weight:600; font-size:0.82rem;">${escapeHTML(sub)}</td>
+        ${cells}
+        <td style="text-align:center; font-weight:700; background:rgba(56,189,248,0.15); color:#38bdf8; font-size:0.82rem;">${rowSum}</td>
       </tr>
     `;
   }).join('');
+
+  const totalCells = dailyTotals.map(t => 
+    `<th style="text-align:center; padding:4px; font-weight:800; color:#34d399; background:rgba(16,185,129,0.1); font-size:0.8rem;">${t}</th>`
+  ).join('');
+
+  const footerRowHtml = `
+    <tr style="background:rgba(15,23,42,0.95); font-weight:bold;">
+      <td colspan="2" style="text-align:right; padding:8px 12px; font-weight:800; color:#34d399; font-size:0.85rem;">TOTAL KESELURUHAN:</td>
+      ${totalCells}
+      <th style="text-align:center; font-size:0.9rem; font-weight:800; color:#34d399; background:rgba(16,185,129,0.25);">${grandTotal}</th>
+    </tr>
+  `;
+
+  rekapMatrixBody.innerHTML = rowsHtml + footerRowHtml;
 }
+
+// Export Rekap Matriks Langsung ke File PDF (.pdf)
+window.exportRekapToPDF = function() {
+  if (!currentUser) return;
+  const monthSelect = document.getElementById('rekapMonthSelect');
+  const yearSelect = document.getElementById('rekapYearSelect');
+
+  const now = new Date();
+  const selectedMonth = monthSelect ? parseInt(monthSelect.value) : now.getMonth();
+  const selectedYear = yearSelect ? parseInt(yearSelect.value) : now.getFullYear();
+
+  const monthNames = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+  const monthName = monthNames[selectedMonth];
+  const displayName = (currentUser.name || currentUser.username || "Operator").trim();
+  const cleanName = displayName.replace(/\s+/g, '_');
+
+  const fileName = `Laporan_Rekap_User_${cleanName}_${monthName}_${selectedYear}.pdf`;
+  const printArea = document.getElementById('rekapPrintArea');
+  if (!printArea) return;
+
+  if (typeof html2pdf !== 'undefined') {
+    showToast('Sedang membuat file PDF...', 'info');
+
+    // Clone area rekap dan beri styling kertas putih & teks hitam bersih
+    const clone = printArea.cloneNode(true);
+    clone.style.background = '#ffffff';
+    clone.style.color = '#000000';
+    clone.style.padding = '20px';
+    clone.style.borderRadius = '0px';
+
+    const infoBox = clone.querySelector('div');
+    if (infoBox) {
+      infoBox.style.background = '#f8fafc';
+      infoBox.style.border = '1px solid #94a3b8';
+      infoBox.style.color = '#0f172a';
+      infoBox.querySelectorAll('span').forEach(sp => sp.style.color = '#0f172a');
+    }
+
+    const table = clone.querySelector('table');
+    if (table) {
+      table.style.color = '#000000';
+      table.querySelectorAll('th, td').forEach(el => {
+        el.style.borderColor = '#475569';
+        if (el.tagName === 'TH') {
+          el.style.background = '#e2e8f0';
+          el.style.color = '#0f172a';
+        } else {
+          el.style.color = '#0f172a';
+          if (el.textContent.trim() === '0') {
+            el.style.color = '#94a3b8';
+          }
+        }
+      });
+    }
+
+    const ttdBlock = clone.querySelector('div[style*="justify-content: flex-end"]');
+    if (ttdBlock) {
+      ttdBlock.querySelectorAll('div, span').forEach(d => d.style.color = '#0f172a');
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'fixed';
+    wrapper.style.left = '-9999px';
+    wrapper.style.top = '0';
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
+    const opt = {
+      margin:       [8, 8, 8, 8],
+      filename:     fileName,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
+
+    html2pdf().set(opt).from(clone).save().then(() => {
+      document.body.removeChild(wrapper);
+      showToast('File PDF berhasil diexport dan didownload!', 'success');
+    }).catch(err => {
+      console.error('HTML2PDF Error:', err);
+      document.body.removeChild(wrapper);
+      window.print();
+    });
+  } else {
+    // Fallback jika CDN html2pdf belum termuat sempurna: buka dialog print/save PDF
+    window.print();
+  }
+};
+
+// Event Listeners Filter Rekap Matriks
+const rekapMonthSelectEl = document.getElementById('rekapMonthSelect');
+const rekapYearSelectEl = document.getElementById('rekapYearSelect');
+const rekapCatSelectEl = document.getElementById('rekapCategorySelect');
+
+if (rekapMonthSelectEl) rekapMonthSelectEl.addEventListener('change', renderRekapitulasi);
+if (rekapYearSelectEl) rekapYearSelectEl.addEventListener('change', renderRekapitulasi);
+if (rekapCatSelectEl) rekapCatSelectEl.addEventListener('change', renderRekapitulasi);
 
 // MODAL ACTION & TINDAK LANJUT
 window.openActionModal = function(key) {

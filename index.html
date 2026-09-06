@@ -342,7 +342,7 @@
           </div>
         </div>
 
-        <!-- ================= PAGE 4: REKAPITULASI & LAPORAN ================= -->
+        <!-- ================= PAGE 4: REKAPITULASI & LAPORAN MATRIX ================= -->
         <div class="page-container" id="page-rekapitulasi" style="display: none;">
           <div class="metrics-grid">
             <div class="metric-card card blue">
@@ -369,26 +369,76 @@
           </div>
 
           <div class="card table-card" style="margin-top: 1.5rem;">
-            <div class="table-header">
-              <h2>Rekapitulasi Pelayanan per Jenis Layanan</h2>
+            <div class="table-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 15px;">
+              <h2>📊 Laporan Rekapitulasi Pelayanan Per-Operator</h2>
+              
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                <select id="rekapCategorySelect" style="padding: 6px 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.85rem;">
+                  <option value="ALL">🌐 Semua Layanan</option>
+                  <option value="Pendaftaran Penduduk">🏠 Pendaftaran Penduduk</option>
+                  <option value="Pencatatan Sipil">📜 Pencatatan Sipil</option>
+                </select>
+
+                <select id="rekapMonthSelect" style="padding: 6px 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.85rem;">
+                  <option value="0">Januari</option>
+                  <option value="1">Februari</option>
+                  <option value="2">Maret</option>
+                  <option value="3">April</option>
+                  <option value="4">Mei</option>
+                  <option value="5">Juni</option>
+                  <option value="6">Juli</option>
+                  <option value="7">Agustus</option>
+                  <option value="8">September</option>
+                  <option value="9">Oktober</option>
+                  <option value="10">November</option>
+                  <option value="11">Desember</option>
+                </select>
+
+                <select id="rekapYearSelect" style="padding: 6px 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.85rem;">
+                  <option value="2026">2026</option>
+                  <option value="2025">2025</option>
+                </select>
+
+                <button class="btn btn-primary btn-xs" onclick="exportRekapToPDF()" style="padding: 6px 14px; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border: none;">
+                  📄 Export PDF (.pdf)
+                </button>
+                <button class="btn btn-secondary btn-xs" onclick="window.print()" style="padding: 6px 12px; font-size: 0.85rem;">
+                  🖨️ Cetak Laporan
+                </button>
+              </div>
             </div>
-            <div class="table-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Kategori Layanan</th>
-                    <th>Total Permohonan</th>
-                    <th>Selesai Cetak</th>
-                    <th>Dalam Proses</th>
-                    <th>Persentase Penyelesaian</th>
-                  </tr>
-                </thead>
-                <tbody id="rekapTableBody">
-                  <tr>
-                    <td colspan="5" class="text-center text-muted">Memuat rekapitulasi...</td>
-                  </tr>
-                </tbody>
-              </table>
+
+            <!-- AREA CETAK LAPORAN REKAP MATRIKS -->
+            <div id="rekapPrintArea" style="background: rgba(11, 15, 25, 0.4); border-radius: 12px; padding: 15px;">
+              <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 12px 16px; margin-bottom: 15px; line-height: 1.7; font-size: 0.9rem;">
+                <div><strong>Nama Operator :</strong> <span id="rekapOperatorName" style="color: #60a5fa; font-weight: 700;">-</span></div>
+                <div><strong>Periode :</strong> <span id="rekapPeriodeText" style="color: #a78bfa; font-weight: 700;">-</span></div>
+              </div>
+
+              <div class="table-container" style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                  <thead>
+                    <tr id="rekapHeaderDaysRow" style="background: rgba(30, 41, 59, 0.9); color: #fff;">
+                      <!-- Header Hari 1 s/d 31 diisi otomatis via JS -->
+                    </tr>
+                  </thead>
+                  <tbody id="rekapMatrixBody">
+                    <tr>
+                      <td colspan="34" class="text-center text-muted">Memuat rekapitulasi matriks harian...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- BLOK TANDA TANGAN LOKASI & PENANDATANGAN -->
+              <div style="margin-top: 30px; display: flex; justify-content: flex-end;">
+                <div style="text-align: center; min-width: 260px; font-size: 0.88rem; color: var(--text-main);">
+                  <div>Tahuna, <span id="rekapTglAkhir" style="font-weight: 600;">-</span></div>
+                  <div style="margin-top: 4px; font-weight: 600;">Yang Melaksanakan Tugas,</div>
+                  <div style="height: 65px;"></div>
+                  <div style="font-weight: 700; text-decoration: underline;" id="rekapNamaTTD">-</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -468,6 +518,7 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="app.js?v=20260906_1951"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="app.js?v=20260906_2055"></script>
 </body>
 </html>
