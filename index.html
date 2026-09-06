@@ -383,47 +383,23 @@
             <div class="table-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 15px;">
               <h2>📊 Laporan Rekapitulasi Pelayanan Per-Operator</h2>
               
-              <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
-                <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-                  <span style="font-size: 0.8rem; color: var(--text-muted);">📅 Periode Tanggal:</span>
-                  <input type="date" id="rekapDateStart" title="Tanggal Mulai" style="padding: 6px 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.82rem;">
-                  <span style="font-size: 0.8rem; color: var(--text-muted);">s/d</span>
-                  <input type="date" id="rekapDateEnd" title="Tanggal Selesai" style="padding: 6px 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.82rem;">
-                  <button class="btn btn-secondary btn-xs" id="btnResetRekapRange" style="padding: 6px 8px; font-size: 0.78rem;" title="Reset Rentang Tanggal">🔄 Reset Tanggal</button>
+              <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                  <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">📅 Dari Tanggal:</span>
+                  <input type="date" id="rekapDateStart" title="Tanggal Mulai" style="padding: 7px 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.85rem; font-weight: 600;">
+                  
+                  <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">s/d Tanggal:</span>
+                  <input type="date" id="rekapDateEnd" title="Tanggal Selesai" style="padding: 7px 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.85rem; font-weight: 600;">
                 </div>
 
-                <select id="rekapCategorySelect" style="padding: 6px 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.85rem;">
-                  <option value="ALL">🌐 Semua Layanan</option>
-                  <option value="Pendaftaran Penduduk">🏠 Pendaftaran Penduduk</option>
-                  <option value="Pencatatan Sipil">📜 Pencatatan Sipil</option>
-                </select>
-
-                <select id="rekapMonthSelect" style="padding: 6px 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.85rem;">
-                  <option value="0">Januari</option>
-                  <option value="1">Februari</option>
-                  <option value="2">Maret</option>
-                  <option value="3">April</option>
-                  <option value="4">Mei</option>
-                  <option value="5">Juni</option>
-                  <option value="6">Juli</option>
-                  <option value="7">Agustus</option>
-                  <option value="8">September</option>
-                  <option value="9">Oktober</option>
-                  <option value="10">November</option>
-                  <option value="11">Desember</option>
-                </select>
-
-                <select id="rekapYearSelect" style="padding: 6px 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.85rem;">
-                  <option value="2026">2026</option>
-                  <option value="2025">2025</option>
-                </select>
-
-                <button class="btn btn-primary btn-xs" onclick="exportRekapToPDF()" style="padding: 6px 14px; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border: none;">
-                  📄 Export PDF (.pdf)
-                </button>
-                <button class="btn btn-secondary btn-xs" onclick="window.print()" style="padding: 6px 12px; font-size: 0.85rem;">
-                  🖨️ Cetak Laporan
-                </button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <button class="btn btn-primary btn-xs" onclick="exportRekapToPDF()" style="padding: 7px 14px; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border: none;">
+                    📄 Export PDF (.pdf)
+                  </button>
+                  <button class="btn btn-secondary btn-xs" onclick="window.print()" style="padding: 7px 12px; font-size: 0.85rem;">
+                    🖨️ Cetak Laporan
+                  </button>
+                </div>
               </div>
             </div>
 

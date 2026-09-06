@@ -944,6 +944,34 @@ window.exportMonitoringToPDF = function() {
   }
 };
 
+// Function Cek Apakah Berkas Pernah Dieksekusi / Dibuat Oleh Username / User Ini
+function isItemExecutedByUser(item, user) {
+  if (!user || !item) return false;
+  const nameStr = (user.name || "").toLowerCase().trim();
+  const unameStr = (user.username || "").toLowerCase().trim();
+
+  const isMatch = (val) => {
+    if (!val) return false;
+    const s = String(val).toLowerCase().trim();
+    return (nameStr && s.includes(nameStr)) || (unameStr && s.includes(unameStr));
+  };
+
+  // Cek apakah user tercatat sebagai pembuat atau eksekutor pada alur berkas
+  return isMatch(item.operator) ||
+         isMatch(item.petugas_scan) ||
+         isMatch(item.eksekutor_scan) ||
+         isMatch(item.kasie) ||
+         isMatch(item.eksekutor_kasie) ||
+         isMatch(item.kabid) ||
+         isMatch(item.eksekutor_kabid) ||
+         isMatch(item.kadis) ||
+         isMatch(item.eksekutor_kadis) ||
+         isMatch(item.kepala_upt) ||
+         isMatch(item.eksekutor_upt) ||
+         isMatch(item.petugas_cetak) ||
+         isMatch(item.eksekutor_cetak);
+}
+
 // Daftar Tanggal Merah / Libur Nasional (Format: MM-DD)
 const NATIONAL_HOLIDAYS = {
   "01-01": "Tahun Baru Masehi",
@@ -971,14 +999,16 @@ function isHolidayOrWeekend(year, monthIndex, dayNum) {
   return { isRed: false, label: "" };
 }
 
-// RENDER REKAPITULASI (Format Matriks Harian Bulan 1-31 Sesuai Referensi Google Sheets)
+// RENDER REKAPITULASI (Format Matriks Harian 1-31 Berdasarkan Username & Rentang Tanggal)
 function renderRekapitulasi() {
   const rekapMatrixBody = document.getElementById('rekapMatrixBody');
   if (!currentUser) return;
 
-  const targetData = isUserUpt(currentUser) ? allData.filter(d => matchItemToUserUpt(d, currentUser)) : allData;
-  const total = targetData.length;
-  const selesai = targetData.filter(d => d.status_alur === '7_SELESAI').length;
+  // 🎯 HANYA TAMPILKAN PROSES YANG DIEKSEKUSI / DIBUAT OLEH USERNAME TERSEBUT (BUKAN AKUMULASI ROLE)
+  const userExecutedData = allData.filter(d => isItemExecutedByUser(d, currentUser));
+
+  const total = userExecutedData.length;
+  const selesai = userExecutedData.filter(d => d.status_alur === '7_SELESAI').length;
   const proses = total - selesai;
 
   if (rekapTotal) rekapTotal.textContent = total;
@@ -987,38 +1017,29 @@ function renderRekapitulasi() {
 
   if (!rekapMatrixBody) return;
 
-  const monthSelect = document.getElementById('rekapMonthSelect');
-  const yearSelect = document.getElementById('rekapYearSelect');
-  const catSelect = document.getElementById('rekapCategorySelect');
   const dateStartInput = document.getElementById('rekapDateStart');
   const dateEndInput = document.getElementById('rekapDateEnd');
 
   const now = new Date();
+  
+  // Default awal jika kosong: Dari tanggal 1 bulan berjalan s/d hari ini / akhir bulan
+  if (dateStartInput && !dateStartInput.value) {
+    const firstDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    dateStartInput.value = firstDayStr;
+  }
+  if (dateEndInput && !dateEndInput.value) {
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    dateEndInput.value = todayStr;
+  }
+
   const startDateStr = dateStartInput ? dateStartInput.value : "";
   const endDateStr = dateEndInput ? dateEndInput.value : "";
 
-  let filterStartDate = null;
-  let filterEndDate = null;
+  let filterStartDate = startDateStr ? new Date(startDateStr + "T00:00:00") : null;
+  let filterEndDate = endDateStr ? new Date(endDateStr + "T23:59:59") : null;
 
-  if (startDateStr) {
-    filterStartDate = new Date(startDateStr + "T00:00:00");
-  }
-  if (endDateStr) {
-    filterEndDate = new Date(endDateStr + "T23:59:59");
-  }
-
-  let selectedMonth, selectedYear;
-  if (filterStartDate) {
-    selectedMonth = filterStartDate.getMonth();
-    selectedYear = filterStartDate.getFullYear();
-    if (monthSelect) monthSelect.value = selectedMonth;
-    if (yearSelect) yearSelect.value = selectedYear;
-  } else {
-    selectedMonth = monthSelect ? parseInt(monthSelect.value) : now.getMonth();
-    selectedYear = yearSelect ? parseInt(yearSelect.value) : now.getFullYear();
-  }
-
-  const selectedCat = catSelect ? catSelect.value : "ALL";
+  const selectedMonth = filterStartDate ? filterStartDate.getMonth() : now.getMonth();
+  const selectedYear = filterStartDate ? filterStartDate.getFullYear() : now.getFullYear();
 
   const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
   const monthNames = [
@@ -1084,8 +1105,8 @@ function renderRekapitulasi() {
     `;
   }
 
-  // Filter Data menurut Bulan/Tahun & Rentang Tanggal
-  const monthData = targetData.filter(item => {
+  // Filter Data menurut Username Eksekutor & Rentang Tanggal
+  const monthData = userExecutedData.filter(item => {
     const rawDate = item.tanggal || item.tgl_operator || item.tgl_scan;
     if (!rawDate) return false;
     const d = new Date(rawDate);
@@ -1100,18 +1121,11 @@ function renderRekapitulasi() {
     return true;
   });
 
-  // Tentukan Daftar Uraian Sub Layanan
-  let subLayananList = [];
-  if (selectedCat === "Pendaftaran Penduduk") {
-    subLayananList = [...SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"]];
-  } else if (selectedCat === "Pencatatan Sipil") {
-    subLayananList = [...SUB_LAYANAN_OPTIONS["Pencatatan Sipil"]];
-  } else {
-    subLayananList = [
-      ...SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"],
-      ...SUB_LAYANAN_OPTIONS["Pencatatan Sipil"]
-    ];
-  }
+  // Tentukan Daftar Uraian Sub Layanan (Semua Sub Layanan)
+  const subLayananList = [
+    ...SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"],
+    ...SUB_LAYANAN_OPTIONS["Pencatatan Sipil"]
+  ];
 
   // Matriks Hitungan per Sub Layanan per Hari
   const matrix = {};
@@ -1190,29 +1204,19 @@ function renderRekapitulasi() {
   rekapMatrixBody.innerHTML = rowsHtml + footerRowHtml;
 }
 
-// Export Rekap Matriks Langsung ke File PDF (.pdf)
+// Export Rekap Matriks Langsung ke File PDF (.pdf) dengan Fit Kolom 100% Pas
 window.exportRekapToPDF = function() {
   if (!currentUser) return;
-  const monthSelect = document.getElementById('rekapMonthSelect');
-  const yearSelect = document.getElementById('rekapYearSelect');
   const dateStartInput = document.getElementById('rekapDateStart');
   const dateEndInput = document.getElementById('rekapDateEnd');
 
-  const now = new Date();
-  const selectedMonth = monthSelect ? parseInt(monthSelect.value) : now.getMonth();
-  const selectedYear = yearSelect ? parseInt(yearSelect.value) : now.getFullYear();
   const startDateStr = dateStartInput ? dateStartInput.value : "";
   const endDateStr = dateEndInput ? dateEndInput.value : "";
 
-  const monthNames = [
-    "Januari", "Februari", "Maret", "April", "Mei", "Juni", 
-    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-  ];
-  const monthName = monthNames[selectedMonth];
   const displayName = (currentUser.name || currentUser.username || "Operator").trim();
   const cleanName = displayName.replace(/\s+/g, '_');
 
-  let fileName = `Laporan_Rekap_User_${cleanName}_${monthName}_${selectedYear}.pdf`;
+  let fileName = `Laporan_Rekap_User_${cleanName}.pdf`;
   if (startDateStr && endDateStr) {
     fileName = `Laporan_Rekap_User_${cleanName}_Periode_${startDateStr}_sd_${endDateStr}.pdf`;
   }
@@ -1223,11 +1227,14 @@ window.exportRekapToPDF = function() {
   if (typeof html2pdf !== 'undefined') {
     showToast('Sedang membuat file PDF...', 'info');
 
-    // Clone area rekap dan beri styling kertas putih & teks hitam bersih
+    // Clone area rekap & atur lebar 1050px fixed agar 34 kolom (Hari 1..31 & Jumlah) muat 100% sempurna tanpa terpotong
     const clone = printArea.cloneNode(true);
+    clone.style.width = '1050px';
+    clone.style.maxWidth = '1050px';
     clone.style.background = '#ffffff';
     clone.style.color = '#000000';
-    clone.style.padding = '20px';
+    clone.style.padding = '15px';
+    clone.style.boxSizing = 'border-box';
     clone.style.borderRadius = '0px';
 
     const infoBox = clone.querySelector('div');
@@ -1240,9 +1247,32 @@ window.exportRekapToPDF = function() {
 
     const table = clone.querySelector('table');
     if (table) {
-      table.style.color = '#000000';
+      table.style.width = '100%';
+      table.style.maxWidth = '100%';
+      table.style.tableLayout = 'fixed';
+      table.style.borderCollapse = 'collapse';
+      table.style.fontSize = '6.5pt';
+
+      const trHeader = table.querySelector('tr');
+      if (trHeader) {
+        const ths = trHeader.querySelectorAll('th');
+        if (ths.length >= 34) {
+          ths[0].style.width = '24px';  // No
+          ths[1].style.width = '200px'; // Uraian Sub Layanan
+          for (let i = 2; i <= 32; i++) {
+            ths[i].style.width = '23px'; // Hari 1 s/d 31
+          }
+          ths[33].style.width = '42px'; // Jumlah
+        }
+      }
+
       table.querySelectorAll('th, td').forEach(el => {
         el.style.borderColor = '#475569';
+        el.style.padding = '3px 1px';
+        el.style.wordBreak = 'break-word';
+        el.style.overflow = 'hidden';
+        el.style.boxSizing = 'border-box';
+
         if (el.classList.contains('holiday-col')) {
           el.style.background = '#fee2e2';
           el.style.color = '#991b1b';
@@ -1290,10 +1320,10 @@ window.exportRekapToPDF = function() {
     document.body.appendChild(wrapper);
 
     const opt = {
-      margin:       [8, 8, 8, 8],
+      margin:       [6, 6, 6, 6],
       filename:     fileName,
       image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 1100 },
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
     };
 
@@ -1306,20 +1336,11 @@ window.exportRekapToPDF = function() {
       window.print();
     });
   } else {
-    // Fallback jika CDN html2pdf belum termuat sempurna: buka dialog print/save PDF
     window.print();
   }
 };
 
 // Event Listeners Filter Rekap Matriks & Monitoring Tanggal
-const rekapMonthSelectEl = document.getElementById('rekapMonthSelect');
-const rekapYearSelectEl = document.getElementById('rekapYearSelect');
-const rekapCatSelectEl = document.getElementById('rekapCategorySelect');
-
-if (rekapMonthSelectEl) rekapMonthSelectEl.addEventListener('change', renderRekapitulasi);
-if (rekapYearSelectEl) rekapYearSelectEl.addEventListener('change', renderRekapitulasi);
-if (rekapCatSelectEl) rekapCatSelectEl.addEventListener('change', renderRekapitulasi);
-
 const monitoringDateFilterEl = document.getElementById('monitoringDateFilter');
 const btnResetMonitoringDateEl = document.getElementById('btnResetMonitoringDate');
 if (monitoringDateFilterEl) {
@@ -1334,18 +1355,9 @@ if (btnResetMonitoringDateEl) {
 
 const rekapDateStartEl = document.getElementById('rekapDateStart');
 const rekapDateEndEl = document.getElementById('rekapDateEnd');
-const btnResetRekapRangeEl = document.getElementById('btnResetRekapRange');
 
 if (rekapDateStartEl) rekapDateStartEl.addEventListener('change', renderRekapitulasi);
 if (rekapDateEndEl) rekapDateEndEl.addEventListener('change', renderRekapitulasi);
-
-if (btnResetRekapRangeEl) {
-  btnResetRekapRangeEl.addEventListener('click', () => {
-    if (rekapDateStartEl) rekapDateStartEl.value = '';
-    if (rekapDateEndEl) rekapDateEndEl.value = '';
-    renderRekapitulasi();
-  });
-}
 
 // MODAL ACTION & TINDAK LANJUT
 window.openActionModal = function(key) {
