@@ -208,7 +208,7 @@ function matchItemToUserUpt(item, user) {
   return itemFas.includes('UPT');
 }
 
-const savedUser = sessionStorage.getItem('simpel_momen_user');
+const savedUser = localStorage.getItem('simpel_momen_user') || sessionStorage.getItem('simpel_momen_user');
 if (savedUser) {
   try {
     currentUser = JSON.parse(savedUser);
@@ -217,6 +217,7 @@ if (savedUser) {
     }
     setupLoggedInUI();
   } catch (e) {
+    localStorage.removeItem('simpel_momen_user');
     sessionStorage.removeItem('simpel_momen_user');
   }
 }
@@ -279,7 +280,7 @@ if (loginForm) {
             fasilitasi: user.fasilitasi,
             sessionToken: 'local_token'
           };
-          sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+          localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
           setupLoggedInUI();
           showToast(`Selamat datang, ${currentUser.name}!`, 'success');
         } else {
@@ -297,7 +298,7 @@ if (loginForm) {
             if (currentUser && currentUser.role) {
               currentUser.role = normalizeUserRole(currentUser.role);
             }
-            sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+            localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
             setupLoggedInUI();
             showToast(`Selamat datang, ${currentUser.name}!`, 'success');
           } else if (result.status === 'error') {
@@ -317,7 +318,7 @@ if (loginForm) {
               fasilitasi: user.fasilitasi,
               sessionToken: 'local_token'
             };
-            sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+            localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
             setupLoggedInUI();
             showToast(`Selamat datang, ${currentUser.name}! (Mode Offline Cadangan)`, 'warning');
           } else {
@@ -342,6 +343,7 @@ if (logoutBtn) {
   logoutBtn.addEventListener('click', (e) => {
     e.preventDefault();
     closeModal();
+    localStorage.removeItem('simpel_momen_user');
     sessionStorage.removeItem('simpel_momen_user');
     currentUser = null;
     appWrapper.style.display = 'none';
@@ -1098,10 +1100,10 @@ function renderRekapitulasi() {
       dayCols += `<th style="${dayStyle}" title="${escapeHTML(colTitle)}" class="${redInfo.isRed ? 'holiday-col' : ''}">${d}</th>`;
     }
     headerDaysRow.innerHTML = `
-      <th style="width:36px; text-align:center; padding:6px 4px;">No</th>
-      <th style="min-width:220px; text-align:left; padding:6px 8px;">Uraian (Sub Layanan)</th>
+      <th style="width:34px; text-align:center; padding:6px 4px;">No</th>
+      <th style="min-width:220px; width:auto; text-align:left; padding:6px 10px; white-space:normal; overflow-wrap:break-word;">Uraian (Sub Layanan)</th>
       ${dayCols}
-      <th style="width:55px; text-align:center; background:rgba(56,189,248,0.25); padding:6px 4px;">Jumlah</th>
+      <th style="width:50px; text-align:center; background:rgba(56,189,248,0.25); padding:6px 4px;">Jumlah</th>
     `;
   }
 
@@ -1177,7 +1179,7 @@ function renderRekapitulasi() {
     return `
       <tr>
         <td style="text-align:center; font-size:0.8rem;">${index + 1}</td>
-        <td style="font-weight:600; font-size:0.82rem;">${escapeHTML(sub)}</td>
+        <td style="text-align:left; padding:5px 8px; font-weight:600; font-size:0.82rem; white-space:normal; overflow-wrap:break-word; word-break:normal;">${escapeHTML(sub)}</td>
         ${cells}
         <td style="text-align:center; font-weight:700; background:rgba(56,189,248,0.15); color:#38bdf8; font-size:0.82rem;">${rowSum}</td>
       </tr>
@@ -1233,7 +1235,7 @@ window.exportRekapToPDF = function() {
     clone.style.maxWidth = '1080px';
     clone.style.background = '#ffffff';
     clone.style.color = '#000000';
-    clone.style.padding = '12px 16px';
+    clone.style.padding = '8px 8px'; // Margin/padding simetris di kiri dan kanan
     clone.style.boxSizing = 'border-box';
     clone.style.borderRadius = '0px';
 
@@ -1278,9 +1280,18 @@ window.exportRekapToPDF = function() {
         }
       });
 
-      // Beri penyesuaian khusus teks Uraian Sub Layanan agar font lebih terbaca
-      table.querySelectorAll('td:nth-child(2)').forEach(el => {
-        el.style.fontSize = '7.2pt';
+      // ✏️ PENYESUAIAN KHUSUS KOLOM URAIAN SUB LAYANAN:
+      // Sesuaikan lebar dengan panjang kalimat agar kalimat terbaca penuh dan pembungkusan kata proporsional
+      table.querySelectorAll('th:nth-child(2), td:nth-child(2)').forEach(el => {
+        el.style.textAlign = 'left';
+        el.style.whiteSpace = 'normal';
+        el.style.wordBreak = 'normal';
+        el.style.overflowWrap = 'break-word';
+        el.style.paddingLeft = '6px';
+        el.style.paddingRight = '6px';
+        el.style.minWidth = '210px'; // Memberikan ruang lebar kalimat Uraian yang proporsional
+        el.style.maxWidth = '270px';
+        el.style.fontSize = '7.5pt';
         el.style.fontWeight = '600';
         el.style.color = '#0f172a';
       });
@@ -1317,6 +1328,7 @@ window.exportRekapToPDF = function() {
     wrapper.style.position = 'absolute';
     wrapper.style.left = '0px';
     wrapper.style.top = '0px';
+    wrapper.style.width = '1080px';
     wrapper.style.zIndex = '-999999';
     wrapper.style.opacity = '1';
     wrapper.style.visibility = 'visible';
@@ -1324,7 +1336,7 @@ window.exportRekapToPDF = function() {
     document.body.appendChild(wrapper);
 
     const opt = {
-      margin:       [5, 5, 5, 5],
+      margin:       [5, 5, 5, 5], // Margin simetris (5mm atas, 5mm kiri, 5mm bawah, 5mm kanan)
       filename:     fileName,
       image:        { type: 'jpeg', quality: 0.98 },
       html2canvas:  { 
@@ -1335,7 +1347,8 @@ window.exportRekapToPDF = function() {
         scrollY: 0,
         x: 0,
         y: 0,
-        windowWidth: 1150
+        width: 1080,
+        windowWidth: 1080
       },
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' },
       pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
