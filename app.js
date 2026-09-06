@@ -954,9 +954,11 @@ const NATIONAL_HOLIDAYS = {
   "12-26": "Cuti Bersama Natal"
 };
 
-function isHolidayOrSunday(year, monthIndex, dayNum) {
+function isHolidayOrWeekend(year, monthIndex, dayNum) {
   const d = new Date(year, monthIndex, dayNum);
-  const isSunday = d.getDay() === 0; // 0 = Minggu
+  const dayOfWeek = d.getDay(); // 0 = Minggu, 6 = Sabtu
+  const isSunday = dayOfWeek === 0;
+  const isSaturday = dayOfWeek === 6;
 
   const mStr = String(monthIndex + 1).padStart(2, '0');
   const dStr = String(dayNum).padStart(2, '0');
@@ -964,6 +966,7 @@ function isHolidayOrSunday(year, monthIndex, dayNum) {
   const holidayName = NATIONAL_HOLIDAYS[dateKey];
 
   if (isSunday) return { isRed: true, label: "Hari Minggu" };
+  if (isSaturday) return { isRed: true, label: "Hari Sabtu" };
   if (holidayName) return { isRed: true, label: holidayName };
   return { isRed: false, label: "" };
 }
@@ -1058,7 +1061,7 @@ function renderRekapitulasi() {
     for (let d = 1; d <= daysInMonth; d++) {
       const currentDayDate = new Date(selectedYear, selectedMonth, d);
       const isWithinRange = (!filterStartDate || currentDayDate >= filterStartDate) && (!filterEndDate || currentDayDate <= filterEndDate);
-      const redInfo = isHolidayOrSunday(selectedYear, selectedMonth, d);
+      const redInfo = isHolidayOrWeekend(selectedYear, selectedMonth, d);
 
       let dayStyle = 'text-align:center; min-width:28px; padding:4px; font-size:0.78rem;';
       let colTitle = redInfo.label || '';
@@ -1143,7 +1146,7 @@ function renderRekapitulasi() {
       rowSum += cnt;
       dailyTotals[i] += cnt;
       const dayNum = i + 1;
-      const redInfo = isHolidayOrSunday(selectedYear, selectedMonth, dayNum);
+      const redInfo = isHolidayOrWeekend(selectedYear, selectedMonth, dayNum);
 
       let cellBg = '';
       if (redInfo.isRed) {
@@ -1169,7 +1172,7 @@ function renderRekapitulasi() {
 
   const totalCells = dailyTotals.map((t, i) => {
     const dayNum = i + 1;
-    const redInfo = isHolidayOrSunday(selectedYear, selectedMonth, dayNum);
+    const redInfo = isHolidayOrWeekend(selectedYear, selectedMonth, dayNum);
     const style = redInfo.isRed ? 
       `text-align:center; padding:4px; font-weight:800; color:#fca5a5; background:rgba(239, 68, 68, 0.3); font-size:0.8rem;` : 
       `text-align:center; padding:4px; font-weight:800; color:#34d399; background:rgba(16,185,129,0.1); font-size:0.8rem;`;
@@ -1264,10 +1267,19 @@ window.exportRekapToPDF = function() {
 
     const footnote = clone.querySelector('#rekapFootnote');
     if (footnote) {
+      footnote.style.display = 'flex';
+      footnote.style.width = '100%';
+      footnote.style.marginTop = '20px';
+      footnote.style.paddingTop = '8px';
+      footnote.style.borderTop = '1px dashed #475569';
+      footnote.style.color = '#0f172a';
+      footnote.style.fontSize = '0.75rem';
       footnote.style.pageBreakInside = 'avoid';
       footnote.style.breakInside = 'avoid';
-      footnote.style.borderColor = '#94a3b8';
-      footnote.querySelectorAll('div, span').forEach(d => d.style.color = '#475569');
+      footnote.querySelectorAll('div, span').forEach(d => {
+        d.style.color = '#0f172a';
+        d.style.fontSize = '0.75rem';
+      });
     }
 
     const wrapper = document.createElement('div');
