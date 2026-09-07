@@ -1032,7 +1032,7 @@ function getBestItemDate(item, role) {
   return null;
 }
 
-// Function Cek Apakah Berkas Pernah Dieksekusi / Dibuat Oleh Username / User Ini
+// Function Cek Apakah Berkas Pernah Dieksekusi / Dibuat Oleh Username / User Ini secara Khusus (Bukan Akumulasi Role)
 function isItemExecutedByUser(item, user) {
   if (!user || !item) return false;
   const role = user.role || '';
@@ -1045,13 +1045,24 @@ function isItemExecutedByUser(item, user) {
     if (isItemUpt) return false;
   }
 
-  // Admin & Monitoring: Tampilkan semua data dalam cakupan Dinas/UPT
+  // Admin & Monitoring: Tampilkan seluruh data rekapitulasi dalam cakupan Dinas/UPT
   if (role === 'admin' || role === 'monitoring') {
     return true;
   }
 
+  // Filter Bidang Layanan spesifik (Dafduk vs Capil)
+  const itemJenisLower = String(item.jenis_layanan || "").toLowerCase();
+  if ((role === 'kasie_dafduk' || role === 'kabid_dafduk') && itemJenisLower !== 'pendaftaran penduduk') {
+    return false;
+  }
+  if ((role === 'kasie_capil' || role === 'kabid_capil') && itemJenisLower === 'pendaftaran penduduk') {
+    return false;
+  }
+
   const nameStr = (user.name || "").toLowerCase().trim();
   const unameStr = (user.username || "").toLowerCase().trim();
+
+  if (!nameStr && !unameStr) return false;
 
   const isMatch = (val) => {
     if (!val) return false;
@@ -1059,9 +1070,12 @@ function isItemExecutedByUser(item, user) {
     return (nameStr && s.includes(nameStr)) || (unameStr && s.includes(unameStr));
   };
 
-  const directMatch = isMatch(item.operator) ||
+  // 🎯 STRICT INDIVIDUAL USER EXECUTOR CHECK:
+  // Hanya berkas yang mencatat nama / username pengguna ini sebagai eksekutor/pembuat
+  return isMatch(item.operator) ||
          isMatch(item.petugas_scan) ||
          isMatch(item.eksekutor_scan) ||
+         isMatch(item.catatan_scan) ||
          isMatch(item.kasie) ||
          isMatch(item.eksekutor_kasie) ||
          isMatch(item.catatan_kasie) ||
@@ -1081,49 +1095,6 @@ function isItemExecutedByUser(item, user) {
          isMatch(item.eksekutor_cetak) ||
          isMatch(item.catatan_print) ||
          isMatch(item.penerima) ||
-         isMatch(item.riwayat_pending);
-
-  if (directMatch) return true;
-
-  // Filter berdasarkan Role & Bidang Layanan
-  const itemJenis = String(item.jenis_layanan || "").trim().toLowerCase();
-  const statusAlur = String(item.status_alur || "").toUpperCase();
-
-  if (role === 'kasie_dafduk') {
-    if (itemJenis !== 'pendaftaran penduduk') return false;
-    return Boolean(item.catatan_kasie || item.tgl_kasie || statusAlur.includes('KASIE') || statusAlur.includes('KABID') || statusAlur.includes('KADIS') || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
-  }
-  if (role === 'kasie_capil') {
-    if (itemJenis === 'pendaftaran penduduk') return false;
-    return Boolean(item.catatan_kasie || item.tgl_kasie || statusAlur.includes('KASIE') || statusAlur.includes('KABID') || statusAlur.includes('KADIS') || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
-  }
-  if (role === 'kabid_dafduk') {
-    if (itemJenis !== 'pendaftaran penduduk') return false;
-    return Boolean(item.catatan_kabid || item.tgl_kabid || statusAlur.includes('KABID') || statusAlur.includes('KADIS') || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
-  }
-  if (role === 'kabid_capil') {
-    if (itemJenis === 'pendaftaran penduduk') return false;
-    return Boolean(item.catatan_kabid || item.tgl_kabid || statusAlur.includes('KABID') || statusAlur.includes('KADIS') || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
-  }
-  if (role === 'kepala_upt') {
-    return Boolean(item.catatan_upt || item.tgl_upt || statusAlur.includes('UPT') || statusAlur.includes('KABID') || statusAlur.includes('KADIS') || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
-  }
-  if (role === 'kadis') {
-    return Boolean(item.catatan_kadis || item.tgl_kadis || statusAlur.includes('KADIS') || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
-  }
-  if (isPetugasScan(role)) {
-    return Boolean(item.link_file || item.tgl_scan || item.catatan_scan || statusAlur !== 'PENDING_OPERATOR');
-  }
-  if (isPetugasTTE(role)) {
-    return Boolean(item.status_tte || item.tgl_tte || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
-  }
-  if (isPetugasCetak(role)) {
-    return Boolean(item.tgl_print || item.penerima || item.catatan_print || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
-  }
-  if (role === 'operator') {
-    return true;
-  }
-
   return false;
 }
 
@@ -1834,25 +1805,63 @@ if (actionForm) {
       if (API_URL === 'local') {
         const item = allData.find(d => String(d.key) === String(key));
         if (item) {
+          const userName = currentUser.name || currentUser.username;
+          const userRole = currentUser.role || '';
+          const currentTime = getLocalDateTimeString();
+
           if (isScanUser) {
             item.link_file = linkFileVal;
+            item.petugas_scan = userName;
+            item.eksekutor_scan = userName;
+            item.tgl_scan = currentTime;
+            item.catatan_scan = notes;
+          }
+          if (isTteUser) {
+            item.petugas_tte = userName;
+            item.eksekutor_tte = userName;
+            item.tgl_tte = currentTime;
+            item.status_tte = statusTteVal;
           }
           if (isCetakUser) {
+            item.petugas_cetak = userName;
+            item.eksekutor_cetak = userName;
             if (cetikStatusVal === 'PENDING_OPERATOR') {
               item.status_alur = 'PENDING_OPERATOR';
-              item.riwayat_pending = `PENDING by ${currentUser.name || currentUser.username}: ${notes}\n${item.riwayat_pending || ''}`;
+              item.riwayat_pending = `PENDING by ${userName}: ${notes}\n${item.riwayat_pending || ''}`;
             } else if (cetikStatusVal === '7_SELESAI') {
               item.status_alur = '7_SELESAI';
               item.penerima = penerimaVal;
-              item.tgl_print = getLocalDateTimeString();
+              item.tgl_print = currentTime;
               item.catatan_print = notes;
             } else {
               item.status_alur = 'SIAP_DICETAK';
             }
-          } else {
+          } else if (!isScanUser && !isTteUser) {
+            if (userRole.includes('kasie')) {
+              item.kasie = userName;
+              item.eksekutor_kasie = userName;
+              item.tgl_kasie = currentTime;
+              item.catatan_kasie = notes;
+            } else if (userRole.includes('kabid')) {
+              item.kabid = userName;
+              item.eksekutor_kabid = userName;
+              item.tgl_kabid = currentTime;
+              item.catatan_kabid = notes;
+            } else if (userRole === 'kadis') {
+              item.kadis = userName;
+              item.eksekutor_kadis = userName;
+              item.tgl_kadis = currentTime;
+              item.catatan_kadis = notes;
+            } else if (userRole === 'kepala_upt') {
+              item.kepala_upt = userName;
+              item.eksekutor_upt = userName;
+              item.tgl_upt = currentTime;
+              item.catatan_upt = notes;
+            }
+
             if (executeAction === 'pending') {
               item.status_alur = 'PENDING_OPERATOR';
-              item.riwayat_pending = `PENDING by ${currentUser.role}: ${notes}\n${item.riwayat_pending || ''}`;
+              item.riwayat_pending = `PENDING by ${userName} (${userRole}): ${notes}\n${item.riwayat_pending || ''}`;
             } else {
               item.status_alur = '7_SELESAI';
             }
