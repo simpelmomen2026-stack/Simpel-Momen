@@ -984,9 +984,72 @@ window.exportMonitoringToPDF = function() {
   }
 };
 
+// Helper Ambil Tanggal Eksekusi Berkas Sesuai Role / Meja User
+function getBestItemDate(item, role) {
+  if (!item) return null;
+  let dateStr = "";
+  if (role === 'operator') {
+    dateStr = item.tgl_operator || item.tanggal;
+  } else if (isPetugasScan(role)) {
+    dateStr = item.tgl_scan || item.tgl_operator || item.tanggal;
+  } else if (role === 'kasie_dafduk' || role === 'kasie_capil' || role === 'kasie') {
+    dateStr = item.tgl_kasie || item.tgl_operator || item.tanggal;
+  } else if (role === 'kabid_dafduk' || role === 'kabid_capil' || role === 'kabid') {
+    dateStr = item.tgl_kabid || item.tgl_operator || item.tanggal;
+  } else if (role === 'kepala_upt') {
+    dateStr = item.tgl_upt || item.tgl_operator || item.tanggal;
+  } else if (role === 'kadis') {
+    dateStr = item.tgl_kadis || item.tgl_operator || item.tanggal;
+  } else if (isPetugasTTE(role)) {
+    dateStr = item.tgl_tte || item.tgl_operator || item.tanggal;
+  } else if (isPetugasCetak(role)) {
+    dateStr = item.tgl_print || item.tgl_operator || item.tanggal;
+  } else {
+    dateStr = item.tanggal || item.tgl_operator || item.tgl_scan || item.tgl_kasie || item.tgl_kabid || item.tgl_kadis || item.tgl_upt || item.tgl_print;
+  }
+
+  if (!dateStr) return null;
+
+  let d = new Date(dateStr);
+  if (!isNaN(d.getTime())) return d;
+
+  const parts = String(dateStr).trim().split(/[\/\-\s]/);
+  if (parts.length >= 3) {
+    const p1 = parseInt(parts[0], 10);
+    const p2 = parseInt(parts[1], 10);
+    const p3 = parseInt(parts[2], 10);
+    if (!isNaN(p1) && !isNaN(p2) && !isNaN(p3)) {
+      if (p1 > 12 && p1 <= 31 && p2 <= 12 && p3 > 2000) {
+        d = new Date(p3, p2 - 1, p1);
+        if (!isNaN(d.getTime())) return d;
+      } else if (p3 > 2000 && p2 <= 12 && p1 <= 31) {
+        d = new Date(p3, p2 - 1, p1);
+        if (!isNaN(d.getTime())) return d;
+      }
+    }
+  }
+
+  return null;
+}
+
 // Function Cek Apakah Berkas Pernah Dieksekusi / Dibuat Oleh Username / User Ini
 function isItemExecutedByUser(item, user) {
   if (!user || !item) return false;
+  const role = user.role || '';
+
+  // Filter UPT vs Dinas
+  const isItemUpt = String(item.fasilitasi || item.integrasi || "").toLowerCase().includes('upt');
+  if (isUserUpt(user)) {
+    if (!matchItemToUserUpt(item, user)) return false;
+  } else {
+    if (isItemUpt) return false;
+  }
+
+  // Admin & Monitoring: Tampilkan semua data dalam cakupan Dinas/UPT
+  if (role === 'admin' || role === 'monitoring') {
+    return true;
+  }
+
   const nameStr = (user.name || "").toLowerCase().trim();
   const unameStr = (user.username || "").toLowerCase().trim();
 
@@ -996,20 +1059,72 @@ function isItemExecutedByUser(item, user) {
     return (nameStr && s.includes(nameStr)) || (unameStr && s.includes(unameStr));
   };
 
-  // Cek apakah user tercatat sebagai pembuat atau eksekutor pada alur berkas
-  return isMatch(item.operator) ||
+  const directMatch = isMatch(item.operator) ||
          isMatch(item.petugas_scan) ||
          isMatch(item.eksekutor_scan) ||
          isMatch(item.kasie) ||
          isMatch(item.eksekutor_kasie) ||
+         isMatch(item.catatan_kasie) ||
          isMatch(item.kabid) ||
          isMatch(item.eksekutor_kabid) ||
+         isMatch(item.catatan_kabid) ||
          isMatch(item.kadis) ||
          isMatch(item.eksekutor_kadis) ||
+         isMatch(item.catatan_kadis) ||
          isMatch(item.kepala_upt) ||
          isMatch(item.eksekutor_upt) ||
+         isMatch(item.catatan_upt) ||
+         isMatch(item.petugas_tte) ||
+         isMatch(item.eksekutor_tte) ||
+         isMatch(item.status_tte) ||
          isMatch(item.petugas_cetak) ||
-         isMatch(item.eksekutor_cetak);
+         isMatch(item.eksekutor_cetak) ||
+         isMatch(item.catatan_print) ||
+         isMatch(item.penerima) ||
+         isMatch(item.riwayat_pending);
+
+  if (directMatch) return true;
+
+  // Filter berdasarkan Role & Bidang Layanan
+  const itemJenis = String(item.jenis_layanan || "").trim().toLowerCase();
+  const statusAlur = String(item.status_alur || "").toUpperCase();
+
+  if (role === 'kasie_dafduk') {
+    if (itemJenis !== 'pendaftaran penduduk') return false;
+    return Boolean(item.catatan_kasie || item.tgl_kasie || statusAlur.includes('KASIE') || statusAlur.includes('KABID') || statusAlur.includes('KADIS') || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
+  }
+  if (role === 'kasie_capil') {
+    if (itemJenis === 'pendaftaran penduduk') return false;
+    return Boolean(item.catatan_kasie || item.tgl_kasie || statusAlur.includes('KASIE') || statusAlur.includes('KABID') || statusAlur.includes('KADIS') || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
+  }
+  if (role === 'kabid_dafduk') {
+    if (itemJenis !== 'pendaftaran penduduk') return false;
+    return Boolean(item.catatan_kabid || item.tgl_kabid || statusAlur.includes('KABID') || statusAlur.includes('KADIS') || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
+  }
+  if (role === 'kabid_capil') {
+    if (itemJenis === 'pendaftaran penduduk') return false;
+    return Boolean(item.catatan_kabid || item.tgl_kabid || statusAlur.includes('KABID') || statusAlur.includes('KADIS') || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
+  }
+  if (role === 'kepala_upt') {
+    return Boolean(item.catatan_upt || item.tgl_upt || statusAlur.includes('UPT') || statusAlur.includes('KABID') || statusAlur.includes('KADIS') || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
+  }
+  if (role === 'kadis') {
+    return Boolean(item.catatan_kadis || item.tgl_kadis || statusAlur.includes('KADIS') || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
+  }
+  if (isPetugasScan(role)) {
+    return Boolean(item.link_file || item.tgl_scan || item.catatan_scan || statusAlur !== 'PENDING_OPERATOR');
+  }
+  if (isPetugasTTE(role)) {
+    return Boolean(item.status_tte || item.tgl_tte || statusAlur.includes('TTE') || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
+  }
+  if (isPetugasCetak(role)) {
+    return Boolean(item.tgl_print || item.penerima || item.catatan_print || statusAlur.includes('CETAK') || statusAlur.includes('7_SELESAI'));
+  }
+  if (role === 'operator') {
+    return true;
+  }
+
+  return false;
 }
 
 // Daftar Tanggal Merah / Libur Nasional (Format: MM-DD)
@@ -1044,7 +1159,9 @@ function renderRekapitulasi() {
   const rekapMatrixBody = document.getElementById('rekapMatrixBody');
   if (!currentUser) return;
 
-  // 🎯 HANYA TAMPILKAN PROSES YANG DIEKSEKUSI / DIBUAT OLEH USERNAME TERSEBUT (BUKAN AKUMULASI ROLE)
+  const role = currentUser.role || '';
+
+  // 🎯 Filter Berkas Sesuai Hak Akses User
   const userExecutedData = allData.filter(d => isItemExecutedByUser(d, currentUser));
 
   const total = userExecutedData.length;
@@ -1145,12 +1262,10 @@ function renderRekapitulasi() {
     `;
   }
 
-  // Filter Data menurut Username Eksekutor & Rentang Tanggal
+  // Filter Data menurut Rentang Tanggal Eksekusi & Bidang Role
   const monthData = userExecutedData.filter(item => {
-    const rawDate = item.tanggal || item.tgl_operator || item.tgl_scan;
-    if (!rawDate) return false;
-    const d = new Date(rawDate);
-    if (isNaN(d.getTime())) return false;
+    const d = getBestItemDate(item, role);
+    if (!d) return false;
 
     if (filterStartDate && d < filterStartDate) return false;
     if (filterEndDate && d > filterEndDate) return false;
@@ -1161,11 +1276,21 @@ function renderRekapitulasi() {
     return true;
   });
 
-  // Tentukan Daftar Uraian Sub Layanan (Semua Sub Layanan)
-  const subLayananList = [
-    ...SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"],
-    ...SUB_LAYANAN_OPTIONS["Pencatatan Sipil"]
-  ];
+  // 🎯 Tentukan Daftar Uraian Sub Layanan Berdasarkan Role User (Pendaftaran Penduduk vs Pencatatan Sipil)
+  let subLayananList = [];
+  if (role === 'kasie_dafduk' || role === 'kabid_dafduk') {
+    // Khusus Kasie Dafduk & Kabid Dafduk: Hanya menyajikan Sub Layanan Pendaftaran Penduduk
+    subLayananList = [...(SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"] || [])];
+  } else if (role === 'kasie_capil' || role === 'kabid_capil') {
+    // Khusus Kasie Capil & Kabid Capil: Hanya menyajikan Sub Layanan Pencatatan Sipil
+    subLayananList = [...(SUB_LAYANAN_OPTIONS["Pencatatan Sipil"] || [])];
+  } else {
+    // Role Lainnya: Menyajikan Seluruh Sub Layanan
+    subLayananList = [
+      ...(SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"] || []),
+      ...(SUB_LAYANAN_OPTIONS["Pencatatan Sipil"] || [])
+    ];
+  }
 
   // Matriks Hitungan per Sub Layanan per Hari
   const matrix = {};
@@ -1175,14 +1300,21 @@ function renderRekapitulasi() {
 
   monthData.forEach(item => {
     const sub = item.sub_layanan;
-    const rawDate = item.tanggal || item.tgl_operator || item.tgl_scan;
-    if (!rawDate) return;
-    const d = new Date(rawDate);
-    if (isNaN(d.getTime())) return;
+    if (!sub) return;
+
+    const d = getBestItemDate(item, role);
+    if (!d) return;
 
     const dayNum = d.getDate();
     if (dayNum >= 1 && dayNum <= daysInMonth) {
       if (!matrix[sub]) {
+        const itemJenisLower = String(item.jenis_layanan || "").toLowerCase();
+        if ((role === 'kasie_dafduk' || role === 'kabid_dafduk') && itemJenisLower !== 'pendaftaran penduduk') {
+          return;
+        }
+        if ((role === 'kasie_capil' || role === 'kabid_capil') && itemJenisLower === 'pendaftaran penduduk') {
+          return;
+        }
         matrix[sub] = Array(daysInMonth).fill(0);
         subLayananList.push(sub);
       }
