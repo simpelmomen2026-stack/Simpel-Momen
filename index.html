@@ -495,9 +495,19 @@
           </select>
         </div>
 
+        <!-- Opsi Status Alur Pencetakan (Khusus Petugas Pencetakan) -->
+        <div class="form-group" id="cetikStatusGroup" style="display: none; margin-bottom: 15px;">
+          <label for="cetikStatus" style="color: #38bdf8; font-weight: 700;">Status Alur Dokumen Cetak *</label>
+          <select id="cetikStatus" style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:8px; color:#fff; font-weight:600;">
+            <option value="7_SELESAI">✅ 7_SELESAI (Selesai Cetak & Diserahkan ke Penerima)</option>
+            <option value="SIAP_DICETAK">🖨️ SIAP_DICETAK (Dalam Antrean Cetak / Proses Cetak)</option>
+            <option value="PENDING_OPERATOR">⚠️ PENDING_OPERATOR (Ditunda / Perbaikan Berkas)</option>
+          </select>
+        </div>
+
         <!-- Khusus Petugas Cetak: Nama Penerima -->
         <div class="form-group" id="penerimaGroup" style="display: none; margin-top: 15px;">
-          <label for="modalPenerima">Nama Penerima Dokumen Cetak *</label>
+          <label for="modalPenerima" style="color: #34d399; font-weight: 700;">👤 Nama Penerima Dokumen Cetak (Wajib Diisi)*</label>
           <input type="text" id="modalPenerima" placeholder="Isikan nama warga / perwakilan penerima dokumen...">
         </div>
 

@@ -1409,6 +1409,9 @@ window.openActionModal = function(key) {
 
   const role = currentUser ? currentUser.role : '';
   
+  const cetikStatusGroup = document.getElementById('cetikStatusGroup');
+  const cetikStatusEl = document.getElementById('cetikStatus');
+
   if (scanLinkGroup) {
     if (role === 'petugas_scan') {
       scanLinkGroup.style.display = 'block';
@@ -1419,7 +1422,21 @@ window.openActionModal = function(key) {
   }
 
   if (tteStatusGroup) tteStatusGroup.style.display = (role === 'petugas_tte') ? 'block' : 'none';
-  if (penerimaGroup) penerimaGroup.style.display = (role === 'petugas_pencetakan') ? 'block' : 'none';
+  if (cetikStatusGroup) cetikStatusGroup.style.display = (role === 'petugas_pencetakan') ? 'block' : 'none';
+  
+  if (role === 'petugas_pencetakan') {
+    if (cetikStatusEl) {
+      cetikStatusEl.value = item.status_alur === 'PENDING_OPERATOR' ? 'PENDING_OPERATOR' : 
+                          (item.status_alur === 'SIAP_DICETAK' ? 'SIAP_DICETAK' : '7_SELESAI');
+    }
+    if (penerimaGroup) {
+      penerimaGroup.style.display = (cetikStatusEl && cetikStatusEl.value === '7_SELESAI') ? 'block' : 'none';
+      if (modalPenerima) modalPenerima.value = item.penerima || '';
+    }
+  } else {
+    if (penerimaGroup) penerimaGroup.style.display = 'none';
+  }
+
   if (modalNotes) modalNotes.value = '';
 
   // Render Box Rekam Jejak Catatan Pending & Catatan Meja-Meja Sebelumnya (Untuk Semua Role User)
@@ -1434,6 +1451,7 @@ window.openActionModal = function(key) {
         <div style="font-size: 0.9rem; color: #fff;">Status: <strong style="color:#60a5fa;">${escapeHTML(item.status_alur)}</strong></div>
         <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Fasilitasi: ${escapeHTML(item.fasilitasi || item.integrasi || 'Dinas')} | Operator: ${escapeHTML(item.operator || '-')}</div>
         <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Link File: ${linkHtml}</div>
+        ${item.penerima ? `<div style="font-size: 0.88rem; color: #34d399; margin-top: 4px; font-weight:700;">👤 Penerima Dokumen: ${escapeHTML(item.penerima)}</div>` : ''}
       </div>
 
       ${(item.riwayat_pending || item.catatan_pending) ? `
@@ -1472,9 +1490,9 @@ window.openActionModal = function(key) {
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
     if (modalNotesGroup) modalNotesGroup.style.display = 'block';
   } else if (role === 'petugas_scan') {
-    // Mode Khusus Petugas Scan (Dinas & UPT): Sembunyikan Keputusan Tindakan (Disetujui/Pending) karena tidak ada pekerjaan opsional
+    // Mode Khusus Petugas Scan (Dinas & UPT)
     if (modalTitle) modalTitle.textContent = '📄 Upload Link Scan PDF';
-    if (standardActionGroup) standardActionGroup.style.display = 'none'; // HAPUS / SEMBUNYIKAN KEPUTUSAN TINDAKAN
+    if (standardActionGroup) standardActionGroup.style.display = 'none';
     if (scanLinkGroup) scanLinkGroup.style.display = 'block';
     if (tteStatusGroup) tteStatusGroup.style.display = 'none';
     if (tteNotesGroup) tteNotesGroup.style.display = 'none';
@@ -1485,7 +1503,7 @@ window.openActionModal = function(key) {
     }
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
   } else if (role === 'petugas_tte') {
-    // Mode Khusus Petugas TTE: Sembunyikan Keputusan Tindakan (Lanjut/Pending), tampilkan hanya Status TTE / SIAK
+    // Mode Khusus Petugas TTE
     if (modalTitle) modalTitle.textContent = '✍️ Tindak Lanjut Petugas TTE / SIAK';
     if (standardActionGroup) standardActionGroup.style.display = 'none';
     if (tteStatusGroup) tteStatusGroup.style.display = 'block';
@@ -1496,10 +1514,25 @@ window.openActionModal = function(key) {
       saveModalBtn.textContent = '💾 Eksekusi Status TTE';
     }
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
+  } else if (role === 'petugas_pencetakan') {
+    // Mode Khusus Petugas Pencetakan
+    if (modalTitle) modalTitle.textContent = '🖨️ Update Status Cetak & Penyerahan Dokumen';
+    if (standardActionGroup) standardActionGroup.style.display = 'none';
+    if (scanLinkGroup) scanLinkGroup.style.display = 'none';
+    if (tteStatusGroup) tteStatusGroup.style.display = 'none';
+    if (tteNotesGroup) tteNotesGroup.style.display = 'none';
+    if (cetikStatusGroup) cetikStatusGroup.style.display = 'block';
+    if (modalNotesGroup) modalNotesGroup.style.display = 'block';
+    if (saveModalBtn) {
+      saveModalBtn.style.display = 'inline-flex';
+      saveModalBtn.textContent = '💾 Simpan Status Cetak';
+    }
+    if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
   } else {
     // Mode Petugas/Eksekutor Biasa
     if (modalTitle) modalTitle.textContent = 'Tindak Lanjut Berkas Antrean';
     if (standardActionGroup) standardActionGroup.style.display = 'block';
+    if (cetikStatusGroup) cetikStatusGroup.style.display = 'none';
     if (tteStatusGroup) tteStatusGroup.style.display = 'none';
     if (tteNotesGroup) tteNotesGroup.style.display = 'none';
     if (saveModalBtn) {
@@ -1534,6 +1567,17 @@ window.openActionModal = function(key) {
   }, 100);
 };
 
+// Listener Change Dropdown Status Alur Cetak
+const cetikStatusEl = document.getElementById('cetikStatus');
+if (cetikStatusEl) {
+  cetikStatusEl.addEventListener('change', () => {
+    const penerimaGroupEl = document.getElementById('penerimaGroup');
+    if (penerimaGroupEl) {
+      penerimaGroupEl.style.display = (cetikStatusEl.value === '7_SELESAI') ? 'block' : 'none';
+    }
+  });
+}
+
 if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
 if (cancelModalBtn) cancelModalBtn.addEventListener('click', closeModal);
 
@@ -1555,9 +1599,32 @@ if (actionForm) {
     const tteNotesVal = tteNotes ? tteNotes.value.trim() : '';
     const penerimaVal = modalPenerima ? modalPenerima.value.trim() : '';
     const linkFileVal = modalLinkFile ? modalLinkFile.value.trim() : '';
+    const cetikStatusVal = cetikStatusEl ? cetikStatusEl.value : '7_SELESAI';
 
     if (currentUser && (currentUser.role === 'petugas_scan' || currentUser.role === 'petugas_tte')) {
       executeAction = 'approve'; // Selalu jadikan executeAction 'approve'
+    }
+
+    if (currentUser && currentUser.role === 'petugas_pencetakan') {
+      if (cetikStatusVal === 'PENDING_OPERATOR') {
+        executeAction = 'pending';
+        if (!notes) {
+          showToast('Silakan isi Catatan / Keterangan penyebab ditunda!', 'error');
+          const submitBtn = actionForm.querySelector('button[type="submit"]');
+          if (submitBtn) submitBtn.disabled = false;
+          return;
+        }
+      } else if (cetikStatusVal === '7_SELESAI') {
+        executeAction = 'approve';
+        if (!penerimaVal) {
+          showToast('Silakan isi Nama Penerima Dokumen Cetak!', 'error');
+          const submitBtn = actionForm.querySelector('button[type="submit"]');
+          if (submitBtn) submitBtn.disabled = false;
+          return;
+        }
+      } else {
+        executeAction = 'approve';
+      }
     }
 
     if (currentUser && currentUser.role === 'petugas_scan') {
@@ -1589,11 +1656,25 @@ if (actionForm) {
           if (currentUser.role === 'petugas_scan') {
             item.link_file = linkFileVal;
           }
-          if (executeAction === 'pending') {
-            item.status_alur = 'PENDING_OPERATOR';
-            item.riwayat_pending = `PENDING by ${currentUser.role}: ${notes}\n${item.riwayat_pending || ''}`;
+          if (currentUser.role === 'petugas_pencetakan') {
+            if (cetikStatusVal === 'PENDING_OPERATOR') {
+              item.status_alur = 'PENDING_OPERATOR';
+              item.riwayat_pending = `PENDING by ${currentUser.name || currentUser.username}: ${notes}\n${item.riwayat_pending || ''}`;
+            } else if (cetikStatusVal === '7_SELESAI') {
+              item.status_alur = '7_SELESAI';
+              item.penerima = penerimaVal;
+              item.tgl_print = getLocalDateTimeString();
+              item.catatan_print = notes;
+            } else {
+              item.status_alur = 'SIAP_DICETAK';
+            }
           } else {
-            item.status_alur = '7_SELESAI';
+            if (executeAction === 'pending') {
+              item.status_alur = 'PENDING_OPERATOR';
+              item.riwayat_pending = `PENDING by ${currentUser.role}: ${notes}\n${item.riwayat_pending || ''}`;
+            } else {
+              item.status_alur = '7_SELESAI';
+            }
           }
         }
         showToast('Berkas berhasil diperbarui (Local)', 'success');
@@ -1611,6 +1692,7 @@ if (actionForm) {
             role: currentUser.role,
             userName: currentUser.name,
             executeAction: executeAction,
+            status_alur: (currentUser.role === 'petugas_pencetakan') ? cetikStatusVal : undefined,
             notes: notes,
             status_tte: statusTteVal,
             penerima: penerimaVal,
