@@ -164,6 +164,25 @@ function normalizeUserRole(rawRole) {
   return str.replace(/\s+/g, '_');
 }
 
+// HELPER ROLE CHECKS
+function isPetugasCetak(role) {
+  if (!role) return false;
+  const s = String(role).toLowerCase().trim();
+  return s === 'petugas_pencetakan' || s === 'petugas_cetak' || s.includes('cetak') || s.includes('print') || s.includes('pencetakan');
+}
+
+function isPetugasScan(role) {
+  if (!role) return false;
+  const s = String(role).toLowerCase().trim();
+  return s === 'petugas_scan' || s.includes('scan');
+}
+
+function isPetugasTTE(role) {
+  if (!role) return false;
+  const s = String(role).toLowerCase().trim();
+  return s === 'petugas_tte' || s.includes('tte');
+}
+
 // HELPER FILTER KHUSUS WILAYAH UPT
 function isUserUpt(user) {
   if (!user) return false;
@@ -761,7 +780,7 @@ function renderCounterDesk() {
         <span class="badge selesai" style="margin-right:4px;">✅ Selesai</span>
         <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">👁️ Detail</button>
       `;
-    } else if (role === 'petugas_pencetakan') {
+    } else if (isPetugasCetak(role)) {
       actionBtnHtml = `
         <button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
           🎉 Cetak & Selesaikan
@@ -773,7 +792,7 @@ function renderCounterDesk() {
           🛠️ Perbaiki & Kirim Ulang
         </button>
       `;
-    } else if (role === 'petugas_scan') {
+    } else if (isPetugasScan(role)) {
       actionBtnHtml = `
         <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
           📄 Scan & Kirim Berkas
@@ -1408,12 +1427,15 @@ window.openActionModal = function(key) {
   if (modalLayananText) modalLayananText.textContent = `${item.jenis_layanan || ''} (${item.sub_layanan || ''})`;
 
   const role = currentUser ? currentUser.role : '';
-  
+  const isCetakUser = isPetugasCetak(role);
+  const isScanUser = isPetugasScan(role);
+  const isTteUser = isPetugasTTE(role);
+
   const cetikStatusGroup = document.getElementById('cetikStatusGroup');
   const cetikStatusEl = document.getElementById('cetikStatus');
 
   if (scanLinkGroup) {
-    if (role === 'petugas_scan') {
+    if (isScanUser) {
       scanLinkGroup.style.display = 'block';
       if (modalLinkFile) modalLinkFile.value = item.link_file || '';
     } else {
@@ -1421,10 +1443,10 @@ window.openActionModal = function(key) {
     }
   }
 
-  if (tteStatusGroup) tteStatusGroup.style.display = (role === 'petugas_tte') ? 'block' : 'none';
-  if (cetikStatusGroup) cetikStatusGroup.style.display = (role === 'petugas_pencetakan') ? 'block' : 'none';
+  if (tteStatusGroup) tteStatusGroup.style.display = isTteUser ? 'block' : 'none';
+  if (cetikStatusGroup) cetikStatusGroup.style.display = isCetakUser ? 'block' : 'none';
   
-  if (role === 'petugas_pencetakan') {
+  if (isCetakUser) {
     if (cetikStatusEl) {
       cetikStatusEl.value = item.status_alur === 'PENDING_OPERATOR' ? 'PENDING_OPERATOR' : 
                           (item.status_alur === 'SIAP_DICETAK' ? 'SIAP_DICETAK' : '7_SELESAI');
@@ -1489,7 +1511,7 @@ window.openActionModal = function(key) {
     }
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
     if (modalNotesGroup) modalNotesGroup.style.display = 'block';
-  } else if (role === 'petugas_scan') {
+  } else if (isScanUser) {
     // Mode Khusus Petugas Scan (Dinas & UPT)
     if (modalTitle) modalTitle.textContent = '📄 Upload Link Scan PDF';
     if (standardActionGroup) standardActionGroup.style.display = 'none';
@@ -1502,7 +1524,7 @@ window.openActionModal = function(key) {
       saveModalBtn.textContent = '🚀 Upload & Kirim Berkas';
     }
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
-  } else if (role === 'petugas_tte') {
+  } else if (isTteUser) {
     // Mode Khusus Petugas TTE
     if (modalTitle) modalTitle.textContent = '✍️ Tindak Lanjut Petugas TTE / SIAK';
     if (standardActionGroup) standardActionGroup.style.display = 'none';
@@ -1514,7 +1536,7 @@ window.openActionModal = function(key) {
       saveModalBtn.textContent = '💾 Eksekusi Status TTE';
     }
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
-  } else if (role === 'petugas_pencetakan') {
+  } else if (isCetakUser) {
     // Mode Khusus Petugas Pencetakan
     if (modalTitle) modalTitle.textContent = '🖨️ Update Status Cetak & Penyerahan Dokumen';
     if (standardActionGroup) standardActionGroup.style.display = 'none';
@@ -1601,11 +1623,15 @@ if (actionForm) {
     const linkFileVal = modalLinkFile ? modalLinkFile.value.trim() : '';
     const cetikStatusVal = cetikStatusEl ? cetikStatusEl.value : '7_SELESAI';
 
-    if (currentUser && (currentUser.role === 'petugas_scan' || currentUser.role === 'petugas_tte')) {
+    const isCetakUser = currentUser && isPetugasCetak(currentUser.role);
+    const isScanUser = currentUser && isPetugasScan(currentUser.role);
+    const isTteUser = currentUser && isPetugasTTE(currentUser.role);
+
+    if (isScanUser || isTteUser) {
       executeAction = 'approve'; // Selalu jadikan executeAction 'approve'
     }
 
-    if (currentUser && currentUser.role === 'petugas_pencetakan') {
+    if (isCetakUser) {
       if (cetikStatusVal === 'PENDING_OPERATOR') {
         executeAction = 'pending';
         if (!notes) {
@@ -1627,7 +1653,7 @@ if (actionForm) {
       }
     }
 
-    if (currentUser && currentUser.role === 'petugas_scan') {
+    if (isScanUser) {
       if (!linkFileVal) {
         showToast('Silakan isi link file scan PDF terlebih dahulu!', 'error');
         const submitBtn = actionForm.querySelector('button[type="submit"]');
@@ -1636,7 +1662,7 @@ if (actionForm) {
       }
     }
 
-    if (currentUser && currentUser.role === 'petugas_tte') {
+    if (isTteUser) {
       notes = tteNotesVal;
       if (statusTteVal !== 'SIAK' && !tteNotesVal) {
         showToast('Silakan isi Catatan TTE mengenai status SIAK!', 'error');
@@ -1653,10 +1679,10 @@ if (actionForm) {
       if (API_URL === 'local') {
         const item = allData.find(d => String(d.key) === String(key));
         if (item) {
-          if (currentUser.role === 'petugas_scan') {
+          if (isScanUser) {
             item.link_file = linkFileVal;
           }
-          if (currentUser.role === 'petugas_pencetakan') {
+          if (isCetakUser) {
             if (cetikStatusVal === 'PENDING_OPERATOR') {
               item.status_alur = 'PENDING_OPERATOR';
               item.riwayat_pending = `PENDING by ${currentUser.name || currentUser.username}: ${notes}\n${item.riwayat_pending || ''}`;
@@ -1692,7 +1718,7 @@ if (actionForm) {
             role: currentUser.role,
             userName: currentUser.name,
             executeAction: executeAction,
-            status_alur: (currentUser.role === 'petugas_pencetakan') ? cetikStatusVal : undefined,
+            status_alur: isCetakUser ? cetikStatusVal : undefined,
             notes: notes,
             status_tte: statusTteVal,
             penerima: penerimaVal,
