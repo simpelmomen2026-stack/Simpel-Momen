@@ -883,21 +883,17 @@ function renderMonitoringTable() {
       `<br><a href="${escapeHTML(row.link_file.trim())}" target="_blank" class="btn btn-secondary btn-xs" style="color:#60a5fa; margin-top:4px; font-size:0.75rem; padding:2px 8px;">📄 Buka Scan PDF</a>` : '';
 
     let actionBtnHtml = '';
-    if (role === 'monitoring') {
-      actionBtnHtml = `<button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">👁️ Detail</button>`;
-    } else if (isPetugasCetak(role)) {
-      actionBtnHtml = `<button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">🖨️ Action Cetak</button>`;
-    } else if (isPending) {
-      actionBtnHtml = `<button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">🛠️ Action Pending</button>`;
-    } else if (isSelesai) {
-      actionBtnHtml = `<button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">✅ Detail Selesai</button>`;
+    if (isPetugasCetak(role)) {
+      actionBtnHtml = `<button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">🖨️ Detail & Status Cetak</button>`;
+    } else if (role === 'monitoring' || isSelesai) {
+      actionBtnHtml = `<button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">👁️ Detail Dokumen</button>`;
     } else {
-      actionBtnHtml = `<button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">⚡ Tindak Lanjut</button>`;
+      actionBtnHtml = `<button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">👁️ Detail & Action</button>`;
     }
 
     return `
       <tr>
-        <td><span class="code-key-badge" style="cursor:pointer;" title="Klik untuk eksekusi / detail" onclick="openActionModal('${escapeHTML(row.key)}')">${escapeHTML(row.key)}</span></td>
+        <td><span class="code-key-badge" style="cursor:pointer;" title="Klik untuk lihat detail dokumen" onclick="openActionModal('${escapeHTML(row.key)}')">${escapeHTML(row.key)}</span></td>
         <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
         <td><strong>${escapeHTML(row.pemohon)}</strong></td>
         <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small>${linkBtnHtml}</td>
