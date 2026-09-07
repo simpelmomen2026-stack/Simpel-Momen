@@ -662,20 +662,25 @@ function renderCounterDesk() {
 
   // Filter antrean khusus meja aktif user
   const userActiveDeskItems = allData.filter(item => {
-    // 🛑 Filter Utama UPT: Sembunyikan berkas Dinas dan berkas UPT lain bagi user tingkatan UPT
-    if (isUserUpt(currentUser) && !matchItemToUserUpt(item, currentUser)) {
-      return false;
+    const itemFas = String(item.fasilitasi || item.integrasi || "");
+    const isItemUpt = itemFas.toLowerCase().includes('upt');
+
+    // 🛑 Filter Utama UPT & Dinas: User UPT hanya lihat UPT, User Dinas HANYA lihat Dinas
+    if (isUserUpt(currentUser)) {
+      if (!matchItemToUserUpt(item, currentUser)) return false;
+    } else {
+      // User Dinas: Sembunyikan SEMUA berkas UPT
+      if (isItemUpt) return false;
     }
 
     const statusAlur = String(item.status_alur || "");
-    const itemFas = String(item.fasilitasi || "");
     const itemJenis = String(item.jenis_layanan || "").trim().toLowerCase();
 
     if (role === 'operator') {
       return statusAlur === 'PENDING_OPERATOR';
     } else if (role === 'petugas_scan') {
       if (fasilitasi === 'UPT') return statusAlur === '1_PETUGAS_SCAN';
-      return statusAlur === '1_PETUGAS_SCAN' && !itemFas.toLowerCase().includes('upt');
+      return statusAlur === '1_PETUGAS_SCAN' && !isItemUpt;
     } else if (role === 'kasie_dafduk') {
       return statusAlur === '2_VERIFIKASI_KASIE' && itemJenis === 'pendaftaran penduduk';
     } else if (role === 'kasie_capil') {
@@ -695,15 +700,15 @@ function renderCounterDesk() {
     } else if (isPetugasCetak(role)) {
       const statusUpper = statusAlur.toUpperCase();
       if (isUserUpt(currentUser) || fasilitasi === 'UPT') {
-        return statusUpper.includes('PENCETAKAN_UPT') || statusUpper.includes('CETAK') || statusUpper === 'SIAP_DICETAK';
+        return isItemUpt && (statusUpper.includes('PENCETAKAN') || statusUpper.includes('CETAK') || statusUpper === 'SIAP_DICETAK');
       }
-      return statusUpper.includes('PENCETAKAN') || statusUpper.includes('CETAK') || statusUpper === 'SIAP_DICETAK';
+      return !isItemUpt && (statusUpper.includes('PENCETAKAN') || statusUpper.includes('CETAK') || statusUpper === 'SIAP_DICETAK');
     }
     return true;
   });
 
   // AKUMULASI NILAI METRIK PADA DASHBOARD
-  const userUptScopeData = isUserUpt(currentUser) ? allData.filter(d => matchItemToUserUpt(d, currentUser)) : allData;
+  const userUptScopeData = isUserUpt(currentUser) ? allData.filter(d => matchItemToUserUpt(d, currentUser)) : allData.filter(d => !String(d.fasilitasi || d.integrasi || "").toLowerCase().includes('upt'));
   const countActiveDesk = userActiveDeskItems.length;
   const countPendingAll = userUptScopeData.filter(d => String(d.status_alur).includes('PENDING')).length;
   const countCompletedAll = userUptScopeData.filter(d => String(d.status_alur).includes('7_SELESAI')).length;
@@ -717,9 +722,15 @@ function renderCounterDesk() {
   const selectedFas = fasilitasiSelect ? fasilitasiSelect.value : 'ALL';
 
   const filtered = allData.filter(item => {
-    // Filter akses UPT spesifik
-    if (isUserUpt(currentUser) && !matchItemToUserUpt(item, currentUser)) {
-      return false;
+    const itemFasLower = String(item.fasilitasi || item.integrasi || "").toLowerCase();
+    const isItemUpt = itemFasLower.includes('upt');
+
+    // Filter akses UPT vs Dinas
+    if (isUserUpt(currentUser)) {
+      if (!matchItemToUserUpt(item, currentUser)) return false;
+    } else {
+      // User Dinas: Sembunyikan berkas UPT kecuali jika filter dropdown secara eksplisit memilih UPT
+      if (isItemUpt && selectedFas !== 'UPT') return false;
     }
 
     const keyMatch = String(item.key || "").toLowerCase().includes(query);
@@ -732,11 +743,9 @@ function renderCounterDesk() {
     if (!matchesSearch) return false;
 
     if (selectedFas === 'Dinas') {
-      const isDinas = String(item.fasilitasi || item.integrasi || "Dinas").toLowerCase().includes('dinas');
-      if (!isDinas) return false;
+      if (isItemUpt) return false;
     } else if (selectedFas === 'UPT') {
-      const isUpt = String(item.fasilitasi || item.integrasi || "").toLowerCase().includes('upt');
-      if (!isUpt) return false;
+      if (!isItemUpt) return false;
     }
 
     if (role === 'monitoring') return true;
@@ -774,36 +783,36 @@ function renderCounterDesk() {
     let actionBtnHtml = '';
     if (role === 'monitoring') {
       actionBtnHtml = `
-        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', 'view')">
           👁️ Detail & Riwayat
         </button>
       `;
     } else if (isSelesai) {
       actionBtnHtml = `
         <span class="badge selesai" style="margin-right:4px;">✅ Selesai</span>
-        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">👁️ Detail</button>
+        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', 'view')">👁️ Detail</button>
       `;
     } else if (isPetugasCetak(role)) {
       actionBtnHtml = `
-        <button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', 'action')">
           🎉 Cetak & Selesaikan
         </button>
       `;
     } else if (role === 'operator' && isPending) {
       actionBtnHtml = `
-        <button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', 'action')">
           🛠️ Perbaiki & Kirim Ulang
         </button>
       `;
     } else if (isPetugasScan(role)) {
       actionBtnHtml = `
-        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', 'action')">
           📄 Scan & Kirim Berkas
         </button>
       `;
     } else {
       actionBtnHtml = `
-        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', 'action')">
           ⚡ Setujui / Lanjutkan
         </button>
       `;
@@ -811,7 +820,7 @@ function renderCounterDesk() {
 
     return `
       <tr style="${rowStyle}">
-        <td><span class="code-key-badge" style="cursor:pointer;" title="Klik untuk eksekusi / detail" onclick="openActionModal('${escapeHTML(row.key)}')">${escapeHTML(row.key)}</span></td>
+        <td><span class="code-key-badge" style="cursor:pointer;" title="Klik untuk eksekusi / detail" onclick="openActionModal('${escapeHTML(row.key)}', 'action')">${escapeHTML(row.key)}</span></td>
         <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
         <td><strong>${escapeHTML(row.pemohon)}</strong><br><small style="color:var(--text-muted);">${escapeHTML(row.no_hp || '-')}</small></td>
         <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small>${linkBtnHtml}</td>
@@ -836,14 +845,20 @@ function renderMonitoringTable() {
   const filterFas = filterFasilitasi ? filterFasilitasi.value : "ALL";
 
   const filtered = allData.filter(item => {
-    // 🛑 Filter Utama UPT: Sembunyikan berkas Dinas dan berkas UPT lain bagi user tingkatan UPT
-    if (isUserUpt(currentUser) && !matchItemToUserUpt(item, currentUser)) {
-      return false;
+    const itemFasLower = String(item.fasilitasi || item.integrasi || "").toLowerCase();
+    const isItemUpt = itemFasLower.includes('upt');
+
+    // 🛑 Filter Utama UPT vs Dinas
+    if (isUserUpt(currentUser)) {
+      if (!matchItemToUserUpt(item, currentUser)) return false;
+    } else {
+      // User Dinas: Sembunyikan berkas UPT kecuali jika filter dropdown secara eksplisit memilih UPT
+      if (isItemUpt && filterFas !== 'UPT') return false;
     }
 
     // Filter Fasilitasi Dropdown
-    if (filterFas === 'Dinas' && item.fasilitasi === 'UPT') return false;
-    if (filterFas === 'UPT' && item.fasilitasi !== 'UPT') return false;
+    if (filterFas === 'Dinas' && isItemUpt) return false;
+    if (filterFas === 'UPT' && !isItemUpt) return false;
 
     // Filter per Tanggal (jika diisi)
     if (selectedDate) {
@@ -872,28 +887,17 @@ function renderMonitoringTable() {
     return;
   }
 
-  const role = currentUser ? currentUser.role : '';
-
+  // 🛑 Pada Halaman Monitoring Alur: SEMUA USER (termasuk Petugas Cetak) hanya menampilkan tombol Read-Only "Detail Dokumen"
   monitoringTableBody.innerHTML = filtered.map(row => {
-    const isSelesai = row.status_alur === '7_SELESAI';
-    const isPending = row.status_alur === 'PENDING_OPERATOR';
-
     const hasLink = row.link_file && row.link_file.trim().startsWith('http');
     const linkBtnHtml = hasLink ? 
       `<br><a href="${escapeHTML(row.link_file.trim())}" target="_blank" class="btn btn-secondary btn-xs" style="color:#60a5fa; margin-top:4px; font-size:0.75rem; padding:2px 8px;">📄 Buka Scan PDF</a>` : '';
 
-    let actionBtnHtml = '';
-    if (isPetugasCetak(role)) {
-      actionBtnHtml = `<button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">🖨️ Detail & Status Cetak</button>`;
-    } else if (role === 'monitoring' || isSelesai) {
-      actionBtnHtml = `<button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">👁️ Detail Dokumen</button>`;
-    } else {
-      actionBtnHtml = `<button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">👁️ Detail & Action</button>`;
-    }
+    const actionBtnHtml = `<button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', 'view')">👁️ Detail Dokumen</button>`;
 
     return `
       <tr>
-        <td><span class="code-key-badge" style="cursor:pointer;" title="Klik untuk lihat detail dokumen" onclick="openActionModal('${escapeHTML(row.key)}')">${escapeHTML(row.key)}</span></td>
+        <td><span class="code-key-badge" style="cursor:pointer;" title="Klik untuk lihat detail dokumen" onclick="openActionModal('${escapeHTML(row.key)}', 'view')">${escapeHTML(row.key)}</span></td>
         <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
         <td><strong>${escapeHTML(row.pemohon)}</strong></td>
         <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small>${linkBtnHtml}</td>
