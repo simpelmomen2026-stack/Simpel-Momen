@@ -1436,7 +1436,7 @@ if (rekapDateStartEl) rekapDateStartEl.addEventListener('change', renderRekapitu
 if (rekapDateEndEl) rekapDateEndEl.addEventListener('change', renderRekapitulasi);
 
 // MODAL ACTION & TINDAK LANJUT
-window.openActionModal = function(key) {
+window.openActionModal = function(key, mode = 'action') {
   const item = allData.find(d => String(d.key) === String(key));
   if (!item || !actionModal) return;
 
@@ -1452,31 +1452,6 @@ window.openActionModal = function(key) {
 
   const cetikStatusGroup = document.getElementById('cetikStatusGroup');
   const cetikStatusEl = document.getElementById('cetikStatus');
-
-  if (scanLinkGroup) {
-    if (isScanUser) {
-      scanLinkGroup.style.display = 'block';
-      if (modalLinkFile) modalLinkFile.value = item.link_file || '';
-    } else {
-      scanLinkGroup.style.display = 'none';
-    }
-  }
-
-  if (tteStatusGroup) tteStatusGroup.style.display = isTteUser ? 'block' : 'none';
-  if (cetikStatusGroup) cetikStatusGroup.style.display = isCetakUser ? 'block' : 'none';
-  
-  if (isCetakUser) {
-    if (cetikStatusEl) {
-      cetikStatusEl.value = item.status_alur === 'PENDING_OPERATOR' ? 'PENDING_OPERATOR' : 
-                          (item.status_alur === 'SIAP_DICETAK' ? 'SIAP_DICETAK' : '7_SELESAI');
-    }
-    if (penerimaGroup) {
-      penerimaGroup.style.display = (cetikStatusEl && cetikStatusEl.value === '7_SELESAI') ? 'block' : 'none';
-      if (modalPenerima) modalPenerima.value = item.penerima || '';
-    }
-  } else {
-    if (penerimaGroup) penerimaGroup.style.display = 'none';
-  }
 
   if (modalNotes) modalNotes.value = '';
 
@@ -1514,9 +1489,15 @@ window.openActionModal = function(key) {
     `;
   }
 
-  // Penanganan Khusus User Monitoring vs Petugas/Eksekutor Biasa
-  if (role === 'monitoring') {
+  // 🛑 Penanganan Mode Read-Only (view) vs Mode Action Eksekusi (action)
+  if (mode === 'view' || role === 'monitoring') {
     if (modalTitle) modalTitle.textContent = '👁️ Detail & Rekam Jejak Dokumen';
+    if (standardActionGroup) standardActionGroup.style.display = 'none';
+    if (scanLinkGroup) scanLinkGroup.style.display = 'none';
+    if (tteStatusGroup) tteStatusGroup.style.display = 'none';
+    if (tteNotesGroup) tteNotesGroup.style.display = 'none';
+    if (cetikStatusGroup) cetikStatusGroup.style.display = 'none';
+    if (penerimaGroup) penerimaGroup.style.display = 'none';
     if (modalNotesGroup) modalNotesGroup.style.display = 'none';
     if (saveModalBtn) saveModalBtn.style.display = 'none';
     if (cancelModalBtn) cancelModalBtn.textContent = '❌ Tutup';
@@ -1524,6 +1505,11 @@ window.openActionModal = function(key) {
     // Mode Operator Perbaikan Pending
     if (modalTitle) modalTitle.textContent = '🛠️ Perbaiki & Kirim Ulang Berkas Pending';
     if (standardActionGroup) standardActionGroup.style.display = 'none';
+    if (scanLinkGroup) scanLinkGroup.style.display = 'none';
+    if (tteStatusGroup) tteStatusGroup.style.display = 'none';
+    if (tteNotesGroup) tteNotesGroup.style.display = 'none';
+    if (cetikStatusGroup) cetikStatusGroup.style.display = 'none';
+    if (penerimaGroup) penerimaGroup.style.display = 'none';
     if (saveModalBtn) {
       saveModalBtn.style.display = 'inline-flex';
       saveModalBtn.textContent = '🚀 Kirim ke Petugas Scan';
@@ -1534,9 +1520,14 @@ window.openActionModal = function(key) {
     // Mode Khusus Petugas Scan (Dinas & UPT)
     if (modalTitle) modalTitle.textContent = '📄 Upload Link Scan PDF';
     if (standardActionGroup) standardActionGroup.style.display = 'none';
-    if (scanLinkGroup) scanLinkGroup.style.display = 'block';
+    if (scanLinkGroup) {
+      scanLinkGroup.style.display = 'block';
+      if (modalLinkFile) modalLinkFile.value = item.link_file || '';
+    }
     if (tteStatusGroup) tteStatusGroup.style.display = 'none';
     if (tteNotesGroup) tteNotesGroup.style.display = 'none';
+    if (cetikStatusGroup) cetikStatusGroup.style.display = 'none';
+    if (penerimaGroup) penerimaGroup.style.display = 'none';
     if (modalNotesGroup) modalNotesGroup.style.display = 'block';
     if (saveModalBtn) {
       saveModalBtn.style.display = 'inline-flex';
@@ -1547,6 +1538,9 @@ window.openActionModal = function(key) {
     // Mode Khusus Petugas TTE
     if (modalTitle) modalTitle.textContent = '✍️ Tindak Lanjut Petugas TTE / SIAK';
     if (standardActionGroup) standardActionGroup.style.display = 'none';
+    if (scanLinkGroup) scanLinkGroup.style.display = 'none';
+    if (cetikStatusGroup) cetikStatusGroup.style.display = 'none';
+    if (penerimaGroup) penerimaGroup.style.display = 'none';
     if (tteStatusGroup) tteStatusGroup.style.display = 'block';
     if (tteNotesGroup) tteNotesGroup.style.display = 'block';
     if (modalNotesGroup) modalNotesGroup.style.display = 'none';
@@ -1563,6 +1557,14 @@ window.openActionModal = function(key) {
     if (tteStatusGroup) tteStatusGroup.style.display = 'none';
     if (tteNotesGroup) tteNotesGroup.style.display = 'none';
     if (cetikStatusGroup) cetikStatusGroup.style.display = 'block';
+    if (cetikStatusEl) {
+      cetikStatusEl.value = item.status_alur === 'PENDING_OPERATOR' ? 'PENDING_OPERATOR' : 
+                          (item.status_alur === 'SIAP_DICETAK' ? 'SIAP_DICETAK' : '7_SELESAI');
+    }
+    if (penerimaGroup) {
+      penerimaGroup.style.display = (cetikStatusEl && cetikStatusEl.value === '7_SELESAI') ? 'block' : 'none';
+      if (modalPenerima) modalPenerima.value = item.penerima || '';
+    }
     if (modalNotesGroup) modalNotesGroup.style.display = 'block';
     if (saveModalBtn) {
       saveModalBtn.style.display = 'inline-flex';
@@ -1573,7 +1575,9 @@ window.openActionModal = function(key) {
     // Mode Petugas/Eksekutor Biasa
     if (modalTitle) modalTitle.textContent = 'Tindak Lanjut Berkas Antrean';
     if (standardActionGroup) standardActionGroup.style.display = 'block';
+    if (scanLinkGroup) scanLinkGroup.style.display = 'none';
     if (cetikStatusGroup) cetikStatusGroup.style.display = 'none';
+    if (penerimaGroup) penerimaGroup.style.display = 'none';
     if (tteStatusGroup) tteStatusGroup.style.display = 'none';
     if (tteNotesGroup) tteNotesGroup.style.display = 'none';
     if (saveModalBtn) {
