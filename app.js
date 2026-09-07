@@ -692,9 +692,12 @@ function renderCounterDesk() {
       return statusAlur === '4_SERTIFIKASI_KADIS' && isSelectedFas;
     } else if (role === 'petugas_tte') {
       return statusAlur === '5_TTE';
-    } else if (role === 'petugas_pencetakan') {
-      if (fasilitasi === 'UPT') return statusAlur === '6_PENCETAKAN_UPT';
-      return statusAlur === '6_PENCETAKAN_DINAS';
+    } else if (isPetugasCetak(role)) {
+      const statusUpper = statusAlur.toUpperCase();
+      if (isUserUpt(currentUser) || fasilitasi === 'UPT') {
+        return statusUpper.includes('PENCETAKAN_UPT') || statusUpper.includes('CETAK') || statusUpper === 'SIAP_DICETAK';
+      }
+      return statusUpper.includes('PENCETAKAN') || statusUpper.includes('CETAK') || statusUpper === 'SIAP_DICETAK';
     }
     return true;
   });
@@ -808,7 +811,7 @@ function renderCounterDesk() {
 
     return `
       <tr style="${rowStyle}">
-        <td><span class="code-key-badge">${escapeHTML(row.key)}</span></td>
+        <td><span class="code-key-badge" style="cursor:pointer;" title="Klik untuk eksekusi / detail" onclick="openActionModal('${escapeHTML(row.key)}')">${escapeHTML(row.key)}</span></td>
         <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
         <td><strong>${escapeHTML(row.pemohon)}</strong><br><small style="color:var(--text-muted);">${escapeHTML(row.no_hp || '-')}</small></td>
         <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small>${linkBtnHtml}</td>
@@ -861,13 +864,15 @@ function renderMonitoringTable() {
   if (filtered.length === 0) {
     monitoringTableBody.innerHTML = `
       <tr>
-        <td colspan="7" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">
+        <td colspan="8" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">
           Tidak ditemukan data dokumen.
         </td>
       </tr>
     `;
     return;
   }
+
+  const role = currentUser ? currentUser.role : '';
 
   monitoringTableBody.innerHTML = filtered.map(row => {
     const isSelesai = row.status_alur === '7_SELESAI';
@@ -877,15 +882,29 @@ function renderMonitoringTable() {
     const linkBtnHtml = hasLink ? 
       `<br><a href="${escapeHTML(row.link_file.trim())}" target="_blank" class="btn btn-secondary btn-xs" style="color:#60a5fa; margin-top:4px; font-size:0.75rem; padding:2px 8px;">📄 Buka Scan PDF</a>` : '';
 
+    let actionBtnHtml = '';
+    if (role === 'monitoring') {
+      actionBtnHtml = `<button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">👁️ Detail</button>`;
+    } else if (isPetugasCetak(role)) {
+      actionBtnHtml = `<button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">🖨️ Action Cetak</button>`;
+    } else if (isPending) {
+      actionBtnHtml = `<button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">🛠️ Action Pending</button>`;
+    } else if (isSelesai) {
+      actionBtnHtml = `<button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">✅ Detail Selesai</button>`;
+    } else {
+      actionBtnHtml = `<button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">⚡ Tindak Lanjut</button>`;
+    }
+
     return `
       <tr>
-        <td><span class="code-key-badge">${escapeHTML(row.key)}</span></td>
+        <td><span class="code-key-badge" style="cursor:pointer;" title="Klik untuk eksekusi / detail" onclick="openActionModal('${escapeHTML(row.key)}')">${escapeHTML(row.key)}</span></td>
         <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
         <td><strong>${escapeHTML(row.pemohon)}</strong></td>
         <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small>${linkBtnHtml}</td>
         <td>${escapeHTML(row.operator || '-')}</td>
         <td style="font-weight: 500;">${escapeHTML(row.status_alur)}</td>
         <td><small style="color:var(--text-muted);">${escapeHTML(row.riwayat_pending || row.catatan_print || row.catatan_kadis || '-')}</small></td>
+        <td class="text-center">${actionBtnHtml}</td>
       </tr>
     `;
   }).join('');
