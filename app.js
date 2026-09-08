@@ -256,10 +256,13 @@ const MOCK_PETUGAS = [
   { username: 'kadis', password: '123456', name: 'Kepala Dinas', role: 'kadis', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'tte_dinas', password: '123456', name: 'Petugas TTE', role: 'petugas_tte', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'print_dinas', password: '123456', name: 'Petugas Cetak Dinas', role: 'petugas_pencetakan', uptCode: null, fasilitasi: 'Dinas' },
-  { username: 'print_upt1', password: '123456', name: 'Petugas Cetak UPT 01', role: 'petugas_pencetakan', uptCode: 'UPT-01', fasilitasi: 'UPT' }
+  { username: 'print_upt1', password: '123456', name: 'Petugas Cetak UPT 01', role: 'petugas_pencetakan', uptCode: 'UPT-01', fasilitasi: 'UPT' },
+  { username: 'petugas_cetak', password: '123456', name: 'Petugas Cetak', role: 'petugas_pencetakan', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'monitoring', password: '123456', name: 'User Monitoring', role: 'monitoring', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'admin', password: '123456', name: 'Administrator', role: 'admin', uptCode: null, fasilitasi: 'Dinas' }
 ];
 
-// Event: Login Submit (Online via GET Parameter & Fallback Offline)
+// Event: Login Submit (Online via GET Parameter & Fallback Akun Demo)
 if (loginForm) {
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -274,8 +277,8 @@ if (loginForm) {
         const uNameClean = cleanStr(u.username);
         const nameClean = cleanStr(u.name);
         const roleClean = cleanStr(u.role);
-        const isMatch = (uNameClean === inputClean || nameClean === inputClean || roleClean === inputClean || (inputClean.length >= 3 && nameClean.includes(inputClean)));
-        const isPass = (u.password === passwordVal || passwordVal === '123456');
+        const isMatch = (uNameClean === inputClean || nameClean === inputClean || roleClean === inputClean || (inputClean.length >= 3 && (uNameClean.includes(inputClean) || nameClean.includes(inputClean))));
+        const isPass = (u.password === passwordVal || passwordVal === '123456' || passwordVal === '');
         return isMatch && isPass;
       });
     };
@@ -300,13 +303,14 @@ if (loginForm) {
             sessionToken: 'local_token'
           };
           localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+          sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
           setupLoggedInUI();
           showToast(`Selamat datang, ${currentUser.name}!`, 'success');
         } else {
           showToast('Username atau password tidak ditemukan!', 'error');
         }
       } else {
-        // Login Online via Google Sheets Apps Script API
+        // Login Online Murni via Google Sheets Apps Script API (Tanpa Fallback Otomatis Akun Lokal)
         try {
           const loginUrl = `${API_URL}?action=login&username=${encodeURIComponent(usernameVal)}&password=${encodeURIComponent(passwordVal)}`;
           const response = await fetch(loginUrl, { method: 'GET' });
@@ -318,31 +322,17 @@ if (loginForm) {
               currentUser.role = normalizeUserRole(currentUser.role);
             }
             localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+            sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
             setupLoggedInUI();
-            showToast(`Selamat datang, ${currentUser.name}!`, 'success');
+            showToast(`Selamat datang, ${currentUser.name || currentUser.username}!`, 'success');
           } else if (result.status === 'error') {
-            showToast(result.message || 'Username atau password tidak cocok!', 'error');
+            showToast(result.message || 'Username atau password salah!', 'error');
           } else {
-            showToast('Respon login dari server tidak valid!', 'error');
+            showToast('Respon verifikasi login tidak valid!', 'error');
           }
         } catch (fetchErr) {
-          console.warn('Koneksi online Apps Script gagal, menggunakan fallback akun demo...', fetchErr);
-          const user = findMockUser();
-          if (user) {
-            currentUser = {
-              username: user.username,
-              name: user.name,
-              role: user.role,
-              uptCode: user.uptCode,
-              fasilitasi: user.fasilitasi,
-              sessionToken: 'local_token'
-            };
-            localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
-            setupLoggedInUI();
-            showToast(`Selamat datang, ${currentUser.name}! (Mode Offline Cadangan)`, 'warning');
-          } else {
-            showToast('Gagal terhubung ke database dan akun tidak ditemukan!', 'error');
-          }
+          console.error('Koneksi login online gagal:', fetchErr);
+          showToast('Gagal terhubung ke server database (Periksa koneksi internet)', 'error');
         }
       }
     } catch (error) {
@@ -538,7 +528,7 @@ function updateConnectionIndicator() {
 
 // Check Single Device Token Online via GET
 async function checkSessionTokenOnline() {
-  if (!currentUser || API_URL === 'local' || !currentUser.sessionToken || !currentUser.username) {
+  if (!currentUser || API_URL === 'local' || !currentUser.sessionToken || currentUser.sessionToken === 'local_token' || !currentUser.username) {
     return true;
   }
   try {
@@ -548,6 +538,7 @@ async function checkSessionTokenOnline() {
     if (result.status === 'expired') {
       showToast('Akun Anda telah masuk di perangkat lain! Menutup sesi...', 'error');
       setTimeout(() => {
+        localStorage.removeItem('simpel_momen_user');
         sessionStorage.removeItem('simpel_momen_user');
         currentUser = null;
         appWrapper.style.display = 'none';
