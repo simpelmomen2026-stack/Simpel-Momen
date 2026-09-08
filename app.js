@@ -280,6 +280,11 @@ if (loginModeSelect) {
 if (loginForm) {
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (sessionExpiryTimer) {
+      clearTimeout(sessionExpiryTimer);
+      sessionExpiryTimer = null;
+    }
+
     const usernameVal = loginUsername ? loginUsername.value.trim() : '';
     const passwordVal = loginPassword ? loginPassword.value.trim() : '';
     const selectedMode = loginModeSelect ? loginModeSelect.value : (API_URL === 'local' ? 'local' : 'online');
@@ -288,6 +293,11 @@ if (loginForm) {
       showToast('Silakan masukkan nama pengguna (username)!', 'error');
       return;
     }
+
+    // Clear previous storage to prevent state pollution
+    localStorage.removeItem('simpel_momen_user');
+    sessionStorage.removeItem('simpel_momen_user');
+    currentUser = null;
 
     const cleanStr = (s) => (s ? s.toString().toLowerCase().replace(/[^a-z0-9]/g, '') : '');
     const inputClean = cleanStr(usernameVal);
@@ -342,7 +352,7 @@ if (loginForm) {
         API_URL = ONLINE_API_ENDPOINT;
         try {
           const loginUrl = `${API_URL}?action=login&username=${encodeURIComponent(usernameVal)}&password=${encodeURIComponent(passwordVal)}`;
-          const response = await fetch(loginUrl, { method: 'GET' });
+          const response = await fetch(loginUrl, { method: 'GET', cache: 'no-cache' });
           const result = await response.json();
           
           if (result.status === 'success' && result.data && !Array.isArray(result.data)) {
@@ -355,7 +365,7 @@ if (loginForm) {
             setupLoggedInUI();
             showToast(`Selamat datang, ${currentUser.name || currentUser.username}!`, 'success');
           } else if (result.status === 'error') {
-            showToast(`${result.message || 'Username atau password salah!'} (Info: Gunakan "Mode Simulasi Demo" jika menguji akun uji coba)`, 'error');
+            showToast(`${result.message || 'Username atau password salah!'}`, 'error');
           } else {
             showToast('Respon verifikasi login dari server Google Sheets tidak valid!', 'error');
           }
@@ -555,24 +565,28 @@ function updateConnectionIndicator() {
   }
 }
 
+let sessionExpiryTimer = null;
+
 // Check Single Device Token Online via GET
 async function checkSessionTokenOnline() {
   if (!currentUser || API_URL === 'local' || !currentUser.sessionToken || currentUser.sessionToken === 'local_token' || !currentUser.username) {
     return true;
   }
+  if (sessionExpiryTimer) {
+    clearTimeout(sessionExpiryTimer);
+    sessionExpiryTimer = null;
+  }
   try {
     const checkUrl = `${API_URL}?action=check_session&username=${encodeURIComponent(currentUser.username)}&sessionToken=${encodeURIComponent(currentUser.sessionToken)}`;
-    const response = await fetch(checkUrl);
+    const response = await fetch(checkUrl, { cache: 'no-cache' });
     const result = await response.json();
     if (result.status === 'expired') {
-      showToast('Akun Anda telah masuk di perangkat lain! Menutup sesi...', 'error');
-      setTimeout(() => {
-        localStorage.removeItem('simpel_momen_user');
-        sessionStorage.removeItem('simpel_momen_user');
-        currentUser = null;
-        appWrapper.style.display = 'none';
-        loginWrapper.style.display = 'flex';
-      }, 2500);
+      showToast('Sesi login telah berakhir atau akun aktif di perangkat lain.', 'error');
+      localStorage.removeItem('simpel_momen_user');
+      sessionStorage.removeItem('simpel_momen_user');
+      currentUser = null;
+      if (appWrapper) appWrapper.style.display = 'none';
+      if (loginWrapper) loginWrapper.style.display = 'flex';
       return false;
     }
   } catch (error) {
