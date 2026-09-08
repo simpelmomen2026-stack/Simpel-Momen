@@ -280,22 +280,38 @@ if (loginModeSelect) {
 if (loginForm) {
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const usernameVal = loginUsername.value.trim();
-    const passwordVal = loginPassword.value.trim();
+    const usernameVal = loginUsername ? loginUsername.value.trim() : '';
+    const passwordVal = loginPassword ? loginPassword.value.trim() : '';
     const selectedMode = loginModeSelect ? loginModeSelect.value : (API_URL === 'local' ? 'local' : 'online');
     
+    if (!usernameVal) {
+      showToast('Silakan masukkan nama pengguna (username)!', 'error');
+      return;
+    }
+
     const cleanStr = (s) => (s ? s.toString().toLowerCase().replace(/[^a-z0-9]/g, '') : '');
     const inputClean = cleanStr(usernameVal);
     
     const findMockUser = () => {
-      return MOCK_PETUGAS.find(u => {
+      const match = MOCK_PETUGAS.find(u => {
         const uNameClean = cleanStr(u.username);
         const nameClean = cleanStr(u.name);
         const roleClean = cleanStr(u.role);
-        const isMatch = (uNameClean === inputClean || nameClean === inputClean || roleClean === inputClean || (inputClean.length >= 3 && (uNameClean.includes(inputClean) || nameClean.includes(inputClean))));
-        const isPass = (u.password === passwordVal || passwordVal === '123456' || passwordVal === '');
-        return isMatch && isPass;
+        return (uNameClean === inputClean || nameClean === inputClean || roleClean === inputClean || (inputClean.length >= 3 && (uNameClean.includes(inputClean) || nameClean.includes(inputClean))));
       });
+      if (match) return match;
+
+      // Generasi profil pengguna demo dinamis untuk username apa pun di mode demo
+      const inferredRole = normalizeUserRole(usernameVal);
+      const isUpt = inputClean.includes('upt');
+      return {
+        username: usernameVal,
+        name: usernameVal.charAt(0).toUpperCase() + usernameVal.slice(1),
+        role: inferredRole,
+        uptCode: isUpt ? 'UPT-01' : null,
+        fasilitasi: isUpt ? 'UPT' : 'Dinas',
+        password: passwordVal || '123456'
+      };
     };
 
     const submitBtn = loginForm.querySelector('button[type="submit"]');
@@ -309,22 +325,18 @@ if (loginForm) {
       if (selectedMode === 'local') {
         API_URL = 'local';
         const user = findMockUser();
-        if (user) {
-          currentUser = {
-            username: user.username,
-            name: user.name,
-            role: user.role,
-            uptCode: user.uptCode,
-            fasilitasi: user.fasilitasi,
-            sessionToken: 'local_token'
-          };
-          localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
-          sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
-          setupLoggedInUI();
-          showToast(`Selamat datang, ${currentUser.name}! (Mode Simulasi Demo)`, 'success');
-        } else {
-          showToast('Username atau password akun demo tidak ditemukan!', 'error');
-        }
+        currentUser = {
+          username: user.username,
+          name: user.name,
+          role: user.role,
+          uptCode: user.uptCode,
+          fasilitasi: user.fasilitasi,
+          sessionToken: 'local_token'
+        };
+        localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+        sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+        setupLoggedInUI();
+        showToast(`Selamat datang, ${currentUser.name}! (Mode Simulasi Demo)`, 'success');
       } else {
         // Login Online Murni via Google Sheets Apps Script API
         API_URL = ONLINE_API_ENDPOINT;
@@ -343,7 +355,7 @@ if (loginForm) {
             setupLoggedInUI();
             showToast(`Selamat datang, ${currentUser.name || currentUser.username}!`, 'success');
           } else if (result.status === 'error') {
-            showToast(`${result.message || 'Username atau password salah!'} (Tips: Pilih Mode Simulasi Demo jika memakai akun uji coba)`, 'error');
+            showToast(`${result.message || 'Username atau password salah!'} (Info: Gunakan "Mode Simulasi Demo" jika menguji akun uji coba)`, 'error');
           } else {
             showToast('Respon verifikasi login dari server Google Sheets tidak valid!', 'error');
           }
