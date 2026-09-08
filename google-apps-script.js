@@ -271,7 +271,7 @@ function doPost(e) {
         var userDetails = getUserDetailsFromPetugasSheet(ss, data.operator || data.userName);
         var namaLengkap = userDetails.name || data.operator || data.userName || "Operator";
         var roleTitle = userDetails.role || "Operator";
-        var fasTag = (data.fasilitasi && data.fasilitasi.indexOf("UPT") !== -1) ? "Fasilitasi: *UPT*" : "Fasilitasi: *Dinas*";
+        var fasTag = formatFasilitasiTag(data.fasilitasi, data.operator || data.userName, ss);
         
         var waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + data.sub_layanan + "* (" + fasTag + ") atas nama *" + data.pemohon + "* telah di input.\n" +
                     "Selanjutnya mohon petugas scan proses lanjut.\n\n" +
@@ -309,7 +309,7 @@ function doPost(e) {
       
       var nextStatus = "";
       
-      if (executeAction === 'pending' && role !== 'petugas_tte') {
+      if (executeAction === 'pending' && role !== 'petugas_tte' && role !== 'petugas_scan') {
         // Alur Pending: Kembalikan berkas ke operator
         nextStatus = "PENDING_OPERATOR";
         var logMsg = "PENDING by " + role + " pada " + timeStr + ": " + notes;
@@ -436,7 +436,7 @@ function doPost(e) {
         var pemohonName = sheet.getRange(foundRow, 5).getValue().toString().trim();
         var subLayanan = sheet.getRange(foundRow, 11).getValue().toString().trim();
         var currentFasilitasi = sheet.getRange(foundRow, 3).getValue().toString().trim();
-        var fasTag = (currentFasilitasi && currentFasilitasi.indexOf("UPT") !== -1) ? "Fasilitasi: *UPT*" : "Fasilitasi: *Dinas*";
+        var fasTag = formatFasilitasiTag(currentFasilitasi, payload.userName, ss);
         var waMsg = "";
         
         if (role === 'operator') {
@@ -445,12 +445,13 @@ function doPost(e) {
                   "Terima Kasih.";
         }
         else if (role === 'petugas_scan') {
-          var targetVerifikasi = (currentFasilitasi && currentFasilitasi.indexOf("UPT") !== -1) ? "Kepala UPT" : "Kepala Seksi";
-          waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami tambahkan link filenya.\n" +
+          var isUptFas = (currentFasilitasi && currentFasilitasi.toUpperCase().indexOf("UPT") !== -1);
+          var targetVerifikasi = isUptFas ? "Kepala UPT" : "Kepala Seksi";
+          waMsg = "Saya *" + namaLengkap + "* selaku *Petugas Scan* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami tambahkan link filenya.\n" +
                   "Mohon " + targetVerifikasi + " dapat melakukan verifikasi dokumen.\n\n" +
                   "Terima Kasih";
         } 
-        else if (role === 'kasie_dafduk' || role === 'kasie_capil' || role === 'kepala_upt') {
+        else if (role === 'kasie_dafduk' || role === 'kasie_capil') {
           if (executeAction === 'pending') {
             waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami verifikasi dan dokumen tersebut harus di PENDING untuk melengkapi *" + (notes || "kelengkapan berkas") + "*.\n" +
                     "Operator tolong disesuaikan kembali\n\n" +
@@ -459,6 +460,24 @@ function doPost(e) {
             waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami verifikasi.\n" +
                     "Mohon selanjutnya Kepala Bidang dapat memvalidasi dokumen tersebut.\n\n" +
                     "Terima Kasih.";
+          }
+        } 
+        else if (role === 'kepala_upt') {
+          if (executeAction === 'pending') {
+            waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami verifikasi dan dokumen tersebut harus di PENDING untuk melengkapi *" + (notes || "kelengkapan berkas") + "*.\n" +
+                    "Operator tolong disesuaikan kembali\n\n" +
+                    "Terima Kasih.";
+          } else {
+            var isPendaftaran = (currentLayanan.trim().toLowerCase() === "pendaftaran penduduk");
+            if (isPendaftaran) {
+              waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami verifikasi.\n" +
+                      "Mohon selanjutnya Kepala Bidang dapat memvalidasi dokumen tersebut.\n\n" +
+                      "Terima Kasih.";
+            } else {
+              waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami verifikasi.\n" +
+                      "Silahkan petugas pencetakan UPT mencetak dokumen tersebut.\n\n" +
+                      "Terima Kasih.";
+            }
           }
         } 
         else if (role === 'kabid_dafduk' || role === 'kabid_capil') {
@@ -910,4 +929,25 @@ function getStatusDeskDisplayName(status) {
     "PENDING_OPERATOR": "Operator Perbaikan"
   };
   return mapping[status] || status;
+}
+
+// FUNGSI PEMBANTU FORMAT TAG FASILITASI UPT PERSIS DENGAN KODE UPT (MISAL: UPT-01)
+function formatFasilitasiTag(fasVal, userName, ss) {
+  if (!fasVal) fasVal = "";
+  var str = fasVal.toString().trim();
+  
+  if (str.toUpperCase().indexOf("UPT") !== -1) {
+    if (str.toUpperCase() !== "UPT") {
+      return "Fasilitasi: *" + str + "*";
+    }
+    if (userName && ss) {
+      var userDetails = getUserDetailsFromPetugasSheet(ss, userName);
+      if (userDetails && userDetails.uptCode && userDetails.uptCode.toUpperCase() !== "DINAS") {
+        return "Fasilitasi: *" + userDetails.uptCode + "*";
+      }
+    }
+    return "Fasilitasi: *UPT*";
+  }
+  
+  return "Fasilitasi: *Dinas*";
 }
