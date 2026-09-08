@@ -262,12 +262,27 @@ const MOCK_PETUGAS = [
   { username: 'admin', password: '123456', name: 'Administrator', role: 'admin', uptCode: null, fasilitasi: 'Dinas' }
 ];
 
-// Event: Login Submit (Online via GET Parameter & Fallback Akun Demo)
+const ONLINE_API_ENDPOINT = 'https://script.google.com/macros/s/AKfycby-RoYMJq-lFarD4KWcOTrCfTj93xze8ljDhvjGBT2faQ8WsYW0BSdqyPlpWxxg6ieqBg/exec';
+const loginModeSelect = document.getElementById('loginModeSelect');
+
+if (loginModeSelect) {
+  loginModeSelect.addEventListener('change', () => {
+    if (loginModeSelect.value === 'local') {
+      API_URL = 'local';
+    } else {
+      API_URL = ONLINE_API_ENDPOINT;
+    }
+    updateConnectionIndicator();
+  });
+}
+
+// Event: Login Submit
 if (loginForm) {
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const usernameVal = loginUsername.value.trim();
     const passwordVal = loginPassword.value.trim();
+    const selectedMode = loginModeSelect ? loginModeSelect.value : (API_URL === 'local' ? 'local' : 'online');
     
     const cleanStr = (s) => (s ? s.toString().toLowerCase().replace(/[^a-z0-9]/g, '') : '');
     const inputClean = cleanStr(usernameVal);
@@ -291,7 +306,8 @@ if (loginForm) {
     }
     
     try {
-      if (API_URL === 'local') {
+      if (selectedMode === 'local') {
+        API_URL = 'local';
         const user = findMockUser();
         if (user) {
           currentUser = {
@@ -305,12 +321,13 @@ if (loginForm) {
           localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
           sessionStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
           setupLoggedInUI();
-          showToast(`Selamat datang, ${currentUser.name}!`, 'success');
+          showToast(`Selamat datang, ${currentUser.name}! (Mode Simulasi Demo)`, 'success');
         } else {
-          showToast('Username atau password tidak ditemukan!', 'error');
+          showToast('Username atau password akun demo tidak ditemukan!', 'error');
         }
       } else {
-        // Login Online Murni via Google Sheets Apps Script API (Tanpa Fallback Otomatis Akun Lokal)
+        // Login Online Murni via Google Sheets Apps Script API
+        API_URL = ONLINE_API_ENDPOINT;
         try {
           const loginUrl = `${API_URL}?action=login&username=${encodeURIComponent(usernameVal)}&password=${encodeURIComponent(passwordVal)}`;
           const response = await fetch(loginUrl, { method: 'GET' });
@@ -326,13 +343,13 @@ if (loginForm) {
             setupLoggedInUI();
             showToast(`Selamat datang, ${currentUser.name || currentUser.username}!`, 'success');
           } else if (result.status === 'error') {
-            showToast(result.message || 'Username atau password salah!', 'error');
+            showToast(`${result.message || 'Username atau password salah!'} (Tips: Pilih Mode Simulasi Demo jika memakai akun uji coba)`, 'error');
           } else {
-            showToast('Respon verifikasi login tidak valid!', 'error');
+            showToast('Respon verifikasi login dari server Google Sheets tidak valid!', 'error');
           }
         } catch (fetchErr) {
           console.error('Koneksi login online gagal:', fetchErr);
-          showToast('Gagal terhubung ke server database (Periksa koneksi internet)', 'error');
+          showToast('Gagal terhubung ke server database Google Sheets (Periksa koneksi internet)', 'error');
         }
       }
     } catch (error) {

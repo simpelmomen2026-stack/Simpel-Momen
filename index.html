@@ -26,6 +26,14 @@
       </div>
       
       <form id="loginForm">
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="loginModeSelect" style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Mode Koneksi Login:</label>
+          <select id="loginModeSelect" style="width:100%; padding:10px 12px; background:rgba(15,23,42,0.8); border:1px solid rgba(59,130,246,0.4); border-radius:var(--radius-md); color:#38bdf8; font-weight:700; font-size:0.85rem; cursor:pointer;">
+            <option value="online">🌐 Live Database Google Sheets</option>
+            <option value="local">💻 Mode Simulasi Demo (Akun Uji Coba)</option>
+          </select>
+        </div>
+
         <div class="form-group">
           <label for="loginUsername">Nama Pengguna (Username) *</label>
           <input type="text" id="loginUsername" placeholder="Masukkan username Anda..." required style="width:100%; padding:12px; background:var(--bg-input); border:1px solid var(--border-color); border-radius:var(--radius-md); color:#fff; font-size:0.9rem;">
@@ -531,6 +539,6 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="app.js?v=20260908_0840"></script>
+  <script src="app.js?v=20260908_0850"></script>
 </body>
 </html>
