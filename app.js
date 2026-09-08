@@ -842,7 +842,7 @@ function renderMonitoringTable() {
   if (filtered.length === 0) {
     monitoringTableBody.innerHTML = `
       <tr>
-        <td colspan="7" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">
+        <td colspan="8" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">
           Tidak ditemukan data dokumen.
         </td>
       </tr>
@@ -867,6 +867,11 @@ function renderMonitoringTable() {
         <td>${escapeHTML(row.operator || '-')}</td>
         <td style="font-weight: 500;">${escapeHTML(row.status_alur)}</td>
         <td><small style="color:var(--text-muted);">${escapeHTML(row.riwayat_pending || row.catatan_print || row.catatan_kadis || '-')}</small></td>
+        <td class="text-center no-print">
+          <button class="btn btn-secondary btn-xs" onclick="openReadOnlyDetailModal('${escapeHTML(row.key)}')" style="padding: 4px 10px; font-weight: 600; background: rgba(59, 130, 246, 0.18); border: 1px solid rgba(59, 130, 246, 0.4); color: #93c5fd; white-space: nowrap;">
+            👁️ Detail Dokumen
+          </button>
+        </td>
       </tr>
     `;
   }).join('');
@@ -888,6 +893,7 @@ window.exportMonitoringToPDF = function() {
   clone.style.background = '#ffffff';
   clone.style.color = '#000000';
   clone.style.padding = '15px';
+  clone.querySelectorAll('.no-print').forEach(el => el.remove());
 
   const table = clone.querySelector('table');
   if (table) {
@@ -1396,6 +1402,109 @@ const rekapDateEndEl = document.getElementById('rekapDateEnd');
 
 if (rekapDateStartEl) rekapDateStartEl.addEventListener('change', renderRekapitulasi);
 if (rekapDateEndEl) rekapDateEndEl.addEventListener('change', renderRekapitulasi);
+
+// MODAL READ-ONLY DETAIL DOKUMEN (INFORMASI TANPA EKSEKUSI)
+window.openReadOnlyDetailModal = function(key) {
+  const item = allData.find(d => String(d.key) === String(key));
+  if (!item || !actionModal) return;
+
+  modalKey.value = item.key;
+  if (modalKodeText) modalKodeText.textContent = item.key;
+  if (modalPemohonText) modalPemohonText.textContent = item.pemohon || '-';
+  if (modalLayananText) modalLayananText.textContent = `${item.jenis_layanan || ''} (${item.sub_layanan || ''})`;
+
+  // Sembunyikan SEMUA Form Input Eksekusi & Tombol Simpan/Eksekusi
+  if (scanLinkGroup) scanLinkGroup.style.display = 'none';
+  if (tteStatusGroup) tteStatusGroup.style.display = 'none';
+  if (tteNotesGroup) tteNotesGroup.style.display = 'none';
+  if (penerimaGroup) penerimaGroup.style.display = 'none';
+  if (standardActionGroup) standardActionGroup.style.display = 'none';
+  if (modalNotesGroup) modalNotesGroup.style.display = 'none';
+  if (saveModalBtn) saveModalBtn.style.display = 'none'; // strictly hidden!
+
+  if (modalTitle) modalTitle.textContent = '👁️ Detail Informasi Dokumen (Read-Only)';
+  if (cancelModalBtn) cancelModalBtn.textContent = '❌ Tutup Informasi';
+
+  // Render Box Rekam Jejak Detail Dokumen Lengkap
+  if (monitoringHistoryBox) {
+    monitoringHistoryBox.style.display = 'block';
+    const hasLink = item.link_file && item.link_file.trim().startsWith('http');
+    const linkHtml = hasLink ? `<a href="${escapeHTML(item.link_file.trim())}" target="_blank" class="btn btn-secondary btn-xs" style="color:#60a5fa; font-weight:600;">📄 Buka Berkas Scan PDF</a>` : '<span style="color:var(--text-muted);">Belum ada file scan</span>';
+
+    monitoringHistoryBox.innerHTML = `
+      <!-- BOX IDENTITAS PEMOHON -->
+      <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+        <div style="font-weight: 700; color: #38bdf8; font-size: 0.88rem; margin-bottom: 8px;">📑 DATA PEMOHON & IDENTITAS BERKAS</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 0.85rem;">
+          <div><span style="color:var(--text-muted);">Kode Key:</span> <strong>${escapeHTML(item.key)}</strong></div>
+          <div><span style="color:var(--text-muted);">Tanggal Input:</span> <strong>${formatDate(item.tanggal || item.tgl_operator)}</strong></div>
+          <div><span style="color:var(--text-muted);">Nama Pemohon:</span> <strong>${escapeHTML(item.pemohon || '-')}</strong></div>
+          <div><span style="color:var(--text-muted);">No. HP (WA):</span> <strong>${escapeHTML(item.no_hp || '-')}</strong></div>
+          <div><span style="color:var(--text-muted);">Email:</span> <strong>${escapeHTML(item.email || '-')}</strong></div>
+          <div><span style="color:var(--text-muted);">Alamat:</span> <strong>${escapeHTML(item.alamat || '-')}</strong></div>
+        </div>
+      </div>
+
+      <!-- BOX SPESIFIKASI LAYANAN -->
+      <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+        <div style="font-weight: 700; color: #fbbf24; font-size: 0.88rem; margin-bottom: 8px;">⚙️ SPESIFIKASI LAYANAN & OPERATOR</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 0.85rem;">
+          <div><span style="color:var(--text-muted);">Jenis Layanan:</span> <strong>${escapeHTML(item.jenis_layanan || '-')}</strong></div>
+          <div><span style="color:var(--text-muted);">Sub Layanan:</span> <strong>${escapeHTML(item.sub_layanan || '-')}</strong></div>
+          <div><span style="color:var(--text-muted);">Fasilitasi:</span> <strong>${escapeHTML(item.fasilitasi || 'Dinas')}</strong></div>
+          <div><span style="color:var(--text-muted);">Integrasi:</span> <strong>${escapeHTML(item.integrasi || '-')}</strong></div>
+          <div><span style="color:var(--text-muted);">Operator Input:</span> <strong>${escapeHTML(item.operator || '-')}</strong></div>
+          <div><span style="color:var(--text-muted);">Link Berkas PDF:</span> ${linkHtml}</div>
+        </div>
+      </div>
+
+      <!-- BOX POSISI ALUR SAAT INI -->
+      <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(96, 165, 250, 0.3); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+        <div style="font-weight: 700; color: #a78bfa; font-size: 0.88rem; margin-bottom: 6px;">📊 POSISI ALUR & TTE</div>
+        <div style="font-size: 0.9rem; color: #fff;">Status Alur Saat Ini: <strong style="color:#60a5fa; font-size:0.95rem;">${escapeHTML(item.status_alur)}</strong></div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Status TTE / SIAK: <strong>${escapeHTML(item.status_tte || 'Belum TTE')}</strong></div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">Penerima Dokumen: <strong>${escapeHTML(item.penerima || '-')}</strong></div>
+      </div>
+
+      ${(item.riwayat_pending || item.catatan_pending) ? `
+      <div style="background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+        <div style="font-weight: 700; color: #f87171; font-size: 0.85rem; margin-bottom: 6px;">⚠️ HISTORI CATATAN PENDING OPERATOR</div>
+        <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.85rem; color: #fca5a5; margin: 0; line-height: 1.5;">${escapeHTML(item.riwayat_pending || item.catatan_pending)}</pre>
+      </div>` : ''}
+
+      <!-- BOX CATATAN JEJAK MEJA TIAP VERIFIKATOR -->
+      <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 14px;">
+        <div style="font-weight: 700; color: #34d399; font-size: 0.85rem; margin-bottom: 8px;">📋 CATATAN REKAM JEJAK MEJA</div>
+        <div>• <strong>Catatan Scan:</strong> ${escapeHTML(item.catatan_scan || '-')} <small style="color:var(--text-muted);">${item.tgl_scan ? `(${item.tgl_scan})` : ''}</small></div>
+        <div>• <strong>Catatan Kasie / Seksi:</strong> ${escapeHTML(item.catatan_kasie || '-')} <small style="color:var(--text-muted);">${item.tgl_kasie ? `(${item.tgl_kasie})` : ''}</small></div>
+        <div>• <strong>Catatan Kepala UPT:</strong> ${escapeHTML(item.catatan_upt || '-')} <small style="color:var(--text-muted);">${item.tgl_upt ? `(${item.tgl_upt})` : ''}</small></div>
+        <div>• <strong>Catatan Kabid:</strong> ${escapeHTML(item.catatan_kabid || '-')} <small style="color:var(--text-muted);">${item.tgl_kabid ? `(${item.tgl_kabid})` : ''}</small></div>
+        <div>• <strong>Catatan Kadis:</strong> ${escapeHTML(item.catatan_kadis || '-')} <small style="color:var(--text-muted);">${item.tgl_kadis ? `(${item.tgl_kadis})` : ''}</small></div>
+        <div>• <strong>Status TTE:</strong> ${escapeHTML(item.status_tte || '-')} <small style="color:var(--text-muted);">${item.tgl_tte ? `(${item.tgl_tte})` : ''}</small></div>
+        <div>• <strong>Penerima & Catatan Print:</strong> ${escapeHTML(item.penerima ? `${item.penerima} (${item.catatan_print || ''})` : '-')} <small style="color:var(--text-muted);">${item.tgl_print ? `(${item.tgl_print})` : ''}</small></div>
+      </div>
+    `;
+  }
+
+  actionModal.classList.add('active');
+  actionModal.style.setProperty('position', 'fixed', 'important');
+  actionModal.style.setProperty('top', '0', 'important');
+  actionModal.style.setProperty('left', '0', 'important');
+  actionModal.style.setProperty('right', '0', 'important');
+  actionModal.style.setProperty('bottom', '0', 'important');
+  actionModal.style.setProperty('width', '100vw', 'important');
+  actionModal.style.setProperty('height', '100vh', 'important');
+  actionModal.style.setProperty('z-index', '999999', 'important');
+  actionModal.style.setProperty('background', 'rgba(11, 15, 25, 0.85)', 'important');
+  actionModal.style.setProperty('backdrop-filter', 'blur(12px)', 'important');
+  actionModal.style.setProperty('display', 'flex', 'important');
+  actionModal.style.setProperty('align-items', 'center', 'important');
+  actionModal.style.setProperty('justify-content', 'center', 'important');
+  actionModal.style.setProperty('padding', '1.5rem', 'important');
+  actionModal.style.setProperty('overflow-y', 'auto', 'important');
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
 
 // MODAL ACTION & TINDAK LANJUT
 window.openActionModal = function(key) {
