@@ -1,9 +1,11 @@
 // Simpel Momen Web Logic - Version 2026.09.06.2055
 // ================= CONFIG & STATE =================
-// Hapus cache API_URL lama dari localStorage agar selalu terhubung 100% ONLINE ke Google Sheets
-localStorage.removeItem('simpel_momen_api_url');
+// ================= SAKLAR MODE APLIKASI =================
+// Ubah IS_OFFLINE_MODE = true jika ingin mematikan koneksi database online sementara (Mode Pemeliharaan/Perbaikan)
+// Ubah IS_OFFLINE_MODE = false jika perbaikan sudah selesai dan ingin meng-online-kan kembali.
+const IS_OFFLINE_MODE = true; 
 
-let API_URL = 'https://script.google.com/macros/s/AKfycby-RoYMJq-lFarD4KWcOTrCfTj93xze8ljDhvjGBT2faQ8WsYW0BSdqyPlpWxxg6ieqBg/exec';
+let API_URL = IS_OFFLINE_MODE ? 'local' : 'https://script.google.com/macros/s/AKfycby-RoYMJq-lFarD4KWcOTrCfTj93xze8ljDhvjGBT2faQ8WsYW0BSdqyPlpWxxg6ieqBg/exec';
 let currentUser = null;
 let allData = [];
 let currentDeskFilter = 'active'; // 'active', 'completed', 'all'
