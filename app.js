@@ -869,8 +869,16 @@ function renderCounterDesk() {
       }
       return true;
     } else if (role === 'petugas_scan') {
-      if (fasilitasi === 'UPT') return statusAlur === '1_PETUGAS_SCAN';
-      return statusAlur === '1_PETUGAS_SCAN' && !itemFas.toLowerCase().includes('upt');
+      const isMatchFas = (fasilitasi === 'UPT') ? true : !itemFas.toLowerCase().includes('upt');
+      if (statusAlur !== '1_PETUGAS_SCAN' || !isMatchFas) return false;
+
+      // Jika dokumen terintegrasi multi-item, HANYA tampilkan 1 dokumen mandatori utama per key pada meja kerja Petugas Scan
+      const keyItems = allData.filter(d => String(d.key) === String(item.key) && String(d.status_alur) === '1_PETUGAS_SCAN');
+      if (keyItems.length > 1) {
+        const mandatoryItem = keyItems.find(d => d.jenis_layanan === 'Pencatatan Sipil' || d.sub_layanan === 'Pindah Domisili') || keyItems[0];
+        return item === mandatoryItem;
+      }
+      return true;
     } else if (role === 'kasie_dafduk') {
       if (statusAlur !== '2_VERIFIKASI_KASIE' || itemJenis !== 'pendaftaran penduduk') return false;
       return !isFollowerItemHiddenForVerifier(item, allData);
@@ -1812,28 +1820,42 @@ window.openActionModal = function(key) {
     const hasLink = item.link_file && item.link_file.trim().startsWith('http');
     const linkHtml = hasLink ? `<a href="${escapeHTML(item.link_file.trim())}" target="_blank" style="color:#60a5fa; font-weight:600;">📄 Buka Scan PDF</a>` : 'Belum ada file scan';
 
-    // Check Multi-Item Warning for Petugas Cetak
+    // Check Multi-Item Warning for Petugas Cetak & Multi-Item Info for Petugas Scan
     let printWarningHtml = '';
-    if (role === 'petugas_pencetakan') {
-      const keyItems = allData.filter(d => String(d.key) === String(item.key));
-      if (keyItems.length > 1) {
-        const namesList = keyItems.map(d => `• <strong>${escapeHTML(d.sub_layanan)}</strong> (${escapeHTML(d.jenis_layanan)})`).join('<br>');
-        printWarningHtml = `
-          <div style="background: rgba(245, 158, 11, 0.15); border: 2px solid rgba(245, 158, 11, 0.6); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
-            <div style="font-weight: 800; color: #fbbf24; font-size: 0.95rem; margin-bottom: 6px;">
-              ⚠️ PERHATIAN PETUGAS CETAK: DOKUMEN TERINTEGRASI (${keyItems.length} DOKUMEN)
-            </div>
-            <div style="font-size: 0.85rem; color: #fef08a; line-height: 1.5;">
-              Pemohon ini mendaftarkan ${keyItems.length} dokumen dalam 1 kode berkas (<strong>${escapeHTML(item.key)}</strong>). Pastikan mencetak SELURUH dokumen fisik berikut:<br>
-              <div style="margin-top:6px; font-weight:600;">${namesList}</div>
-            </div>
+    let scanMultiItemInfoHtml = '';
+    const keyItems = allData.filter(d => String(d.key) === String(item.key));
+
+    if (role === 'petugas_pencetakan' && keyItems.length > 1) {
+      const namesList = keyItems.map(d => `• <strong>${escapeHTML(d.sub_layanan)}</strong> (${escapeHTML(d.jenis_layanan)})`).join('<br>');
+      printWarningHtml = `
+        <div style="background: rgba(245, 158, 11, 0.15); border: 2px solid rgba(245, 158, 11, 0.6); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+          <div style="font-weight: 800; color: #fbbf24; font-size: 0.95rem; margin-bottom: 6px;">
+            ⚠️ PERHATIAN PETUGAS CETAK: DOKUMEN TERINTEGRASI (${keyItems.length} DOKUMEN)
           </div>
-        `;
-      }
+          <div style="font-size: 0.85rem; color: #fef08a; line-height: 1.5;">
+            Pemohon ini mendaftarkan ${keyItems.length} dokumen dalam 1 kode berkas (<strong>${escapeHTML(item.key)}</strong>). Pastikan mencetak SELURUH dokumen fisik berikut:<br>
+            <div style="margin-top:6px; font-weight:600;">${namesList}</div>
+          </div>
+        </div>
+      `;
+    } else if (role === 'petugas_scan' && keyItems.length > 1) {
+      const namesList = keyItems.map(d => `• <strong>${escapeHTML(d.sub_layanan)}</strong> (${escapeHTML(d.jenis_layanan)})`).join('<br>');
+      scanMultiItemInfoHtml = `
+        <div style="background: rgba(59, 130, 246, 0.15); border: 2px solid rgba(59, 130, 246, 0.6); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+          <div style="font-weight: 800; color: #60a5fa; font-size: 0.95rem; margin-bottom: 6px;">
+            📄 DOKUMEN TERINTEGRASI MULTI-ITEM (${keyItems.length} DOKUMEN)
+          </div>
+          <div style="font-size: 0.85rem; color: #93c5fd; line-height: 1.5;">
+            Link file scan PDF yang Anda upload di bawah akan otomatis terkirim dan disinkronkan ke SELURUH ${keyItems.length} dokumen dalam Kode Unik <strong>${escapeHTML(item.key)}</strong>:<br>
+            <div style="margin-top:6px; font-weight:600;">${namesList}</div>
+          </div>
+        </div>
+      `;
     }
 
     monitoringHistoryBox.innerHTML = `
       ${printWarningHtml}
+      ${scanMultiItemInfoHtml}
       <div style="background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
         <div style="font-weight: 700; color: #a78bfa; font-size: 0.85rem; margin-bottom: 8px;">📊 STATUS ALUR DOKUMEN</div>
         <div style="font-size: 0.9rem; color: #fff;">Status: <strong style="color:#60a5fa;">${escapeHTML(item.status_alur)}</strong></div>
