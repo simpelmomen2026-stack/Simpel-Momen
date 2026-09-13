@@ -881,7 +881,7 @@ function renderCounterDesk() {
       }
       return true;
     } else if (role === 'petugas_scan') {
-      const isMatchFas = (fasilitasi === 'UPT') ? true : !itemFas.toLowerCase().includes('upt');
+      const isMatchFas = isUserUpt(currentUser) ? true : !itemFas.toLowerCase().includes('upt');
       if (statusAlur !== '1_PETUGAS_SCAN' || !isMatchFas) return false;
 
       // Jika dokumen terintegrasi multi-item, HANYA tampilkan 1 dokumen mandatori utama per key pada meja kerja Petugas Scan
@@ -2082,6 +2082,8 @@ if (actionForm) {
             key: key,
             role: currentUser.role,
             userName: currentUser.name,
+            userFasilitasi: currentUser.fasilitasi,
+            userUptCode: currentUser.uptCode,
             executeAction: executeAction,
             notes: notes,
             status_tte: statusTteVal,
