@@ -462,16 +462,26 @@ function switchPage(pageId) {
 }
 
 // Sub Layanan Options Handler (Dropdown Otomatis)
-function updateSubLayananOptions() {
+function updateSubLayananOptions(forceReset = false) {
   if (!formJenisLayanan || !formSubLayanan) return;
   const selectedLayanan = formJenisLayanan.value || "Pendaftaran Penduduk";
   const options = SUB_LAYANAN_OPTIONS[selectedLayanan] || [];
-  formSubLayanan.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+  
+  const currentSubVal = formSubLayanan.value;
+  const currentOptionValues = Array.from(formSubLayanan.options).map(opt => opt.value);
+  const optionsMatch = options.length === currentOptionValues.length && options.every((v, i) => v === currentOptionValues[i]);
+
+  if (!optionsMatch || forceReset) {
+    formSubLayanan.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+    if (!forceReset && currentSubVal && options.includes(currentSubVal)) {
+      formSubLayanan.value = currentSubVal;
+    }
+  }
 }
 
 if (formJenisLayanan) {
   formJenisLayanan.addEventListener('change', () => {
-    updateSubLayananOptions();
+    updateSubLayananOptions(true);
     updateOperatorFormV2UI();
   });
 }
@@ -485,6 +495,7 @@ if (formIntegrasi) {
     currentDraftItems = [];
     sharedSessionKey = null;
     currentStepIndex = 1;
+    updateSubLayananOptions(true);
     updateOperatorFormV2UI();
   });
 }
@@ -516,23 +527,23 @@ function updateOperatorFormV2UI() {
       if (currentStepIndex === 1) {
         if (stepIndicatorBadge) stepIndicatorBadge.textContent = `📌 Item ke-${currentStepIndex} (Mandatori Utama: Capil)`;
         if (mandatoryRoleTag) mandatoryRoleTag.textContent = '⭐ Berkas Utama / Mandatori Capil (Diproses Pertama)';
-        if (formJenisLayanan) {
+        if (formJenisLayanan && formJenisLayanan.value !== 'Pencatatan Sipil') {
           formJenisLayanan.value = 'Pencatatan Sipil';
-          updateSubLayananOptions();
+          updateSubLayananOptions(true);
         }
       } else {
         if (stepIndicatorBadge) stepIndicatorBadge.textContent = `🔗 Item ke-${currentStepIndex} (Pengikut: Dafduk)`;
         if (mandatoryRoleTag) mandatoryRoleTag.textContent = '🔗 Berkas Pengikut (Terpengaruh Cascading Approval)';
-        if (formJenisLayanan) {
+        if (formJenisLayanan && formJenisLayanan.value !== 'Pendaftaran Penduduk') {
           formJenisLayanan.value = 'Pendaftaran Penduduk';
-          updateSubLayananOptions();
+          updateSubLayananOptions(true);
         }
       }
     } else if (integrasiVal === 'Dafduk - Dafduk') {
       if (stepIndicatorBadge) stepIndicatorBadge.textContent = `📌 Item ke-${currentStepIndex} (Dafduk Integrasi)`;
-      if (formJenisLayanan) {
+      if (formJenisLayanan && formJenisLayanan.value !== 'Pendaftaran Penduduk') {
         formJenisLayanan.value = 'Pendaftaran Penduduk';
-        updateSubLayananOptions();
+        updateSubLayananOptions(true);
       }
       const subVal = formSubLayanan ? formSubLayanan.value : '';
       if (subVal === 'Pindah Domisili') {
@@ -616,6 +627,7 @@ if (btnNextItem) {
     currentDraftItems.push(draftItem);
     currentStepIndex++;
     showToast(`Dokumen "${subLayanan}" ditambahkan ke sesi integrasi (${sharedSessionKey})!`, 'success');
+    updateSubLayananOptions(true);
     updateOperatorFormV2UI();
   });
 }
