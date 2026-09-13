@@ -2025,7 +2025,9 @@ if (actionForm) {
               item.catatan_scan = notes;
               item.tgl_scan = getLocalDateTimeString();
               item.petugas_scan = currentUser.name;
-              item.status_alur = (item.integrasi && item.integrasi.includes('UPT')) ? '2_VERIFIKASI_UPT' : '2_VERIFIKASI_KASIE';
+              const itemFasStr = String(item.fasilitasi || '').toUpperCase();
+              const isUptTarget = isUserUpt(currentUser) || itemFasStr.includes('UPT') || (currentUser.uptCode && currentUser.uptCode !== '');
+              item.status_alur = isUptTarget ? '2_VERIFIKASI_UPT' : '2_VERIFIKASI_KASIE';
             } else if (executeAction === 'pending') {
               item.status_alur = 'PENDING_OPERATOR';
               item.riwayat_pending = `PENDING by ${currentUser.role}: ${notes}\n${item.riwayat_pending || ''}`;
@@ -2048,7 +2050,9 @@ if (actionForm) {
                 item.catatan_kadis = notes;
                 item.tgl_kadis = getLocalDateTimeString();
               } else if (currentUser.role === 'petugas_tte') {
-                item.status_alur = (item.integrasi && item.integrasi.includes('UPT')) ? '6_PENCETAKAN_UPT' : '6_PENCETAKAN_DINAS';
+                const itemFasStr = String(item.fasilitasi || '').toUpperCase();
+                const isUptTarget = isUserUpt(currentUser) || itemFasStr.includes('UPT') || (currentUser.uptCode && currentUser.uptCode !== '');
+                item.status_alur = isUptTarget ? '6_PENCETAKAN_UPT' : '6_PENCETAKAN_DINAS';
                 item.status_tte = statusTteVal;
                 item.tgl_tte = getLocalDateTimeString();
               } else if (currentUser.role === 'petugas_pencetakan') {
