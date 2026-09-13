@@ -997,38 +997,39 @@ function renderCounterDesk() {
 
     // Tombol Akses Tindakan
     let actionBtnHtml = '';
+    const safeSub = escapeHTML(row.sub_layanan || '');
     if (role === 'monitoring') {
       actionBtnHtml = `
-        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${safeSub}')">
           👁️ Detail & Riwayat
         </button>
       `;
     } else if (isSelesai) {
       actionBtnHtml = `
         <span class="badge selesai" style="margin-right:4px;">✅ Selesai</span>
-        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">👁️ Detail</button>
+        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${safeSub}')">👁️ Detail</button>
       `;
     } else if (role === 'petugas_pencetakan') {
       actionBtnHtml = `
-        <button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${safeSub}')">
           🎉 Cetak & Selesaikan
         </button>
       `;
     } else if (role === 'operator' && isPending) {
       actionBtnHtml = `
-        <button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${safeSub}')">
           🛠️ Perbaiki & Kirim Ulang
         </button>
       `;
     } else if (role === 'petugas_scan') {
       actionBtnHtml = `
-        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${safeSub}')">
           📄 Scan & Kirim Berkas
         </button>
       `;
     } else {
       actionBtnHtml = `
-        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${safeSub}')">
           ⚡ Setujui / Lanjutkan
         </button>
       `;
@@ -1809,10 +1810,28 @@ window.openReadOnlyDetailModal = function(key) {
 };
 
 // MODAL ACTION & TINDAK LANJUT
-window.openActionModal = function(key) {
-  const item = allData.find(d => String(d.key) === String(key));
+let activeModalItem = null;
+
+window.openActionModal = function(key, targetSubLayanan) {
+  let item = null;
+  const role = currentUser ? currentUser.role : '';
+
+  if (targetSubLayanan) {
+    item = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan || '').trim().toLowerCase() === String(targetSubLayanan).trim().toLowerCase());
+  }
+  if (!item) {
+    if (role === 'kasie_capil' || role === 'kabid_capil') {
+      item = allData.find(d => String(d.key) === String(key) && String(d.jenis_layanan || '').trim().toLowerCase() !== 'pendaftaran penduduk');
+    } else if (role === 'kasie_dafduk' || role === 'kabid_dafduk') {
+      item = allData.find(d => String(d.key) === String(key) && String(d.jenis_layanan || '').trim().toLowerCase() === 'pendaftaran penduduk');
+    }
+  }
+  if (!item) {
+    item = allData.find(d => String(d.key) === String(key));
+  }
   if (!item || !actionModal) return;
 
+  activeModalItem = item;
   modalKey.value = item.key;
   if (modalKodeText) modalKodeText.textContent = item.key;
   if (modalPemohonText) modalPemohonText.textContent = item.pemohon || '-';
@@ -2099,7 +2118,9 @@ if (actionForm) {
             notes: notes,
             status_tte: statusTteVal,
             penerima: penerimaVal,
-            link_file: linkFileVal
+            link_file: linkFileVal,
+            jenis_layanan: activeModalItem ? activeModalItem.jenis_layanan : '',
+            sub_layanan: activeModalItem ? activeModalItem.sub_layanan : ''
           })
         });
         const result = await response.json();
