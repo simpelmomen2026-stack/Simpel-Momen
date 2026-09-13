@@ -3,7 +3,7 @@
 // ================= SAKLAR MODE APLIKASI =================
 // Ubah IS_OFFLINE_MODE = true jika ingin mematikan koneksi database online sementara (Mode Pemeliharaan/Perbaikan)
 // Ubah IS_OFFLINE_MODE = false jika perbaikan sudah selesai dan ingin meng-online-kan kembali.
-const IS_OFFLINE_MODE = true; 
+const IS_OFFLINE_MODE = false; 
 
 let API_URL = IS_OFFLINE_MODE ? 'local' : 'https://script.google.com/macros/s/AKfycby-RoYMJq-lFarD4KWcOTrCfTj93xze8ljDhvjGBT2faQ8WsYW0BSdqyPlpWxxg6ieqBg/exec';
 let currentUser = null;
