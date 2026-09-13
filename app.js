@@ -831,6 +831,14 @@ function isFollowerItemHiddenForVerifier(item, dataSet) {
 
   if (item === mandatoryItem) return false;
 
+  // 1. Mandatory item pending -> hide follower
+  if (mandatoryItem.status_alur === 'PENDING_OPERATOR') return true;
+
+  // 2. Mandatory item still undergoing verification at Kasie / Kepala UPT (Stage 2) -> hide follower item (Pendaftaran Penduduk)
+  if (mandatoryItem.status_alur === '2_VERIFIKASI_KASIE' || mandatoryItem.status_alur === '2_VERIFIKASI_UPT') {
+    return true;
+  }
+
   const stageOrder = {
     '1_PETUGAS_SCAN': 1,
     '2_VERIFIKASI_KASIE': 2,
@@ -846,7 +854,6 @@ function isFollowerItemHiddenForVerifier(item, dataSet) {
   const itemStage = stageOrder[item.status_alur] || 0;
   const mandatoryStage = stageOrder[mandatoryItem.status_alur] || 0;
 
-  if (mandatoryItem.status_alur === 'PENDING_OPERATOR') return true;
   if (itemStage > mandatoryStage) return true;
 
   return false;
@@ -2034,9 +2041,13 @@ if (actionForm) {
             } else {
               // Approval next stage
               if (currentUser.role === 'kasie_dafduk' || currentUser.role === 'kasie_capil') {
-                item.status_alur = '3_VALIDASI_KABID';
-                item.catatan_kasie = notes;
-                item.tgl_kasie = getLocalDateTimeString();
+                const isCapilUser = currentUser.role === 'kasie_capil';
+                const isCapilItem = String(item.jenis_layanan || '').trim().toLowerCase() !== 'pendaftaran penduduk';
+                if ((isCapilUser && isCapilItem) || (!isCapilUser && !isCapilItem)) {
+                  item.status_alur = '3_VALIDASI_KABID';
+                  item.catatan_kasie = notes;
+                  item.tgl_kasie = getLocalDateTimeString();
+                }
               } else if (currentUser.role === 'kepala_upt') {
                 item.status_alur = '3_VALIDASI_KABID';
                 item.catatan_upt = notes;
