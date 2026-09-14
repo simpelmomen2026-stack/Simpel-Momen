@@ -837,9 +837,20 @@ function renderCounterDesk() {
       `;
     }
 
-    const batchCount = allData.filter(d => String(d.key) === String(row.key)).length;
+    const batchItems = allData.filter(d => String(d.key) === String(row.key));
+    const batchCount = batchItems.length;
     const isIntegrated = batchCount > 1 || (row.integrasi && row.integrasi !== 'tunggal');
-    const integrasiBadgeHtml = isIntegrated ? `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:2px 6px; border-radius:6px; display:inline-block; margin-top:4px;">⚡ Terintegrasi (${batchCount} Dokumen)</span>` : '';
+    
+    let integrasiBadgeHtml = '';
+    if (isIntegrated) {
+      if (role === 'petugas_scan' && batchCount > 1) {
+        const followerItems = batchItems.filter(it => it !== row);
+        const followerNames = followerItems.map(f => `${escapeHTML(f.sub_layanan)} (${escapeHTML(f.pemohon || 'Warga')})`).join(', ');
+        integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:3px 8px; border-radius:6px; display:inline-block; margin-top:4px; line-height:1.4;">⚡ Terintegrasi (${batchCount} Dokumen)<br><small style="color:#d8b4fe; font-weight:700;">📌 Mandatori: ${escapeHTML(row.sub_layanan)}<br>👁️ Tersembunyi: ${followerNames}</small></span>`;
+      } else {
+        integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:2px 6px; border-radius:6px; display:inline-block; margin-top:4px;">⚡ Terintegrasi (${batchCount} Dokumen)</span>`;
+      }
+    }
 
     return `
       <tr style="${rowStyle}">
@@ -1655,9 +1666,31 @@ window.openActionModal = function(key) {
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
 
     if (monitoringHistoryBox && batchCount > 1) {
+      const allBatchItems = allData.filter(d => String(d.key) === String(item.key));
+      const followerListHtml = allBatchItems.map((it, idx) => {
+        const isMandatory = (it === item || it.isMandatory || String(it.jenis_layanan).toLowerCase().includes('capil') || String(it.sub_layanan).toLowerCase().includes('pindah'));
+        const tag = isMandatory ? '📌 MANDATORI UTAMA' : `📄 PENGIKUT #${idx + 1}`;
+        const tagBg = isMandatory ? 'background:#3b82f6; color:#fff;' : 'background:rgba(139,92,246,0.3); color:#c084fc;';
+        return `
+          <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 12px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="color: #fff; font-size: 0.85rem;">${idx + 1}. ${escapeHTML(it.sub_layanan)}</strong>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">Pemohon: ${escapeHTML(it.pemohon || '-')} | Jenis: ${escapeHTML(it.jenis_layanan || '-')}</div>
+            </div>
+            <span style="font-size: 0.7rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; ${tagBg}">${tag}</span>
+          </div>
+        `;
+      }).join('');
+
       const bannerHtml = `
-        <div style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; font-size: 0.84rem; color: #d8b4fe; line-height: 1.5;">
-          ⚡ <strong>Propagasi Otomatis Scan PDF:</strong> Pengisian link PDF pada dokumen mandatori ini secara otomatis mewakili & mengisi link file ke <strong>${followerCount} Dokumen Pengikut Tersembunyi</strong> (Kode Unik: <code>${escapeHTML(item.key)}</code>). Saat diklik kirim, seluruh dokumen terintegrasi akan dikirim bersama-sama ke Kasie / Kepala UPT.
+        <div style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+          <div style="font-weight: 800; color: #c084fc; font-size: 0.88rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+            ⚡ BUKTI RINCIAN BERKAS TERINTEGRASI KODE UNIK (${escapeHTML(item.key)}) - TOTAL ${allBatchItems.length} DOKUMEN
+          </div>
+          <div style="font-size: 0.82rem; color: #e9d5ff; margin-bottom: 8px; line-height: 1.5;">
+            💡 Petugas Scan menginput Link PDF pada Dokumen Mandatori Utama di bawah. <strong>Link PDF & status pengiriman ini secara otomatis mewakili & memproses seluruh ${allBatchItems.length} dokumen di bawah ini sekaligus:</strong>
+          </div>
+          ${followerListHtml}
         </div>
       `;
       monitoringHistoryBox.innerHTML = bannerHtml + monitoringHistoryBox.innerHTML;
