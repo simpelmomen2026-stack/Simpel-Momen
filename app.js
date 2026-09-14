@@ -641,6 +641,28 @@ function populateFasilitasiFilterOptions() {
   filterFasilitasi.value = currentVal || "ALL";
 }
 
+// HELPER MANDATORI UTAMA INTEGRASI LAYANAN
+function getMandatoryItemForBatch(batch) {
+  if (!batch || batch.length === 0) return null;
+  if (batch.length === 1) return batch[0];
+  
+  const explicitMandatory = batch.find(b => b.isMandatory === true);
+  if (explicitMandatory) return explicitMandatory;
+
+  const capilItem = batch.find(b => 
+    String(b.jenis_layanan || '').toLowerCase().includes('pencatatan sipil') || 
+    String(b.jenis_layanan || '').toLowerCase().includes('capil')
+  );
+  if (capilItem) return capilItem;
+
+  const pindahItem = batch.find(b => 
+    String(b.sub_layanan || '').toLowerCase().includes('pindah')
+  );
+  if (pindahItem) return pindahItem;
+
+  return batch[0];
+}
+
 // RENDER MEJA KERJA COUNTER & PEMBARUAN METRIK AKUMULASI
 function renderCounterDesk() {
   if (!counterTableBody || !currentUser) return;
@@ -729,47 +751,111 @@ function renderCounterDesk() {
     return userActiveDeskItems.includes(item);
   });
 
-  // 🕒 Pengurutan & Filter Khusus Petugas Scan (Dinas & UPT):
-  // 1. Sembunyikan Dokumen Pengikut dari Tabel (Hanya tampilkan 1 Dokumen Mandatori per Kode Unik)
-  // 2. Urutkan dari Dokumen Paling Lama (Paling Atas) ke Terbaru (Terbawah)
+  // 🕒 Pengurutan & Filter Khusus Counter User (Petugas Scan, Kasie Capil, Kasie Dafduk, Kepala UPT, Operator):
+  // 1. Filter Stay Mode: Sembunyikan Dokumen Pengikut / Dokumen Belum Waktunya dari Tabel Counter (Hanya tampilkan 1 Dokumen Mandatori per Kode Unik)
+  // 2. Pengurutan FIFO: Urutkan dari Dokumen Paling Lama (Paling Atas) ke Terbaru (Terbawah)
   let displayList = filtered;
-  if (role === 'petugas_scan') {
-    const keyMap = {};
-    filtered.forEach(it => {
-      const k = String(it.key);
-      if (!keyMap[k]) keyMap[k] = [];
-      keyMap[k].push(it);
-    });
 
-    displayList = filtered.filter(item => {
-      const batch = keyMap[String(item.key)];
-      if (!batch || batch.length <= 1) return true; // Berkas tunggal tetap ditampilkan
+  const allDataKeyMap = {};
+  allData.forEach(it => {
+    const k = String(it.key);
+    if (!allDataKeyMap[k]) allDataKeyMap[k] = [];
+    allDataKeyMap[k].push(it);
+  });
 
-      // Jika ada item dengan isMandatory === true, tampilkan item mandatori tersebut
-      const mandatoryItem = batch.find(b => b.isMandatory);
-      if (mandatoryItem) return item === mandatoryItem;
+  displayList = filtered.filter(item => {
+    const fullBatch = allDataKeyMap[String(item.key)] || [];
+    if (fullBatch.length <= 1) return true; // Berkas tunggal tetap ditampilkan
 
-      // Jika Dafduk - Capil: Utamakan Pencatatan Sipil sebagai mandatori
-      const capilItem = batch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
-      if (capilItem) return item === capilItem;
+    const isDafdukCapil = fullBatch.some(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil')) &&
+                          fullBatch.some(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk'));
+    const isDafdukDafduk = fullBatch.every(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk'));
 
-      // Jika Dafduk - Dafduk: Utamakan Pindah Domisili
-      const pindahItem = batch.find(b => String(b.sub_layanan).toLowerCase().includes('pindah domisili'));
-      if (pindahItem) return item === pindahItem;
+    if (role === 'petugas_scan') {
+      const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+      return item === mandatoryItem;
+    }
 
-      // Fallback: Tampilkan item pertama saja
-      return item === batch[0];
-    });
+    if (role === 'kasie_capil') {
+      // Kasie Capil melihat dokumen Pencatatan Sipil secara langsung
+      return true;
+    }
 
-    displayList.sort((a, b) => {
-      const timeA = String(a.tgl_operator || a.tanggal || '');
-      const timeB = String(b.tgl_operator || b.tanggal || '');
-      if (timeA && timeB) {
-        return timeA.localeCompare(timeB);
+    if (role === 'kasie_dafduk') {
+      if (isDafdukCapil) {
+        // C.1 Integrasi Layanan Dafduk - Capil di Dinas:
+        // Dokumen Dafduk HANYA DITAMPILKAN jika dokumen Capil yang se-Kode Unik SUDAH DIVERIFIKASI oleh Kasie Capil (status Capil bukan 2_VERIFIKASI_KASIE lagi)!
+        const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
+        if (capilItem) {
+          const capilStatus = String(capilItem.status_alur || '');
+          if (capilStatus === '2_VERIFIKASI_KASIE') {
+            // Kasie Capil belum memverifikasi -> Dokumen Dafduk SEOLAH-OLAH ADA TETAPI JANGAN DULU DITAMPILKAN!
+            return false;
+          }
+        }
+        return true;
       }
-      return 0;
-    });
-  }
+
+      if (isDafdukDafduk) {
+        // C.2 Integrasi Layanan Dafduk - Dafduk di Dinas:
+        // Khusus jika ada sub_layanan Pindah: Kasie Dafduk mengeksekusi secara terpisah & kekhususan mandatori diabaikan!
+        const hasPindah = fullBatch.some(b => String(b.sub_layanan).toLowerCase().includes('pindah'));
+        if (hasPindah) {
+          return true; // Tampilkan setiap item Pindah / Dafduk secara terpisah!
+        }
+        // Tanpa Pindah: Tampilkan HANYA 1 dokumen mandatori!
+        const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+        return item === mandatoryItem;
+      }
+
+      return true;
+    }
+
+    if (role === 'kepala_upt') {
+      if (isDafdukCapil) {
+        // C.1 Integrasi Layanan Dafduk - Capil di UPT:
+        // Tampilkan HANYA dokumen Capil terlebih dahulu! Dokumen Dafduk disembunyikan ("seolah-olah ada namun jangan dulu ditampilkan").
+        const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
+        if (capilItem) {
+          return item === capilItem;
+        }
+      }
+
+      if (isDafdukDafduk) {
+        // C.2 Integrasi Layanan Dafduk - Dafduk di UPT:
+        // Tampilkan HANYA dokumen mandatori! Dokumen Dafduk lainnya disembunyikan.
+        const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+        return item === mandatoryItem;
+      }
+
+      return true;
+    }
+
+    if (role === 'operator') {
+      // Stay Mode Pending Operator:
+      if (isDafdukCapil) {
+        const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
+        if (capilItem) return item === capilItem;
+      }
+      if (isDafdukDafduk) {
+        const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+        return item === mandatoryItem;
+      }
+      return true;
+    }
+
+    return true;
+  });
+
+  // 🕒 Pengurutan FIFO (Oldest at Top, Newest at Bottom) untuk SEMUA Counter User
+  displayList.sort((a, b) => {
+    const timeA = String(a.tgl_operator || a.tanggal || '');
+    const timeB = String(b.tgl_operator || b.tanggal || '');
+    if (timeA && timeB) {
+      return timeA.localeCompare(timeB);
+    }
+    return 0;
+  });
 
   if (counterEntriesCount) counterEntriesCount.textContent = `Menampilkan ${displayList.length} berkas`;
 
@@ -843,12 +929,12 @@ function renderCounterDesk() {
     
     let integrasiBadgeHtml = '';
     if (isIntegrated) {
-      if (role === 'petugas_scan' && batchCount > 1) {
+      if (batchCount > 1) {
         const followerItems = batchItems.filter(it => it !== row);
         const followerNames = followerItems.map(f => `${escapeHTML(f.sub_layanan)} (${escapeHTML(f.pemohon || 'Warga')})`).join(', ');
-        integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:3px 8px; border-radius:6px; display:inline-block; margin-top:4px; line-height:1.4;">⚡ Terintegrasi (${batchCount} Dokumen)<br><small style="color:#d8b4fe; font-weight:700;">📌 Mandatori: ${escapeHTML(row.sub_layanan)}<br>👁️ Tersembunyi: ${followerNames}</small></span>`;
+        integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:3px 8px; border-radius:6px; display:inline-block; margin-top:4px; line-height:1.4;">⚡ Terintegrasi (${batchCount} Dokumen)<br><small style="color:#d8b4fe; font-weight:700;">📌 Ditampilkan: ${escapeHTML(row.sub_layanan)}<br>👁️ Pengikut Tersembunyi: ${followerNames}</small></span>`;
       } else {
-        integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:2px 6px; border-radius:6px; display:inline-block; margin-top:4px;">⚡ Terintegrasi (${batchCount} Dokumen)</span>`;
+        integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:2px 6px; border-radius:6px; display:inline-block; margin-top:4px;">⚡ Terintegrasi</span>`;
       }
     }
 
@@ -1602,7 +1688,40 @@ window.openActionModal = function(key) {
     const hasLink = item.link_file && item.link_file.trim().startsWith('http');
     const linkHtml = hasLink ? `<a href="${escapeHTML(item.link_file.trim())}" target="_blank" style="color:#60a5fa; font-weight:600;">📄 Buka Scan PDF</a>` : 'Belum ada file scan';
 
+    const allBatchItems = allData.filter(d => String(d.key) === String(item.key));
+    let batchBannerHtml = '';
+    if (allBatchItems.length > 1) {
+      const followerListHtml = allBatchItems.map((it, idx) => {
+        const isMandatory = (it === item || it.isMandatory || String(it.jenis_layanan).toLowerCase().includes('capil') || String(it.sub_layanan).toLowerCase().includes('pindah'));
+        const tag = isMandatory ? '📌 MANDATORI UTAMA' : `📄 PENGIKUT #${idx + 1}`;
+        const tagBg = isMandatory ? 'background:#3b82f6; color:#fff;' : 'background:rgba(139,92,246,0.3); color:#c084fc;';
+        return `
+          <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 12px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="color: #fff; font-size: 0.85rem;">${idx + 1}. ${escapeHTML(it.sub_layanan)}</strong>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">Pemohon: ${escapeHTML(it.pemohon || '-')} | Jenis: ${escapeHTML(it.jenis_layanan || '-')} | Status: <span style="color:#a78bfa;">${escapeHTML(it.status_alur)}</span></div>
+            </div>
+            <span style="font-size: 0.7rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; ${tagBg}">${tag}</span>
+          </div>
+        `;
+      }).join('');
+
+      batchBannerHtml = `
+        <div style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+          <div style="font-weight: 800; color: #c084fc; font-size: 0.88rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+            ⚡ RINCIAN DOKUMEN TERINTEGRASI KODE UNIK (${escapeHTML(item.key)}) - TOTAL ${allBatchItems.length} DOKUMEN
+          </div>
+          <div style="font-size: 0.82rem; color: #e9d5ff; margin-bottom: 8px; line-height: 1.5;">
+            💡 <strong>Tindakan yang dieksekusi pada dokumen mandatori ini secara otomatis mewakili & memproses seluruh ${allBatchItems.length} dokumen terintegrasi di bawah ini:</strong>
+          </div>
+          ${followerListHtml}
+        </div>
+      `;
+    }
+
     monitoringHistoryBox.innerHTML = `
+      ${batchBannerHtml}
+
       <div style="background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; margin-bottom: 12px;">
         <div style="font-weight: 700; color: #a78bfa; font-size: 0.85rem; margin-bottom: 8px;">📊 STATUS ALUR DOKUMEN</div>
         <div style="font-size: 0.9rem; color: #fff;">Status: <strong style="color:#60a5fa;">${escapeHTML(item.status_alur)}</strong></div>
@@ -1647,7 +1766,6 @@ window.openActionModal = function(key) {
     if (modalNotesGroup) modalNotesGroup.style.display = 'block';
   } else if (role === 'petugas_scan') {
     const batchCount = allData.filter(d => String(d.key) === String(item.key)).length;
-    const followerCount = batchCount - 1;
 
     if (modalTitle) {
       modalTitle.textContent = batchCount > 1 ? 
@@ -1664,37 +1782,7 @@ window.openActionModal = function(key) {
       saveModalBtn.textContent = '🚀 Upload & Kirim Berkas';
     }
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
-
-    if (monitoringHistoryBox && batchCount > 1) {
-      const allBatchItems = allData.filter(d => String(d.key) === String(item.key));
-      const followerListHtml = allBatchItems.map((it, idx) => {
-        const isMandatory = (it === item || it.isMandatory || String(it.jenis_layanan).toLowerCase().includes('capil') || String(it.sub_layanan).toLowerCase().includes('pindah'));
-        const tag = isMandatory ? '📌 MANDATORI UTAMA' : `📄 PENGIKUT #${idx + 1}`;
-        const tagBg = isMandatory ? 'background:#3b82f6; color:#fff;' : 'background:rgba(139,92,246,0.3); color:#c084fc;';
-        return `
-          <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 12px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <strong style="color: #fff; font-size: 0.85rem;">${idx + 1}. ${escapeHTML(it.sub_layanan)}</strong>
-              <div style="font-size: 0.78rem; color: var(--text-muted);">Pemohon: ${escapeHTML(it.pemohon || '-')} | Jenis: ${escapeHTML(it.jenis_layanan || '-')}</div>
-            </div>
-            <span style="font-size: 0.7rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; ${tagBg}">${tag}</span>
-          </div>
-        `;
-      }).join('');
-
-      const bannerHtml = `
-        <div style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
-          <div style="font-weight: 800; color: #c084fc; font-size: 0.88rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-            ⚡ BUKTI RINCIAN BERKAS TERINTEGRASI KODE UNIK (${escapeHTML(item.key)}) - TOTAL ${allBatchItems.length} DOKUMEN
-          </div>
-          <div style="font-size: 0.82rem; color: #e9d5ff; margin-bottom: 8px; line-height: 1.5;">
-            💡 Petugas Scan menginput Link PDF pada Dokumen Mandatori Utama di bawah. <strong>Link PDF & status pengiriman ini secara otomatis mewakili & memproses seluruh ${allBatchItems.length} dokumen di bawah ini sekaligus:</strong>
-          </div>
-          ${followerListHtml}
-        </div>
-      `;
-      monitoringHistoryBox.innerHTML = bannerHtml + monitoringHistoryBox.innerHTML;
-    }
+  }
   } else if (role === 'petugas_tte') {
     // Mode Khusus Petugas TTE: Sembunyikan Keputusan Tindakan (Lanjut/Pending), tampilkan hanya Status TTE / SIAK
     if (modalTitle) modalTitle.textContent = '✍️ Tindak Lanjut Petugas TTE / SIAK';
@@ -1795,36 +1883,128 @@ if (actionForm) {
 
     try {
       if (API_URL === 'local') {
-        let updatedCount = 0;
+        const timeStr = getLocalDateTimeString();
         const sampleItem = allData.find(d => String(d.key) === String(key));
-        const isUptTarget = (sampleItem && String(sampleItem.fasilitasi || '').toLowerCase().includes('upt')) || (currentUser && isUserUpt(currentUser));
-        const targetNextStatus = isUptTarget ? '2_VERIFIKASI_UPT' : '2_VERIFIKASI_KASIE';
-        const targetDestName = isUptTarget ? 'Kepala UPT' : 'Kepala Seksi / Kasie';
-
-        allData.forEach(item => {
-          if (String(item.key) === String(key)) {
-            if (currentUser.role === 'petugas_scan') {
-              item.link_file = linkFileVal;
-              item.catatan_scan = notes;
-              item.tgl_scan = getLocalDateTimeString();
-              item.status_alur = targetNextStatus;
-              updatedCount++;
-            } else if (executeAction === 'pending') {
-              item.status_alur = 'PENDING_OPERATOR';
-              item.riwayat_pending = `PENDING by ${currentUser.role}: ${notes}\n${item.riwayat_pending || ''}`;
-            } else {
-              item.status_alur = '7_SELESAI';
-            }
-          }
-        });
+        const fullBatch = allData.filter(d => String(d.key) === String(key));
+        const isDafdukCapil = fullBatch.some(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil')) &&
+                              fullBatch.some(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk'));
+        const isDafdukDafduk = fullBatch.every(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk'));
 
         if (currentUser.role === 'petugas_scan') {
+          const isUptTarget = (sampleItem && String(sampleItem.fasilitasi || '').toLowerCase().includes('upt')) || (currentUser && isUserUpt(currentUser));
+          const targetNextStatus = isUptTarget ? '2_VERIFIKASI_UPT' : '2_VERIFIKASI_KASIE';
+          const targetDestName = isUptTarget ? 'Kepala UPT' : 'Kepala Seksi / Kasie';
+
+          let updatedCount = 0;
+          allData.forEach(item => {
+            if (String(item.key) === String(key)) {
+              item.link_file = linkFileVal;
+              item.catatan_scan = notes;
+              item.tgl_scan = timeStr;
+              item.status_alur = targetNextStatus;
+              updatedCount++;
+            }
+          });
           const followerCount = updatedCount - 1;
           const detailStr = updatedCount > 1 ? `${updatedCount} dokumen terintegrasi (1 Mandatori + ${followerCount} Dokumen Pengikut)` : 'dokumen';
           showToast(`🎉 Berhasil! Link PDF scan pada dokumen mandatori telah mewakili & terisi untuk ${detailStr} (Kode Unik: ${key}) & seluruhnya terkirim ke Meja ${targetDestName}. Tugas scan Anda selesai dengan baik!`, 'success');
+        } else if (executeAction === 'pending') {
+          // PENDING ALL
+          let updatedCount = 0;
+          allData.forEach(item => {
+            if (String(item.key) === String(key)) {
+              item.status_alur = 'PENDING_OPERATOR';
+              item.riwayat_pending = `PENDING by ${currentUser.role} pada ${timeStr}: ${notes}\n${item.riwayat_pending || ''}`;
+              if (currentUser.role === 'kasie_capil' || currentUser.role === 'kasie_dafduk') {
+                item.catatan_kasie = notes;
+                item.tgl_kasie = timeStr;
+              } else if (currentUser.role === 'kepala_upt') {
+                item.catatan_upt = notes;
+                item.tgl_upt = timeStr;
+              }
+              updatedCount++;
+            }
+          });
+          showToast(`⚠️ Berhasil! Dokumen (Kode Unik: ${key}) beserta ${updatedCount > 1 ? updatedCount + ' dokumen terintegrasi' : 'berkas'} telah di-PENDING & dikembalikan ke Operator!`, 'warning');
         } else {
-          showToast('Berkas berhasil diperbarui (Local)', 'success');
+          // APPROVE / SELESAI
+          if (currentUser.role === 'kasie_capil') {
+            if (sampleItem) {
+              sampleItem.status_alur = '3_VALIDASI_KABID';
+              sampleItem.catatan_kasie = notes;
+              sampleItem.tgl_kasie = timeStr;
+            }
+            showToast(`🎉 Berhasil! Dokumen Pencatatan Sipil (Kode Unik: ${key}) diverifikasi & diteruskan ke Kabid Capil. Dokumen Pendaftaran Penduduk sekarang aktif di Meja Kasie Dafduk untuk diproses selanjutnya!`, 'success');
+          } else if (currentUser.role === 'kasie_dafduk') {
+            if (isDafdukDafduk && !fullBatch.some(b => String(b.sub_layanan).toLowerCase().includes('pindah'))) {
+              allData.forEach(item => {
+                if (String(item.key) === String(key)) {
+                  item.status_alur = '3_VALIDASI_KABID';
+                  item.catatan_kasie = notes;
+                  item.tgl_kasie = timeStr;
+                }
+              });
+              showToast(`🎉 Berhasil! Seluruh dokumen Dafduk terintegrasi (Kode Unik: ${key}) telah diverifikasi & diteruskan ke Kabid Dafduk!`, 'success');
+            } else {
+              if (sampleItem) {
+                sampleItem.status_alur = '3_VALIDASI_KABID';
+                sampleItem.catatan_kasie = notes;
+                sampleItem.tgl_kasie = timeStr;
+              }
+              showToast(`🎉 Berhasil! Dokumen Pendaftaran Penduduk (Kode Unik: ${key}) diverifikasi & diteruskan ke Kabid Dafduk!`, 'success');
+            }
+          } else if (currentUser.role === 'kepala_upt') {
+            if (isDafdukCapil) {
+              allData.forEach(item => {
+                if (String(item.key) === String(key)) {
+                  item.catatan_upt = notes;
+                  item.tgl_upt = timeStr;
+                  const isCapil = String(item.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(item.jenis_layanan).toLowerCase().includes('capil');
+                  if (isCapil) {
+                    item.status_alur = '6_PENCETAKAN_UPT';
+                  } else {
+                    item.status_alur = '3_VALIDASI_KABID'; // Langsung ke Kabid Dafduk!
+                  }
+                }
+              });
+              showToast(`🎉 Berhasil! Dokumen Capil diteruskan ke Petugas Cetak UPT & Dokumen Dafduk otomatis terkirim langsung ke Kabid Dafduk!`, 'success');
+            } else if (isDafdukDafduk) {
+              allData.forEach(item => {
+                if (String(item.key) === String(key)) {
+                  item.status_alur = '3_VALIDASI_KABID';
+                  item.catatan_upt = notes;
+                  item.tgl_upt = timeStr;
+                }
+              });
+              showToast(`🎉 Berhasil! Seluruh dokumen Dafduk terintegrasi (Kode Unik: ${key}) diverifikasi & diteruskan ke Kabid Dafduk!`, 'success');
+            } else {
+              if (sampleItem) {
+                const isCapil = String(sampleItem.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(sampleItem.jenis_layanan).toLowerCase().includes('capil');
+                sampleItem.status_alur = isCapil ? '6_PENCETAKAN_UPT' : '3_VALIDASI_KABID';
+                sampleItem.catatan_upt = notes;
+                sampleItem.tgl_upt = timeStr;
+              }
+              showToast(`🎉 Berhasil! Dokumen (Kode Unik: ${key}) diverifikasi & diteruskan!`, 'success');
+            }
+          } else if (currentUser.role === 'operator') {
+            let updatedCount = 0;
+            allData.forEach(item => {
+              if (String(item.key) === String(key)) {
+                item.status_alur = '1_PETUGAS_SCAN';
+                item.tgl_operator = timeStr;
+                if (notes) {
+                  item.riwayat_pending = `PERBAIKAN OPERATOR pada ${timeStr}: ${notes}\n${item.riwayat_pending || ''}`;
+                }
+                updatedCount++;
+              }
+            });
+            showToast(`🎉 Berhasil! Dokumen perbaikan (Kode Unik: ${key}) beserta ${updatedCount > 1 ? updatedCount + ' dokumen terintegrasi' : 'berkas'} telah dikirim ulang ke Petugas Scan!`, 'success');
+          } else {
+            if (sampleItem) sampleItem.status_alur = '7_SELESAI';
+            showToast('Berkas berhasil diperbarui (Local)', 'success');
+          }
         }
+
         closeModal();
         renderCounterDesk();
         renderMonitoringTable();
@@ -1847,31 +2027,9 @@ if (actionForm) {
         });
         const result = await response.json();
         if (result.status === 'success') {
-          if (currentUser && currentUser.role === 'petugas_scan') {
-            const isUptTarget = (currentUser.fasilitasi === 'UPT' || isUserUpt(currentUser));
-            const targetDestName = isUptTarget ? 'Kepala UPT' : 'Kepala Seksi / Kasie';
-            let syncCount = 0;
-            allData.forEach(d => {
-              if (String(d.key) === String(key)) {
-                d.link_file = linkFileVal;
-                d.catatan_scan = notes;
-                d.tgl_scan = getLocalDateTimeString();
-                d.status_alur = isUptTarget ? '2_VERIFIKASI_UPT' : '2_VERIFIKASI_KASIE';
-                syncCount++;
-              }
-            });
-            const followerCount = syncCount - 1;
-            const detailStr = syncCount > 1 ? `${syncCount} dokumen terintegrasi (1 Mandatori + ${followerCount} Dokumen Pengikut)` : 'dokumen';
-            showToast(`🎉 Berhasil! Link PDF scan pada dokumen mandatori telah mewakili & terisi untuk ${detailStr} (Kode Unik: ${key}) & seluruhnya terkirim ke Meja ${targetDestName}. Tugas scan Anda selesai dengan baik!`, 'success');
-            closeModal();
-            renderCounterDesk();
-            renderMonitoringTable();
-            renderRekapitulasi();
-          } else {
-            showToast(result.message || 'Berkas berhasil diperbarui!', 'success');
-            closeModal();
-            loadData();
-          }
+          showToast(result.message || '🎉 Berhasil! Berkas & seluruh dokumen terintegrasi telah diperbarui dan dikirim!', 'success');
+          closeModal();
+          loadData();
         } else {
           showToast(result.message || 'Gagal memperbarui berkas!', 'error');
         }
