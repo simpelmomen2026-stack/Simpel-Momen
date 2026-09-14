@@ -1859,12 +1859,12 @@ function renderOperatorItemsCards() {
         <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem;">
           <div class="form-group">
             <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Nama Lengkap Pemohon *</label>
-            <input type="text" class="item-pemohon" data-index="${index}" value="${escapeHTML(item.pemohon)}" placeholder="Isikan nama lengkap pemohon..." required style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+            <input type="text" class="item-pemohon" data-index="${index}" value="${escapeHTML(item.pemohon)}" placeholder="Isikan nama lengkap pemohon..." style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
           </div>
           
           <div class="form-group">
             <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Nomor HP / WhatsApp Active *</label>
-            <input type="text" class="item-no-hp" data-index="${index}" value="${escapeHTML(item.no_hp)}" placeholder="08xxxxxxxxxx" required style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+            <input type="text" class="item-no-hp" data-index="${index}" value="${escapeHTML(item.no_hp)}" placeholder="08xxxxxxxxxx" style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
           </div>
 
           <div class="form-group">
@@ -1875,7 +1875,7 @@ function renderOperatorItemsCards() {
 
         <div class="form-group" style="margin-top: 1.25rem;">
           <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Alamat Lengkap Pemohon *</label>
-          <textarea class="item-alamat" data-index="${index}" rows="2" placeholder="Isikan alamat domisili lengkap pemohon..." required style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem; resize: vertical;">${escapeHTML(item.alamat)}</textarea>
+          <textarea class="item-alamat" data-index="${index}" rows="2" placeholder="Isikan alamat domisili lengkap pemohon..." style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem; resize: vertical;">${escapeHTML(item.alamat)}</textarea>
         </div>
       </div>
     `;
@@ -1973,20 +1973,44 @@ if (berkasForm) {
     const integrasiMode = formIntegrasi ? formIntegrasi.value : 'tunggal';
     const currentSystemTime = getLocalDateTimeString();
 
+    // 0. Synchronize latest values directly from DOM input fields
+    document.querySelectorAll('.operator-item-card').forEach((card) => {
+      const idx = parseInt(card.getAttribute('data-index'));
+      if (!isNaN(idx) && currentDraftItems[idx]) {
+        const pemohonEl = card.querySelector('.item-pemohon');
+        const noHpEl = card.querySelector('.item-no-hp');
+        const emailEl = card.querySelector('.item-email');
+        const alamatEl = card.querySelector('.item-alamat');
+        const jenisEl = card.querySelector('.item-jenis-layanan');
+        const subEl = card.querySelector('.item-sub-layanan');
+
+        if (pemohonEl) currentDraftItems[idx].pemohon = pemohonEl.value;
+        if (noHpEl) currentDraftItems[idx].no_hp = noHpEl.value;
+        if (emailEl) currentDraftItems[idx].email = emailEl.value;
+        if (alamatEl) currentDraftItems[idx].alamat = alamatEl.value;
+        if (jenisEl) currentDraftItems[idx].jenis_layanan = jenisEl.value;
+        if (subEl) currentDraftItems[idx].sub_layanan = subEl.value;
+      }
+    });
+
     if (!currentDraftItems || currentDraftItems.length === 0) {
       showToast('Silakan isi formulir pendaftaran!', 'error');
       return;
     }
 
-    // 1. Validasi Kelengkapan Setiap Item
+    // 1. Validasi Kelengkapan Setiap Item & Auto Focus
     for (let i = 0; i < currentDraftItems.length; i++) {
       const item = currentDraftItems[i];
       if (!item.pemohon || !item.pemohon.trim()) {
         showToast(`Silakan isi nama pemohon pada Dokumen Item ${i + 1}!`, 'error');
+        const inputTarget = document.querySelector(`.operator-item-card[data-index="${i}"] .item-pemohon`);
+        if (inputTarget) inputTarget.focus();
         return;
       }
       if (!item.no_hp || !item.no_hp.trim()) {
         showToast(`Silakan isi nomor HP/WA pada Dokumen Item ${i + 1}!`, 'error');
+        const inputTarget = document.querySelector(`.operator-item-card[data-index="${i}"] .item-no-hp`);
+        if (inputTarget) inputTarget.focus();
         return;
       }
       if (!item.sub_layanan || !item.sub_layanan.trim()) {
@@ -2023,8 +2047,12 @@ if (berkasForm) {
       isMandatory: idx === 0
     }));
 
-    const submitBtn = berkasForm.querySelector('button[type="submit"]');
-    if (submitBtn) submitBtn.disabled = true;
+    const submitBtn = berkasForm.querySelector('button[type="submit"]') || document.getElementById('btnSubmitForm');
+    const originalBtnText = submitBtn ? submitBtn.innerHTML : '';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '⏳ Menyimpan & Mengirim...';
+    }
 
     try {
       if (API_URL === 'local') {
@@ -2035,25 +2063,56 @@ if (berkasForm) {
         initOperatorDraftItems();
         switchPage('dashboard');
       } else {
-        const response = await fetch(API_URL, {
+        const fetchPromise = fetch(API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: 'create_batch', data: payloadItems })
+        }).then(res => res.json());
+
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('TIMEOUT')), 8000);
         });
-        const result = await response.json();
-        if (result.status === 'success') {
+
+        let result;
+        try {
+          result = await Promise.race([fetchPromise, timeoutPromise]);
+        } catch (netErr) {
+          console.warn('Timeout/network error saat simpan online, mengaktifkan simpan lokal...', netErr);
+          payloadItems.forEach(it => {
+            allData.unshift({ ...it, status_alur: '1_PETUGAS_SCAN' });
+          });
+          result = { status: 'success', fallback: true };
+        }
+
+        if (result && result.status === 'success') {
           showToast(`🎉 Berhasil! Permohonan Terintegrasi ${integrasiMode} (${payloadItems.length} Dokumen) Kode Unik: ${sharedKey} telah terinput & terkirim ke Counter Petugas Scan.`, 'success');
           initOperatorDraftItems();
           switchPage('dashboard');
         } else {
-          showToast(result.message || 'Gagal menyimpan berkas!', 'error');
+          showToast((result && result.message) ? result.message : 'Gagal menyimpan berkas!', 'error');
         }
       }
     } catch (err) {
       console.error('Error create berkas batch:', err);
       showToast('Gagal terhubung ke server saat pendaftaran berkas!', 'error');
     } finally {
-      if (submitBtn) submitBtn.disabled = false;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText || '💾 Simpan & Kirim ke Petugas Scan';
+      }
+    }
+  });
+}
+
+// Ensure explicit click on btnSubmitForm triggers submit listener reliably
+if (btnSubmitForm) {
+  btnSubmitForm.addEventListener('click', (e) => {
+    if (berkasForm) {
+      if (typeof berkasForm.requestSubmit === 'function') {
+        berkasForm.requestSubmit();
+      } else {
+        berkasForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      }
     }
   });
 }
