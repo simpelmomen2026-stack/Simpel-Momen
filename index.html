@@ -27,8 +27,28 @@
       
       <form id="loginForm">
         <div class="form-group">
-          <label for="loginUsername">Nama Pengguna (Username) *</label>
-          <input type="text" id="loginUsername" placeholder="Masukkan username Anda..." required style="width:100%; padding:12px; background:var(--bg-input); border:1px solid var(--border-color); border-radius:var(--radius-md); color:#fff; font-size:0.9rem;">
+          <label for="quickLoginSelect">⚡ Pilih Cepat Akun / Peran (Opsional):</label>
+          <select id="quickLoginSelect" style="width:100%; padding:12px; background:var(--bg-input); border:1px solid var(--border-color); border-radius:var(--radius-md); color:#fff; font-size:0.9rem; margin-bottom:12px; cursor:pointer;">
+            <option value="">-- ATAU PILIH AKUN LANGSUNG DI SINI --</option>
+            <option value="operator_dinas" data-pass="123456">🏢 Operator Dinas</option>
+            <option value="operator_upt1" data-pass="123456">🏛️ Operator UPT 01</option>
+            <option value="scan_dinas" data-pass="123456">📷 Petugas Scan Dinas (Milla Sasuwe)</option>
+            <option value="scan_upt1" data-pass="123456">📷 Petugas Scan UPT 01</option>
+            <option value="kasie_capil" data-pass="123456">👔 Kasie Capil (Suryani Sambaiyang)</option>
+            <option value="kasie_dafduk" data-pass="123456">👔 Kasie Dafduk Dinas</option>
+            <option value="kepala_upt1" data-pass="123456">🏛️ Kepala UPT 01</option>
+            <option value="kabid_capil" data-pass="123456">⭐ Kabid Capil</option>
+            <option value="kabid_dafduk" data-pass="123456">⭐ Kabid Dafduk</option>
+            <option value="kadis" data-pass="123456">👑 Kepala Dinas (Davidson Djarang)</option>
+            <option value="tte_dinas" data-pass="123456">🔏 Petugas TTE Dinas</option>
+            <option value="print_dinas" data-pass="123456">🖨️ Petugas Cetak Dinas</option>
+            <option value="print_upt1" data-pass="123456">🖨️ Petugas Cetak UPT 01</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="loginUsername">Nama Pengguna (Username / Nama Petugas) *</label>
+          <input type="text" id="loginUsername" placeholder="Masukkan username atau pilih akun di atas..." required style="width:100%; padding:12px; background:var(--bg-input); border:1px solid var(--border-color); border-radius:var(--radius-md); color:#fff; font-size:0.9rem;">
         </div>
         
         <div class="form-group">

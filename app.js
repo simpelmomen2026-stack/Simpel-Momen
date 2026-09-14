@@ -259,6 +259,17 @@ const MOCK_PETUGAS = [
   { username: 'print_upt1', password: '123456', name: 'Petugas Cetak UPT 01', role: 'petugas_pencetakan', uptCode: 'UPT-01', fasilitasi: 'UPT' }
 ];
 
+const quickLoginSelect = document.getElementById('quickLoginSelect');
+if (quickLoginSelect) {
+  quickLoginSelect.addEventListener('change', (e) => {
+    const val = e.target.value;
+    if (val) {
+      if (loginUsername) loginUsername.value = val;
+      if (loginPassword) loginPassword.value = '123456';
+    }
+  });
+}
+
 // Event: Login Submit (Online via GET Parameter & POST Fallback with Timeout Protection)
 if (loginForm) {
   loginForm.addEventListener('submit', async (e) => {
