@@ -5,7 +5,7 @@
 // Ubah IS_OFFLINE_MODE = false jika perbaikan sudah selesai dan ingin meng-online-kan kembali.
 const IS_OFFLINE_MODE = false; 
 
-let API_URL = IS_OFFLINE_MODE ? 'local' : 'https://script.google.com/macros/s/AKfycby-RoYMJq-lFarD4KWcOTrCfTj93xze8ljDhvjGBT2faQ8WsYW0BSdqyPlpWxxg6ieqBg/exec';
+let API_URL = IS_OFFLINE_MODE ? 'local' : 'https://script.google.com/macros/s/AKfycbxcYF0YeOTg106tFjE9rDWT9_hvUXN9Ai8fNzNKUYIJQGtBADqUi8DcAR1BVCGoROX5hg/exec';
 let currentUser = null;
 let allData = [];
 let currentDeskFilter = 'active'; // 'active', 'completed', 'all'
@@ -259,12 +259,17 @@ const MOCK_PETUGAS = [
   { username: 'print_upt1', password: '123456', name: 'Petugas Cetak UPT 01', role: 'petugas_pencetakan', uptCode: 'UPT-01', fasilitasi: 'UPT' }
 ];
 
-// Event: Login Submit (Online via GET Parameter & Fallback Offline)
+// Event: Login Submit (Online via GET Parameter & POST Fallback with Timeout Protection)
 if (loginForm) {
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const usernameVal = loginUsername.value.trim();
     const passwordVal = loginPassword.value.trim();
+    
+    if (!usernameVal) {
+      showToast('Silakan masukkan nama pengguna (username)!', 'error');
+      return;
+    }
     
     const cleanStr = (s) => (s ? s.toString().toLowerCase().replace(/[^a-z0-9]/g, '') : '');
     const inputClean = cleanStr(usernameVal);
@@ -286,7 +291,7 @@ if (loginForm) {
     };
 
     const submitBtn = loginForm.querySelector('button[type="submit"]');
-    const originalText = submitBtn ? submitBtn.textContent : 'Masuk';
+    const originalText = submitBtn ? submitBtn.textContent : 'Masuk ke Sistem';
     if (submitBtn) {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Memverifikasi...';
@@ -311,28 +316,77 @@ if (loginForm) {
           showToast('Username atau password tidak ditemukan!', 'error');
         }
       } else {
-        // Login Online via Google Sheets Apps Script API
+        // Login Online via Google Sheets Apps Script API dengan Dual GET/POST Fallback + Timeout
         try {
-          const loginUrl = `${API_URL}?action=login&username=${encodeURIComponent(usernameVal)}&password=${encodeURIComponent(passwordVal)}`;
-          const response = await fetch(loginUrl, { method: 'GET' });
-          const result = await response.json();
+          const cleanApiUrl = API_URL.trim().replace(/\/$/, '');
+          const loginUrl = `${cleanApiUrl}?action=login&username=${encodeURIComponent(usernameVal)}&password=${encodeURIComponent(passwordVal)}`;
           
-          if (result.status === 'success' && result.data && !Array.isArray(result.data)) {
+          let result = null;
+          let fetchSuccess = false;
+          
+          // percobaan 1: GET Fetch dengan Timeout 8 Detik
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            
+            const response = await fetch(loginUrl, { method: 'GET', signal: controller.signal });
+            clearTimeout(timeoutId);
+            const responseText = await response.text();
+            
+            if (responseText.trim().startsWith('<') || responseText.includes('<!DOCTYPE')) {
+              showToast('⚠️ Google Apps Script belum terhubung ke Google Sheet! Buka Apps Script dari menu Extensions > Apps Script pada Google Sheet Anda dan pastikan Web App sudah di-deploy dengan hak akses "Anyone".', 'error');
+              return;
+            }
+            
+            result = JSON.parse(responseText);
+            fetchSuccess = true;
+          } catch (getErr) {
+            console.warn('GET Login failed/timeout, trying POST fallback:', getErr);
+          }
+          
+          // percobaan 2: POST Fetch Fallback jika GET Gagal
+          if (!fetchSuccess) {
+            try {
+              const postController = new AbortController();
+              const postTimeoutId = setTimeout(() => postController.abort(), 8000);
+              
+              const response = await fetch(cleanApiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ action: 'login', username: usernameVal, password: passwordVal }),
+                signal: postController.signal
+              });
+              clearTimeout(postTimeoutId);
+              const responseText = await response.text();
+              
+              if (responseText.trim().startsWith('<') || responseText.includes('<!DOCTYPE')) {
+                showToast('⚠️ Google Apps Script belum terhubung ke Google Sheet! Buka Apps Script dari menu Extensions > Apps Script pada Google Sheet Anda.', 'error');
+                return;
+              }
+              
+              result = JSON.parse(responseText);
+              fetchSuccess = true;
+            } catch (postErr) {
+              console.warn('POST Login failed:', postErr);
+            }
+          }
+          
+          if (fetchSuccess && result && result.status === 'success' && result.data && !Array.isArray(result.data)) {
             currentUser = result.data;
             if (currentUser && currentUser.role) {
               currentUser.role = normalizeUserRole(currentUser.role);
             }
             localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
             setupLoggedInUI();
-            showToast(`Selamat datang, ${currentUser.name}!`, 'success');
-          } else if (result.status === 'error') {
+            showToast(`Selamat datang, ${currentUser.name || currentUser.username}!`, 'success');
+          } else if (fetchSuccess && result && result.status === 'error') {
             showToast(result.message || 'Username atau password tidak cocok!', 'error');
           } else {
-            showToast('Respon login dari server tidak valid!', 'error');
+            showToast('⚠️ Gagal terhubung ke Server Online (Google Apps Script)! Periksa jaringan internet Anda atau pastikan Web App Apps Script sudah di-deploy dengan hak akses "Anyone".', 'error');
           }
         } catch (fetchErr) {
           console.error('Koneksi online Apps Script gagal:', fetchErr);
-          showToast('⚠️ Gagal terhubung ke Server Online (Google Apps Script)! Pastikan koneksi internet aktif dan Web App Apps Script sudah di-deploy dengan hak akses "Anyone".', 'error');
+          showToast('⚠️ Gagal terhubung ke Server Online! Silakan periksa jaringan internet Anda.', 'error');
         }
       }
     } catch (error) {
