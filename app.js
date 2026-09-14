@@ -729,9 +729,51 @@ function renderCounterDesk() {
     return userActiveDeskItems.includes(item);
   });
 
-  if (counterEntriesCount) counterEntriesCount.textContent = `Menampilkan ${filtered.length} berkas`;
+  // 🕒 Pengurutan & Filter Khusus Petugas Scan (Dinas & UPT):
+  // 1. Sembunyikan Dokumen Pengikut dari Tabel (Hanya tampilkan 1 Dokumen Mandatori per Kode Unik)
+  // 2. Urutkan dari Dokumen Paling Lama (Paling Atas) ke Terbaru (Terbawah)
+  let displayList = filtered;
+  if (role === 'petugas_scan') {
+    const keyMap = {};
+    filtered.forEach(it => {
+      const k = String(it.key);
+      if (!keyMap[k]) keyMap[k] = [];
+      keyMap[k].push(it);
+    });
 
-  if (filtered.length === 0) {
+    displayList = filtered.filter(item => {
+      const batch = keyMap[String(item.key)];
+      if (!batch || batch.length <= 1) return true; // Berkas tunggal tetap ditampilkan
+
+      // Jika ada item dengan isMandatory === true, tampilkan item mandatori tersebut
+      const mandatoryItem = batch.find(b => b.isMandatory);
+      if (mandatoryItem) return item === mandatoryItem;
+
+      // Jika Dafduk - Capil: Utamakan Pencatatan Sipil sebagai mandatori
+      const capilItem = batch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
+      if (capilItem) return item === capilItem;
+
+      // Jika Dafduk - Dafduk: Utamakan Pindah Domisili
+      const pindahItem = batch.find(b => String(b.sub_layanan).toLowerCase().includes('pindah domisili'));
+      if (pindahItem) return item === pindahItem;
+
+      // Fallback: Tampilkan item pertama saja
+      return item === batch[0];
+    });
+
+    displayList.sort((a, b) => {
+      const timeA = String(a.tgl_operator || a.tanggal || '');
+      const timeB = String(b.tgl_operator || b.tanggal || '');
+      if (timeA && timeB) {
+        return timeA.localeCompare(timeB);
+      }
+      return 0;
+    });
+  }
+
+  if (counterEntriesCount) counterEntriesCount.textContent = `Menampilkan ${displayList.length} berkas`;
+
+  if (displayList.length === 0) {
     counterTableBody.innerHTML = `
       <tr>
         <td colspan="7" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">
@@ -742,7 +784,7 @@ function renderCounterDesk() {
     return;
   }
 
-  counterTableBody.innerHTML = filtered.map(row => {
+  counterTableBody.innerHTML = displayList.map(row => {
     const isPending = row.status_alur === 'PENDING_OPERATOR';
     const isSelesai = row.status_alur === '7_SELESAI';
     const rowStyle = isPending ? 'background: rgba(239, 68, 68, 0.08);' : (isSelesai ? 'background: rgba(16, 185, 129, 0.04);' : '');
@@ -795,9 +837,13 @@ function renderCounterDesk() {
       `;
     }
 
+    const batchCount = allData.filter(d => String(d.key) === String(row.key)).length;
+    const isIntegrated = batchCount > 1 || (row.integrasi && row.integrasi !== 'tunggal');
+    const integrasiBadgeHtml = isIntegrated ? `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:2px 6px; border-radius:6px; display:inline-block; margin-top:4px;">⚡ Terintegrasi (${batchCount} Dokumen)</span>` : '';
+
     return `
       <tr style="${rowStyle}">
-        <td><span class="code-key-badge">${escapeHTML(row.key)}</span></td>
+        <td><span class="code-key-badge">${escapeHTML(row.key)}</span>${integrasiBadgeHtml}</td>
         <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
         <td><strong>${escapeHTML(row.pemohon)}</strong><br><small style="color:var(--text-muted);">${escapeHTML(row.no_hp || '-')}</small></td>
         <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small>${linkBtnHtml}</td>
@@ -1589,9 +1635,15 @@ window.openActionModal = function(key) {
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
     if (modalNotesGroup) modalNotesGroup.style.display = 'block';
   } else if (role === 'petugas_scan') {
-    // Mode Khusus Petugas Scan (Dinas & UPT): Sembunyikan Keputusan Tindakan (Disetujui/Pending) karena tidak ada pekerjaan opsional
-    if (modalTitle) modalTitle.textContent = '📄 Upload Link Scan PDF';
-    if (standardActionGroup) standardActionGroup.style.display = 'none'; // HAPUS / SEMBUNYIKAN KEPUTUSAN TINDAKAN
+    const batchCount = allData.filter(d => String(d.key) === String(item.key)).length;
+    const followerCount = batchCount - 1;
+
+    if (modalTitle) {
+      modalTitle.textContent = batchCount > 1 ? 
+        '📄 Upload Link Scan PDF (Dokumen Mandatori Utama)' : 
+        '📄 Upload Link Scan PDF';
+    }
+    if (standardActionGroup) standardActionGroup.style.display = 'none';
     if (scanLinkGroup) scanLinkGroup.style.display = 'block';
     if (tteStatusGroup) tteStatusGroup.style.display = 'none';
     if (tteNotesGroup) tteNotesGroup.style.display = 'none';
@@ -1601,6 +1653,15 @@ window.openActionModal = function(key) {
       saveModalBtn.textContent = '🚀 Upload & Kirim Berkas';
     }
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
+
+    if (monitoringHistoryBox && batchCount > 1) {
+      const bannerHtml = `
+        <div style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; font-size: 0.84rem; color: #d8b4fe; line-height: 1.5;">
+          ⚡ <strong>Propagasi Otomatis Scan PDF:</strong> Pengisian link PDF pada dokumen mandatori ini secara otomatis mewakili & mengisi link file ke <strong>${followerCount} Dokumen Pengikut Tersembunyi</strong> (Kode Unik: <code>${escapeHTML(item.key)}</code>). Saat diklik kirim, seluruh dokumen terintegrasi akan dikirim bersama-sama ke Kasie / Kepala UPT.
+        </div>
+      `;
+      monitoringHistoryBox.innerHTML = bannerHtml + monitoringHistoryBox.innerHTML;
+    }
   } else if (role === 'petugas_tte') {
     // Mode Khusus Petugas TTE: Sembunyikan Keputusan Tindakan (Lanjut/Pending), tampilkan hanya Status TTE / SIAK
     if (modalTitle) modalTitle.textContent = '✍️ Tindak Lanjut Petugas TTE / SIAK';
@@ -1701,19 +1762,36 @@ if (actionForm) {
 
     try {
       if (API_URL === 'local') {
-        const item = allData.find(d => String(d.key) === String(key));
-        if (item) {
-          if (currentUser.role === 'petugas_scan') {
-            item.link_file = linkFileVal;
+        let updatedCount = 0;
+        const sampleItem = allData.find(d => String(d.key) === String(key));
+        const isUptTarget = (sampleItem && String(sampleItem.fasilitasi || '').toLowerCase().includes('upt')) || (currentUser && isUserUpt(currentUser));
+        const targetNextStatus = isUptTarget ? '2_VERIFIKASI_UPT' : '2_VERIFIKASI_KASIE';
+        const targetDestName = isUptTarget ? 'Kepala UPT' : 'Kepala Seksi / Kasie';
+
+        allData.forEach(item => {
+          if (String(item.key) === String(key)) {
+            if (currentUser.role === 'petugas_scan') {
+              item.link_file = linkFileVal;
+              item.catatan_scan = notes;
+              item.tgl_scan = getLocalDateTimeString();
+              item.status_alur = targetNextStatus;
+              updatedCount++;
+            } else if (executeAction === 'pending') {
+              item.status_alur = 'PENDING_OPERATOR';
+              item.riwayat_pending = `PENDING by ${currentUser.role}: ${notes}\n${item.riwayat_pending || ''}`;
+            } else {
+              item.status_alur = '7_SELESAI';
+            }
           }
-          if (executeAction === 'pending') {
-            item.status_alur = 'PENDING_OPERATOR';
-            item.riwayat_pending = `PENDING by ${currentUser.role}: ${notes}\n${item.riwayat_pending || ''}`;
-          } else {
-            item.status_alur = '7_SELESAI';
-          }
+        });
+
+        if (currentUser.role === 'petugas_scan') {
+          const followerCount = updatedCount - 1;
+          const detailStr = updatedCount > 1 ? `${updatedCount} dokumen terintegrasi (1 Mandatori + ${followerCount} Dokumen Pengikut)` : 'dokumen';
+          showToast(`🎉 Berhasil! Link PDF scan pada dokumen mandatori telah mewakili & terisi untuk ${detailStr} (Kode Unik: ${key}) & seluruhnya terkirim ke Meja ${targetDestName}. Tugas scan Anda selesai dengan baik!`, 'success');
+        } else {
+          showToast('Berkas berhasil diperbarui (Local)', 'success');
         }
-        showToast('Berkas berhasil diperbarui (Local)', 'success');
         closeModal();
         renderCounterDesk();
         renderMonitoringTable();
@@ -1736,9 +1814,31 @@ if (actionForm) {
         });
         const result = await response.json();
         if (result.status === 'success') {
-          showToast(result.message || 'Berkas berhasil diperbarui!', 'success');
-          closeModal();
-          loadData();
+          if (currentUser && currentUser.role === 'petugas_scan') {
+            const isUptTarget = (currentUser.fasilitasi === 'UPT' || isUserUpt(currentUser));
+            const targetDestName = isUptTarget ? 'Kepala UPT' : 'Kepala Seksi / Kasie';
+            let syncCount = 0;
+            allData.forEach(d => {
+              if (String(d.key) === String(key)) {
+                d.link_file = linkFileVal;
+                d.catatan_scan = notes;
+                d.tgl_scan = getLocalDateTimeString();
+                d.status_alur = isUptTarget ? '2_VERIFIKASI_UPT' : '2_VERIFIKASI_KASIE';
+                syncCount++;
+              }
+            });
+            const followerCount = syncCount - 1;
+            const detailStr = syncCount > 1 ? `${syncCount} dokumen terintegrasi (1 Mandatori + ${followerCount} Dokumen Pengikut)` : 'dokumen';
+            showToast(`🎉 Berhasil! Link PDF scan pada dokumen mandatori telah mewakili & terisi untuk ${detailStr} (Kode Unik: ${key}) & seluruhnya terkirim ke Meja ${targetDestName}. Tugas scan Anda selesai dengan baik!`, 'success');
+            closeModal();
+            renderCounterDesk();
+            renderMonitoringTable();
+            renderRekapitulasi();
+          } else {
+            showToast(result.message || 'Berkas berhasil diperbarui!', 'success');
+            closeModal();
+            loadData();
+          }
         } else {
           showToast(result.message || 'Gagal memperbarui berkas!', 'error');
         }
