@@ -217,104 +217,73 @@ function doPost(e) {
     ensureColumns(sheet, 30); // Pastikan memiliki minimal 30 kolom
     
     // 1. TAMBAH BARU (OPERATOR INPUT)
-    // 1. TAMBAH BARU (OPERATOR INPUT - SINGLE ATAU BATCH MULTI-ITEM INTEGRASI V2.0)
-    if (payload.action === 'create' || payload.action === 'create_batch') {
-      var items = Array.isArray(payload.data) ? payload.data : [payload.data];
-      var sharedKey = (items.length > 0 && items[0].key) ? items[0].key : generateUniqueKey();
+    if (payload.action === 'create') {
+      var data = payload.data;
+      var key = data.key || generateUniqueKey();
+      var tanggal = data.tanggal || new Date().toISOString().slice(0, 10);
       var timeStr = getLocalDateTimeString();
       
-      for (var k = 0; k < items.length; k++) {
-        var itemData = items[k];
-        var itemKey = itemData.key || sharedKey;
-        var tanggal = itemData.tanggal || new Date().toISOString().slice(0, 10);
-        
-        var values = [
-          itemKey,
-          tanggal,
-          itemData.fasilitasi || "Dinas",
-          itemData.operator || "Operator",
-          itemData.pemohon || "",
-          itemData.alamat || "",
-          itemData.no_hp || "",
-          itemData.email || "",
-          itemData.integrasi || "tunggal",
-          itemData.jenis_layanan || "",
-          itemData.sub_layanan || "",
-          itemData.link_file || "", // link_file
-          itemData.status_alur || "1_PETUGAS_SCAN", // status_alur
-          itemData.status_tte || "",
-          itemData.penerima || "",
-          itemData.catatan_scan || "",
-          itemData.catatan_kasie || "",
-          itemData.catatan_kabid || "",
-          itemData.catatan_kadis || "",
-          itemData.catatan_upt || "",
-          itemData.catatan_print || "",
-          itemData.riwayat_pending || "",
-          timeStr, // tgl_operator
-          "", "", "", "", "", "", ""
-        ];
-        
-        // Cari jika baris dengan key & jenis_layanan & sub_layanan ini sudah ada (update perbaikan pending)
-        var lastR = sheet.getLastRow();
-        var updatedExisting = false;
-        if (lastR > 1) {
-          var existingValues = sheet.getRange(2, 1, lastR - 1, 11).getValues();
-          for (var r = 0; r < existingValues.length; r++) {
-            if (existingValues[r][0].toString() === itemKey && existingValues[r][10].toString() === itemData.sub_layanan) {
-              sheet.getRange(r + 2, 1, 1, 30).setValues([values]);
-              updatedExisting = true;
-              break;
-            }
-          }
-        }
-        if (!updatedExisting) {
-          sheet.insertRowBefore(2);
-          sheet.getRange(2, 1, 1, 30).setValues([values]);
-        }
+      var values = [
+        key,
+        tanggal,
+        data.fasilitasi,
+        data.operator,
+        data.pemohon,
+        data.alamat,
+        data.no_hp,
+        data.email,
+        data.integrasi,
+        data.jenis_layanan,
+        data.sub_layanan,
+        "", // link_file (kosong awal)
+        "1_PETUGAS_SCAN", // status_alur
+        "", // status_tte
+        "", // penerima
+        "", // catatan_scan
+        "", // catatan_kasie
+        "", // catatan_kabid
+        "", // catatan_kadis
+        "", // catatan_upt
+        "", // catatan_print
+        data.riwayat_pending || "", // riwayat_pending
+        timeStr, // tgl_operator (W)
+        "", // tgl_scan (X)
+        "", // tgl_kasie (Y)
+        "", // tgl_upt (Z)
+        "", // tgl_kabid (AA)
+        "", // tgl_kadis (AB)
+        "", // tgl_tte (AC)
+        ""  // tgl_print (AD)
+      ];
+      
+      // Cari jika data key sudah ada (mengupdate berkas pending yang diperbaiki operator)
+      var foundRow = findRowByKey(sheet, key);
+      if (foundRow !== -1) {
+        sheet.getRange(foundRow, 1, 1, 30).setValues([values]);
+      } else {
+        sheet.insertRowBefore(2);
+        sheet.getRange(2, 1, 1, 30).setValues([values]);
       }
       
       // Kirim Notifikasi WA HANYA ke Grup Khusus Target
       try {
-        var firstItem = items[0];
-        var mandatoryItem = items[0];
-        for (var i = 0; i < items.length; i++) {
-          if (items[i].isMandatory || items[i].jenis_layanan === "Pencatatan Sipil" || items[i].sub_layanan === "Pindah Domisili") {
-            mandatoryItem = items[i];
-            break;
-          }
-        }
-        var mandatoryPemohon = mandatoryItem.pemohon || firstItem.pemohon || "";
-
         var ss = getSpreadsheet();
-        var userDetails = getUserDetailsFromPetugasSheet(ss, firstItem.operator || firstItem.userName);
-        var namaLengkap = userDetails.name || firstItem.operator || firstItem.userName || "Operator";
+        var userDetails = getUserDetailsFromPetugasSheet(ss, data.operator || data.userName);
+        var namaLengkap = userDetails.name || data.operator || data.userName || "Operator";
         var roleTitle = userDetails.role || "Operator";
-        var fasTag = formatFasilitasiTag(firstItem.fasilitasi, firstItem.operator || firstItem.userName, ss);
+        var fasTag = formatFasilitasiTag(data.fasilitasi, data.operator || data.userName, ss);
         
-        var waMsg = "";
-        if (items.length > 1 || (firstItem.integrasi && firstItem.integrasi !== "tunggal")) {
-          var docListStr = "";
-          for (var d = 0; d < items.length; d++) {
-            var itemPemohon = items[d].pemohon || mandatoryPemohon;
-            docListStr += (d + 1) + ". " + items[d].sub_layanan + " - " + itemPemohon + "\n";
-          }
-          waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa permohonan Terintegrasi *" + firstItem.integrasi + "* (Kode Unik: *" + sharedKey + "*) atas nama *" + mandatoryPemohon + "* (" + fasTag + ") telah di-input.\n\n" +
-                  "📋 *Daftar Sub Layanan Terintegrasi (" + items.length + " Dokumen):*\n\n" + docListStr + "\n" +
-                  "Selanjutnya mohon Petugas Scan memproses dokumen tersebut.\n\n" +
-                  "Terima Kasih";
-        } else {
-          waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa berkas permohonan *" + firstItem.sub_layanan + "* atas nama *" + firstItem.pemohon + "* (" + fasTag + ") Kode Unik *" + sharedKey + "* telah di-input.\n\n" +
-                  "Selanjutnya mohon Petugas Scan memproses berkas tersebut.\n\n" +
-                  "Terima Kasih";
-        }
+        var waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + data.sub_layanan + "* (" + fasTag + ") atas nama *" + data.pemohon + "* telah di input.\n" +
+                    "Selanjutnya mohon petugas scan proses lanjut.\n\n" +
+                    "Terima Kasih";
         
-        sendWhatsAppNotification(waMsg, firstItem.fasilitasi);
+        // Kirim Notifikasi WA ke Grup Target (Dinas/UPT) & Admin 082397724667
+        sendWhatsAppNotification(waMsg, data.fasilitasi);
       } catch(waErr) {
         Logger.log("WA Error saat create: " + waErr.toString());
       }
       
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: { key: sharedKey, count: items.length } }))
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: { key: key } }))
         .setMimeType(ContentService.MimeType.JSON);
     }
     
@@ -326,11 +295,10 @@ function doPost(e) {
       var notes = payload.notes || "";
       var timeStr = getLocalDateTimeString();
       
-      var matchingRows = findRowsByKey(sheet, key);
-      if (matchingRows.length === 0) {
+      var foundRow = findRowByKey(sheet, key);
+      if (foundRow === -1) {
         throw new Error("Berkas dengan Key " + key + " tidak ditemukan.");
       }
-      var foundRow = matchingRows[0];
       
       // Ambil data baris yang sekarang untuk memproses keputusan alur
       var currentStatus = sheet.getRange(foundRow, 13).getValue().toString(); // Column M (Status Alur)
@@ -342,30 +310,24 @@ function doPost(e) {
       var nextStatus = "";
       
       if (executeAction === 'pending' && role !== 'petugas_tte' && role !== 'petugas_scan') {
-        // Alur Pending: Kembalikan seluruh baris berkas terintegrasi ke operator
+        // Alur Pending: Kembalikan berkas ke operator
         nextStatus = "PENDING_OPERATOR";
         var logMsg = "PENDING by " + role + " pada " + timeStr + ": " + notes;
+        var newRiwayat = riwayatPending ? logMsg + "\n---\n" + riwayatPending : logMsg;
+        sheet.getRange(foundRow, 22).setValue(newRiwayat); // Col V
         
-        for (var m = 0; m < matchingRows.length; m++) {
-          var rIndex = matchingRows[m];
-          var rRiwayat = sheet.getRange(rIndex, 22).getValue().toString();
-          var newRiwayat = rRiwayat ? logMsg + "\n---\n" + rRiwayat : logMsg;
-          sheet.getRange(rIndex, 13).setValue("PENDING_OPERATOR"); // Col M
-          sheet.getRange(rIndex, 22).setValue(newRiwayat); // Col V
-          
-          if (role === 'kasie_dafduk' || role === 'kasie_capil') {
-            sheet.getRange(rIndex, 17).setValue(notes); // Col Q
-            sheet.getRange(rIndex, 25).setValue(timeStr); // Col Y (tgl_kasie)
-          } else if (role === 'kepala_upt') {
-            sheet.getRange(rIndex, 20).setValue(notes); // Col T
-            sheet.getRange(rIndex, 26).setValue(timeStr); // Col Z (tgl_upt)
-          } else if (role === 'kabid_dafduk' || role === 'kabid_capil') {
-            sheet.getRange(rIndex, 18).setValue(notes); // Col R
-            sheet.getRange(rIndex, 27).setValue(timeStr); // Col AA (tgl_kabid)
-          } else if (role === 'kadis') {
-            sheet.getRange(rIndex, 19).setValue(notes); // Col S
-            sheet.getRange(rIndex, 28).setValue(timeStr); // Col AB (tgl_kadis)
-          }
+        if (role === 'kasie_dafduk' || role === 'kasie_capil') {
+          sheet.getRange(foundRow, 17).setValue(notes); // Col Q
+          sheet.getRange(foundRow, 25).setValue(timeStr); // Col Y (tgl_kasie)
+        } else if (role === 'kepala_upt') {
+          sheet.getRange(foundRow, 20).setValue(notes); // Col T
+          sheet.getRange(foundRow, 26).setValue(timeStr); // Col Z (tgl_upt)
+        } else if (role === 'kabid_dafduk' || role === 'kabid_capil') {
+          sheet.getRange(foundRow, 18).setValue(notes); // Col R
+          sheet.getRange(foundRow, 27).setValue(timeStr); // Col AA (tgl_kabid)
+        } else if (role === 'kadis') {
+          sheet.getRange(foundRow, 19).setValue(notes); // Col S
+          sheet.getRange(foundRow, 28).setValue(timeStr); // Col AB (tgl_kadis)
         }
       } 
       
@@ -373,21 +335,15 @@ function doPost(e) {
         // Alur Approve / Setuju Berjenjang
         if (role === 'petugas_scan') {
           var linkFile = payload.link_file || "";
+          sheet.getRange(foundRow, 12).setValue(linkFile); // Col L (Link File)
+          sheet.getRange(foundRow, 16).setValue(notes); // Col P (Catatan Scan)
+          sheet.getRange(foundRow, 24).setValue(timeStr); // Col X (tgl_scan)
           nextStatus = (currentFasilitasi === "UPT" || currentFasilitasi.indexOf("UPT") !== -1) ? "2_VERIFIKASI_UPT" : "2_VERIFIKASI_KASIE";
-          
-          for (var m = 0; m < matchingRows.length; m++) {
-            var rIndex = matchingRows[m];
-            sheet.getRange(rIndex, 12).setValue(linkFile); // Col L (Link File)
-            sheet.getRange(rIndex, 16).setValue(notes); // Col P (Catatan Scan)
-            sheet.getRange(rIndex, 24).setValue(timeStr); // Col X (tgl_scan)
-            sheet.getRange(rIndex, 13).setValue(nextStatus); // Col M (Status Alur)
-          }
         } 
         
         else if (role === 'kasie_dafduk' || role === 'kasie_capil') {
           sheet.getRange(foundRow, 17).setValue(notes); // Col Q (Catatan Kasie)
           sheet.getRange(foundRow, 25).setValue(timeStr); // Col Y (tgl_kasie)
-          sheet.getRange(foundRow, 13).setValue("3_VALIDASI_KABID");
           nextStatus = "3_VALIDASI_KABID";
         } 
         
@@ -399,7 +355,6 @@ function doPost(e) {
           } else {
             nextStatus = "6_PENCETAKAN_UPT";
           }
-          sheet.getRange(foundRow, 13).setValue(nextStatus);
         } 
         
         else if (role === 'kabid_dafduk' || role === 'kabid_capil') {
@@ -412,14 +367,12 @@ function doPost(e) {
           } else {
             nextStatus = "4_SERTIFIKASI_KADIS";
           }
-          sheet.getRange(foundRow, 13).setValue(nextStatus);
         } 
         
         else if (role === 'kadis') {
           sheet.getRange(foundRow, 19).setValue(notes); // Col S (Catatan Kadis)
           sheet.getRange(foundRow, 28).setValue(timeStr); // Col AB (tgl_kadis)
           nextStatus = "5_TTE";
-          sheet.getRange(foundRow, 13).setValue(nextStatus);
         } 
         
         else if (role === 'petugas_tte') {
@@ -432,35 +385,29 @@ function doPost(e) {
           
           if (statusTteVal === 'Belum diajukan SIAK') {
             if (isUptFas && isPendaftaran) {
-              nextStatus = "2_VERIFIKASI_UPT";
+              nextStatus = "2_VERIFIKASI_UPT"; // Kembali ke Kepala UPT (khusus Fasilitasi UPT Pendaftaran Penduduk)
             } else {
-              nextStatus = "2_VERIFIKASI_KASIE";
+              nextStatus = "2_VERIFIKASI_KASIE"; // Kembali ke Kasie (Fasilitasi Dinas semua jenis layanan & UPT non-pendaftaran)
             }
             var logMsg = "BELUM DIAJUKAN SIAK by TTE pada " + timeStr + ": " + (notes || "Belum diajukan SIAK");
             var newRiwayat = riwayatPending ? logMsg + "\n---\n" + riwayatPending : logMsg;
-            sheet.getRange(foundRow, 22).setValue(newRiwayat);
+            sheet.getRange(foundRow, 22).setValue(newRiwayat); // Col V (riwayat pending)
           } else if (statusTteVal === 'Belum Verifikasi SIAK') {
             nextStatus = "3_VALIDASI_KABID";
             var logMsg = "BELUM VERIFIKASI SIAK by TTE pada " + timeStr + ": " + (notes || "Belum Verifikasi SIAK");
             var newRiwayat = riwayatPending ? logMsg + "\n---\n" + riwayatPending : logMsg;
-            sheet.getRange(foundRow, 22).setValue(newRiwayat);
+            sheet.getRange(foundRow, 22).setValue(newRiwayat); // Col V (riwayat pending)
           } else {
             nextStatus = (isUptFas) ? "6_PENCETAKAN_UPT" : "6_PENCETAKAN_DINAS";
           }
-          sheet.getRange(foundRow, 13).setValue(nextStatus);
         } 
         
         else if (role === 'operator') {
-          for (var m = 0; m < matchingRows.length; m++) {
-            var rIndex = matchingRows[m];
-            var rRiwayat = sheet.getRange(rIndex, 22).getValue().toString();
-            sheet.getRange(rIndex, 23).setValue(timeStr); // Col W (tgl_operator)
-            if (notes) {
-              var logMsg = "PERBAIKAN OPERATOR pada " + timeStr + ": " + notes;
-              var newRiwayat = rRiwayat ? logMsg + "\n---\n" + rRiwayat : logMsg;
-              sheet.getRange(rIndex, 22).setValue(newRiwayat); // Col V
-            }
-            sheet.getRange(rIndex, 13).setValue("1_PETUGAS_SCAN"); // Col M
+          sheet.getRange(foundRow, 23).setValue(timeStr); // Col W (tgl_operator)
+          if (notes) {
+            var logMsg = "PERBAIKAN OPERATOR pada " + timeStr + ": " + notes;
+            var newRiwayat = riwayatPending ? logMsg + "\n---\n" + riwayatPending : logMsg;
+            sheet.getRange(foundRow, 22).setValue(newRiwayat); // Col V (riwayat_pending)
           }
           nextStatus = "1_PETUGAS_SCAN";
         }
@@ -471,8 +418,12 @@ function doPost(e) {
           sheet.getRange(foundRow, 21).setValue(notes); // Col U (Catatan Print)
           sheet.getRange(foundRow, 30).setValue(timeStr); // Col AD (tgl_print)
           nextStatus = "7_SELESAI";
-          sheet.getRange(foundRow, 13).setValue(nextStatus);
         }
+      }
+      
+      // Update Status Alur Dokumen di Spreadsheet
+      if (nextStatus) {
+        sheet.getRange(foundRow, 13).setValue(nextStatus); // Col M
       }
       
       // Kirim Notifikasi WA Berdasarkan Tingkatan User (Role Templates)
@@ -496,23 +447,9 @@ function doPost(e) {
         else if (role === 'petugas_scan') {
           var isUptFas = (currentFasilitasi && currentFasilitasi.toUpperCase().indexOf("UPT") !== -1);
           var targetVerifikasi = isUptFas ? "Kepala UPT" : "Kepala Seksi";
-          
-          if (matchingRows.length > 1) {
-            var docListStr = "";
-            for (var m = 0; m < matchingRows.length; m++) {
-              var rSub = sheet.getRange(matchingRows[m], 11).getValue().toString();
-              var rPemohon = sheet.getRange(matchingRows[m], 5).getValue().toString();
-              docListStr += (m + 1) + ". " + rSub + " - " + rPemohon + "\n";
-            }
-            waMsg = "Saya *" + namaLengkap + "* selaku *Petugas Scan* menyampaikan bahwa dokumen Terintegrasi (" + matchingRows.length + " Dokumen) atas nama *" + pemohonName + "* (" + fasTag + ") Kode Unik *" + key + "* telah kami tambahkan link filenya.\n\n" +
-                    "📋 *Daftar Sub Layanan Terintegrasi:*\n\n" + docListStr + "\n" +
-                    "Mohon " + targetVerifikasi + " dapat melakukan verifikasi dokumen.\n\n" +
-                    "Terima Kasih";
-          } else {
-            waMsg = "Saya *" + namaLengkap + "* selaku *Petugas Scan* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami tambahkan link filenya.\n\n" +
-                    "Mohon " + targetVerifikasi + " dapat melakukan verifikasi dokumen.\n\n" +
-                    "Terima Kasih";
-          }
+          waMsg = "Saya *" + namaLengkap + "* selaku *Petugas Scan* menyampaikan bahwa dokumen *" + subLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami tambahkan link filenya.\n" +
+                  "Mohon " + targetVerifikasi + " dapat melakukan verifikasi dokumen.\n\n" +
+                  "Terima Kasih";
         } 
         else if (role === 'kasie_dafduk' || role === 'kasie_capil') {
           if (executeAction === 'pending') {
