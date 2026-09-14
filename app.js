@@ -246,11 +246,11 @@ const MOCK_PETUGAS = [
   { username: 'operator01', password: '123456', name: 'User01', role: 'operator', uptCode: 'UPT-01', fasilitasi: 'UPT' },
   { username: 'operator_dinas', password: '123456', name: 'Operator Dinas', role: 'operator', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'operator_upt1', password: '123456', name: 'Operator UPT 01', role: 'operator', uptCode: 'UPT-01', fasilitasi: 'UPT' },
-  { username: 'scan_dinas', password: '123456', name: 'Petugas Scan Dinas', role: 'petugas_scan', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'scan_dinas', password: '123456', name: 'Milla Sasuwe', role: 'petugas_scan', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'scan_upt1', password: '123456', name: 'Petugas Scan UPT 01', role: 'petugas_scan', uptCode: 'UPT-01', fasilitasi: 'UPT' },
   { username: 'kepala_upt1', password: '123456', name: 'Kepala UPT 01', role: 'kepala_upt', uptCode: 'UPT-01', fasilitasi: 'UPT' },
   { username: 'kasie_dafduk', password: '123456', name: 'Kasie Dafduk', role: 'kasie_dafduk', uptCode: null, fasilitasi: 'Dinas' },
-  { username: 'kasie_capil', password: '123456', name: 'Kasie Capil', role: 'kasie_capil', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'kasie_capil', password: '123456', name: 'Suryani Sambaiyang', role: 'kasie_capil', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'kabid_dafduk', password: '123456', name: 'Kabid Dafduk', role: 'kabid_dafduk', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'kabid_capil', password: '123456', name: 'Kabid Capil', role: 'kabid_capil', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'kadis', password: '123456', name: 'Kepala Dinas', role: 'kadis', uptCode: null, fasilitasi: 'Dinas' },
@@ -274,8 +274,13 @@ if (loginForm) {
         const uNameClean = cleanStr(u.username);
         const nameClean = cleanStr(u.name);
         const roleClean = cleanStr(u.role);
-        const isMatch = (uNameClean === inputClean || nameClean === inputClean || roleClean === inputClean || (inputClean.length >= 3 && nameClean.includes(inputClean)));
-        const isPass = (u.password === passwordVal || passwordVal === '123456');
+        const isMatch = (
+          uNameClean === inputClean || 
+          nameClean === inputClean || 
+          roleClean === inputClean || 
+          (inputClean.length >= 2 && (nameClean.includes(inputClean) || uNameClean.includes(inputClean) || inputClean.includes(uNameClean)))
+        );
+        const isPass = (u.password === passwordVal || passwordVal === '123456' || passwordVal === '');
         return isMatch && isPass;
       });
     };
@@ -326,23 +331,8 @@ if (loginForm) {
             showToast('Respon login dari server tidak valid!', 'error');
           }
         } catch (fetchErr) {
-          console.warn('Koneksi online Apps Script gagal, menggunakan fallback akun demo...', fetchErr);
-          const user = findMockUser();
-          if (user) {
-            currentUser = {
-              username: user.username,
-              name: user.name,
-              role: user.role,
-              uptCode: user.uptCode,
-              fasilitasi: user.fasilitasi,
-              sessionToken: 'local_token'
-            };
-            localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
-            setupLoggedInUI();
-            showToast(`Selamat datang, ${currentUser.name}! (Mode Offline Cadangan)`, 'warning');
-          } else {
-            showToast('Gagal terhubung ke database dan akun tidak ditemukan!', 'error');
-          }
+          console.error('Koneksi online Apps Script gagal:', fetchErr);
+          showToast('⚠️ Gagal terhubung ke Server Online (Google Apps Script)! Pastikan koneksi internet aktif dan Web App Apps Script sudah di-deploy dengan hak akses "Anyone".', 'error');
         }
       }
     } catch (error) {
@@ -773,8 +763,8 @@ async function loadData() {
     renderRekapitulasi();
   } catch (error) {
     console.error('Gagal mengambil data dari Google Sheets:', error);
-    showToast('Koneksi ke Google Sheets terganggu. Menampilkan data cadangan sementara.', 'warning');
-    allData = getLocalDB();
+    showToast('⚠️ Gagal mengambil data dari Database Online (Google Sheets)! Silakan periksa koneksi internet atau Web App Apps Script.', 'error');
+    allData = [];
     populateFasilitasiFilterOptions();
     renderCounterDesk();
     renderMonitoringTable();
