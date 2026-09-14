@@ -429,7 +429,7 @@ function switchPage(pageId) {
     if (formFasilitasiDisplay && currentUser) {
       formFasilitasiDisplay.value = currentUser.fasilitasi === 'UPT' ? `🏛️ ${currentUser.uptCode || 'UPT'}` : '🏢 Fasilitasi Dinas';
     }
-    updateSubLayananOptions();
+    initOperatorDraftItems();
   } else if (pageId === 'monitoring') {
     if (pageTitle) pageTitle.textContent = `Monitoring Alur Pelayanan`;
     if (pageSubtitle) pageSubtitle.textContent = `Lacak perjalanan dan verifikasi dokumen secara real-time.`;
@@ -1746,67 +1746,311 @@ if (actionForm) {
   });
 }
 
-// FORM INPUT OPERATOR SUBMIT (Ter-sinkron Waktu Sistem Presisi)
+// ================= FORMULIR PENDAFTARAN OPERATOR MODEL V2.0 =================
+const DAFDUK_MANDATORY_BASE_OPTIONS = [
+  "KK Baru",
+  "KK Perubahan / Penggantian",
+  "KK Hilang",
+  "Pindah Domisili"
+];
+
+let currentDraftItems = [];
+
+function initOperatorDraftItems() {
+  const integrasiMode = formIntegrasi ? formIntegrasi.value : 'tunggal';
+  
+  if (integrasiMode === 'Dafduk - Capil') {
+    currentDraftItems = [
+      { id: 1, jenis_layanan: 'Pencatatan Sipil', sub_layanan: 'Akta Kelahiran', pemohon: '', no_hp: '', email: '', alamat: '' }
+    ];
+  } else if (integrasiMode === 'Dafduk - Dafduk') {
+    currentDraftItems = [
+      { id: 1, jenis_layanan: 'Pendaftaran Penduduk', sub_layanan: 'KK Baru', pemohon: '', no_hp: '', email: '', alamat: '' }
+    ];
+  } else { // 'tunggal'
+    currentDraftItems = [
+      { id: 1, jenis_layanan: 'Pendaftaran Penduduk', sub_layanan: 'Rekam / Cetak KTP', pemohon: '', no_hp: '', email: '', alamat: '' }
+    ];
+  }
+  
+  renderOperatorItemsCards();
+}
+
+function renderOperatorItemsCards() {
+  const container = document.getElementById('operatorItemsContainer');
+  const btnAddItemBtn = document.getElementById('btnAddItemBtn');
+  const integrasiMode = formIntegrasi ? formIntegrasi.value : 'tunggal';
+
+  if (!container) return;
+
+  if (btnAddItemBtn) {
+    if (integrasiMode === 'tunggal') {
+      btnAddItemBtn.style.display = 'none';
+    } else {
+      btnAddItemBtn.style.display = 'inline-flex';
+    }
+  }
+
+  let html = '';
+  currentDraftItems.forEach((item, index) => {
+    const isFirstItem = (index === 0);
+    const itemNum = index + 1;
+    const badgeColor = isFirstItem ? '#3b82f6' : '#8b5cf6';
+    const badgeTitle = isFirstItem ? '📌 DOKUMEN MANDATORI UTAMA (ITEM 1 - ACUAN ALUR)' : `📄 DOKUMEN PENGIKUT TERINTEGRASI (ITEM ${itemNum})`;
+
+    let jenisOptionsHtml = '';
+    let subOptionsHtml = '';
+
+    if (integrasiMode === 'Dafduk - Capil') {
+      if (isFirstItem) {
+        jenisOptionsHtml = `<option value="Pencatatan Sipil" selected>Pencatatan Sipil (Capil - MANDATORI)</option>`;
+        const capilOpts = SUB_LAYANAN_OPTIONS["Pencatatan Sipil"] || [];
+        subOptionsHtml = capilOpts.map(opt => `<option value="${opt}" ${item.sub_layanan === opt ? 'selected' : ''}>${opt}</option>`).join('');
+      } else {
+        jenisOptionsHtml = `<option value="Pendaftaran Penduduk" selected>Pendaftaran Penduduk (Dafduk)</option>`;
+        const dafdukOpts = SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"] || [];
+        subOptionsHtml = dafdukOpts.map(opt => `<option value="${opt}" ${item.sub_layanan === opt ? 'selected' : ''}>${opt}</option>`).join('');
+      }
+    } else if (integrasiMode === 'Dafduk - Dafduk') {
+      jenisOptionsHtml = `<option value="Pendaftaran Penduduk" selected>Pendaftaran Penduduk (Dafduk)</option>`;
+      if (isFirstItem) {
+        subOptionsHtml = DAFDUK_MANDATORY_BASE_OPTIONS.map(opt => `<option value="${opt}" ${item.sub_layanan === opt ? 'selected' : ''}>${opt}</option>`).join('');
+      } else {
+        const dafdukOpts = SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"] || [];
+        subOptionsHtml = dafdukOpts.map(opt => `<option value="${opt}" ${item.sub_layanan === opt ? 'selected' : ''}>${opt}</option>`).join('');
+      }
+    } else { // 'tunggal'
+      jenisOptionsHtml = `
+        <option value="Pendaftaran Penduduk" ${item.jenis_layanan === 'Pendaftaran Penduduk' ? 'selected' : ''}>Pendaftaran Penduduk (Dafduk)</option>
+        <option value="Pencatatan Sipil" ${item.jenis_layanan === 'Pencatatan Sipil' ? 'selected' : ''}>Pencatatan Sipil (Capil)</option>
+      `;
+      const currentOpts = SUB_LAYANAN_OPTIONS[item.jenis_layanan] || SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"];
+      subOptionsHtml = currentOpts.map(opt => `<option value="${opt}" ${item.sub_layanan === opt ? 'selected' : ''}>${opt}</option>`).join('');
+    }
+
+    html += `
+      <div class="operator-item-card" data-index="${index}" style="background: rgba(15, 23, 42, 0.75); border: 1px solid ${isFirstItem ? 'rgba(59, 130, 246, 0.4)' : 'rgba(139, 92, 246, 0.3)'}; border-radius: 16px; padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.06);">
+          <div style="font-size: 0.82rem; font-weight: 800; color: ${badgeColor}; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+            ${badgeTitle}
+          </div>
+          ${!isFirstItem ? `<button type="button" class="btn btn-danger btn-xs remove-item-btn" data-index="${index}" style="padding: 4px 12px; font-size: 0.75rem; font-weight:700;">🗑️ Hapus Dokumen Ini</button>` : ''}
+        </div>
+
+        <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; margin-bottom: 1.25rem;">
+          <div class="form-group">
+            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Baris 3: Kategori Layanan *</label>
+            <select class="item-jenis-layanan" data-index="${index}" ${integrasiMode !== 'tunggal' ? 'disabled' : ''} style="width: 100%; padding: 11px 14px; background: rgba(17, 24, 39, 0.9); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+              ${jenisOptionsHtml}
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Sub Jenis Layanan (Dropdown) *</label>
+            <select class="item-sub-layanan" data-index="${index}" style="width: 100%; padding: 11px 14px; background: rgba(17, 24, 39, 0.9); border: 1px solid ${isFirstItem ? '#3b82f6' : '#8b5cf6'}; border-radius: 10px; color: #fff; font-size: 0.9rem; font-weight: 600;">
+              ${subOptionsHtml}
+            </select>
+          </div>
+        </div>
+
+        <div style="font-size: 0.78rem; font-weight: 700; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">
+          👤 BARIS 4: DATA DIRI PEMOHON / WARGA
+        </div>
+        <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem;">
+          <div class="form-group">
+            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Nama Lengkap Pemohon *</label>
+            <input type="text" class="item-pemohon" data-index="${index}" value="${escapeHTML(item.pemohon)}" placeholder="Isikan nama lengkap pemohon..." required style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+          </div>
+          
+          <div class="form-group">
+            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Nomor HP / WhatsApp Active *</label>
+            <input type="text" class="item-no-hp" data-index="${index}" value="${escapeHTML(item.no_hp)}" placeholder="08xxxxxxxxxx" required style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+          </div>
+
+          <div class="form-group">
+            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Alamat Email (Opsional)</label>
+            <input type="email" class="item-email" data-index="${index}" value="${escapeHTML(item.email)}" placeholder="pemohon@email.com" style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 1.25rem;">
+          <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Alamat Lengkap Pemohon *</label>
+          <textarea class="item-alamat" data-index="${index}" rows="2" placeholder="Isikan alamat domisili lengkap pemohon..." required style="width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem; resize: vertical;">${escapeHTML(item.alamat)}</textarea>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+  bindOperatorItemInputEvents();
+}
+
+function bindOperatorItemInputEvents() {
+  document.querySelectorAll('.item-pemohon').forEach(el => {
+    el.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.getAttribute('data-index'));
+      if (currentDraftItems[idx]) currentDraftItems[idx].pemohon = e.target.value;
+    });
+  });
+  document.querySelectorAll('.item-no-hp').forEach(el => {
+    el.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.getAttribute('data-index'));
+      if (currentDraftItems[idx]) currentDraftItems[idx].no_hp = e.target.value;
+    });
+  });
+  document.querySelectorAll('.item-email').forEach(el => {
+    el.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.getAttribute('data-index'));
+      if (currentDraftItems[idx]) currentDraftItems[idx].email = e.target.value;
+    });
+  });
+  document.querySelectorAll('.item-alamat').forEach(el => {
+    el.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.getAttribute('data-index'));
+      if (currentDraftItems[idx]) currentDraftItems[idx].alamat = e.target.value;
+    });
+  });
+  document.querySelectorAll('.item-jenis-layanan').forEach(el => {
+    el.addEventListener('change', (e) => {
+      const idx = parseInt(e.target.getAttribute('data-index'));
+      if (currentDraftItems[idx]) {
+        currentDraftItems[idx].jenis_layanan = e.target.value;
+        const opts = SUB_LAYANAN_OPTIONS[e.target.value] || [];
+        currentDraftItems[idx].sub_layanan = opts[0] || '';
+        renderOperatorItemsCards();
+      }
+    });
+  });
+  document.querySelectorAll('.item-sub-layanan').forEach(el => {
+    el.addEventListener('change', (e) => {
+      const idx = parseInt(e.target.getAttribute('data-index'));
+      if (currentDraftItems[idx]) {
+        currentDraftItems[idx].sub_layanan = e.target.value;
+      }
+    });
+  });
+  document.querySelectorAll('.remove-item-btn').forEach(el => {
+    el.addEventListener('click', (e) => {
+      const idx = parseInt(e.target.getAttribute('data-index'));
+      if (idx > 0 && currentDraftItems.length > 1) {
+        currentDraftItems.splice(idx, 1);
+        renderOperatorItemsCards();
+      }
+    });
+  });
+}
+
+// Tombol ➕ Lanjut (Tambah Dokumen)
+const btnAddItemBtn = document.getElementById('btnAddItemBtn');
+if (btnAddItemBtn) {
+  btnAddItemBtn.addEventListener('click', () => {
+    const item1 = currentDraftItems[0] || {};
+    currentDraftItems.push({
+      id: currentDraftItems.length + 1,
+      jenis_layanan: 'Pendaftaran Penduduk',
+      sub_layanan: 'KK Baru',
+      pemohon: item1.pemohon || '',
+      no_hp: item1.no_hp || '',
+      email: item1.email || '',
+      alamat: item1.alamat || ''
+    });
+    renderOperatorItemsCards();
+    showToast(`Dokumen pengikut baru (Item ${currentDraftItems.length}) ditambahkan. Silakan isi sub layanan.`, 'info');
+  });
+}
+
+// Tombol Perubahan Status Integrasi Layanan
+if (formIntegrasi) {
+  formIntegrasi.addEventListener('change', () => {
+    initOperatorDraftItems();
+  });
+}
+
+// FORM INPUT OPERATOR SUBMIT (Multi-Item Ter-sinkron Kode Unik Sama Persis)
 if (berkasForm) {
   berkasForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const integrasiMode = formIntegrasi ? formIntegrasi.value : 'tunggal';
     const currentSystemTime = getLocalDateTimeString();
-    const pemohon = formPemohon ? formPemohon.value.trim() : '';
-    const noHp = formNoHp ? formNoHp.value.trim() : '';
-    const email = formEmail ? formEmail.value.trim() : '';
-    const alamat = formAlamat ? formAlamat.value.trim() : '';
-    const jenisLayanan = formJenisLayanan ? formJenisLayanan.value : '';
-    const subLayanan = formSubLayanan ? formSubLayanan.value : '';
-    const integrasi = formIntegrasi ? formIntegrasi.value : 'tunggal';
 
-    if (!pemohon || !jenisLayanan || !subLayanan) {
-      showToast('Silakan lengkapi nama pemohon dan jenis/sub layanan!', 'error');
+    if (!currentDraftItems || currentDraftItems.length === 0) {
+      showToast('Silakan isi formulir pendaftaran!', 'error');
       return;
     }
 
-    const payloadData = {
+    // 1. Validasi Kelengkapan Setiap Item
+    for (let i = 0; i < currentDraftItems.length; i++) {
+      const item = currentDraftItems[i];
+      if (!item.pemohon || !item.pemohon.trim()) {
+        showToast(`Silakan isi nama pemohon pada Dokumen Item ${i + 1}!`, 'error');
+        return;
+      }
+      if (!item.no_hp || !item.no_hp.trim()) {
+        showToast(`Silakan isi nomor HP/WA pada Dokumen Item ${i + 1}!`, 'error');
+        return;
+      }
+      if (!item.sub_layanan || !item.sub_layanan.trim()) {
+        showToast(`Silakan pilih sub layanan pada Dokumen Item ${i + 1}!`, 'error');
+        return;
+      }
+    }
+
+    // 2. Prioritas Khusus Pindah Domisili pada Integrasi Dafduk - Dafduk
+    if (integrasiMode === 'Dafduk - Dafduk' && currentDraftItems.length > 1) {
+      const pindahIdx = currentDraftItems.findIndex(it => it.sub_layanan === 'Pindah Domisili');
+      if (pindahIdx > 0) {
+        const [pindahItem] = currentDraftItems.splice(pindahIdx, 1);
+        currentDraftItems.unshift(pindahItem);
+        showToast('💡 Dokumen Pindah Domisili diutamakan sebagai dokumen mandatori utama!', 'info');
+      }
+    }
+
+    // 3. Generate 1 Kode Unik Yang Sama Persis Untuk Seluruh Item
+    const sharedKey = generateUniqueKey();
+    const payloadItems = currentDraftItems.map((item, idx) => ({
+      key: sharedKey,
       tanggal: currentSystemTime.slice(0, 10),
       fasilitasi: currentUser ? (isUserUpt(currentUser) ? (currentUser.uptCode || currentUser.fasilitasi || 'UPT') : 'Dinas') : 'Dinas',
       operator: currentUser ? currentUser.name || currentUser.username : 'Operator',
       userName: currentUser ? currentUser.name || currentUser.username : 'Operator',
-      pemohon: pemohon,
-      alamat: alamat,
-      no_hp: noHp,
-      email: email,
-      integrasi: integrasi,
-      jenis_layanan: jenisLayanan,
-      sub_layanan: subLayanan
-    };
+      pemohon: item.pemohon.trim(),
+      alamat: item.alamat ? item.alamat.trim() : '',
+      no_hp: item.no_hp.trim(),
+      email: item.email ? item.email.trim() : '',
+      integrasi: integrasiMode,
+      jenis_layanan: item.jenis_layanan,
+      sub_layanan: item.sub_layanan,
+      isMandatory: idx === 0
+    }));
 
     const submitBtn = berkasForm.querySelector('button[type="submit"]');
     if (submitBtn) submitBtn.disabled = true;
 
     try {
       if (API_URL === 'local') {
-        const newKey = `SM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.random().toString(36).substr(2,4).toUpperCase()}`;
-        allData.unshift({ key: newKey, ...payloadData, status_alur: '1_PETUGAS_SCAN' });
-        showToast(`Berkas berhasil dibuat dengan Key: ${newKey}`, 'success');
-        berkasForm.reset();
-        if (formWaktuSistem) formWaktuSistem.value = getLocalDateTimeString();
+        payloadItems.forEach(it => {
+          allData.unshift({ ...it, status_alur: '1_PETUGAS_SCAN' });
+        });
+        showToast(`🎉 Berhasil! Permohonan Terintegrasi ${integrasiMode} (${payloadItems.length} Dokumen) Kode Unik: ${sharedKey} telah terinput & terkirim ke Counter Petugas Scan.`, 'success');
+        initOperatorDraftItems();
         switchPage('dashboard');
       } else {
         const response = await fetch(API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'create', data: payloadData })
+          body: JSON.stringify({ action: 'create_batch', data: payloadItems })
         });
         const result = await response.json();
         if (result.status === 'success') {
-          showToast(`Berkas berhasil dibuat dengan Key: ${result.data.key}`, 'success');
-          berkasForm.reset();
-          if (formWaktuSistem) formWaktuSistem.value = getLocalDateTimeString();
+          showToast(`🎉 Berhasil! Permohonan Terintegrasi ${integrasiMode} (${payloadItems.length} Dokumen) Kode Unik: ${sharedKey} telah terinput & terkirim ke Counter Petugas Scan.`, 'success');
+          initOperatorDraftItems();
           switchPage('dashboard');
         } else {
           showToast(result.message || 'Gagal menyimpan berkas!', 'error');
         }
       }
     } catch (err) {
-      console.error('Error create berkas:', err);
+      console.error('Error create berkas batch:', err);
       showToast('Gagal terhubung ke server saat pendaftaran berkas!', 'error');
     } finally {
       if (submitBtn) submitBtn.disabled = false;
@@ -1817,13 +2061,8 @@ if (berkasForm) {
 // Reset form event
 if (btnResetForm) {
   btnResetForm.addEventListener('click', () => {
-    if (berkasForm) berkasForm.reset();
-    if (formWaktuSistem) formWaktuSistem.value = getLocalDateTimeString();
-    if (formOperator && currentUser) formOperator.value = currentUser.name || currentUser.username;
-    if (formFasilitasiDisplay && currentUser) {
-      formFasilitasiDisplay.value = currentUser.fasilitasi === 'UPT' ? `🏛️ ${currentUser.uptCode || 'UPT'}` : '🏢 Fasilitasi Dinas';
-    }
-    updateSubLayananOptions();
+    initOperatorDraftItems();
+    showToast('Formulir pendaftaran berhasil direset.', 'info');
   });
 }
 

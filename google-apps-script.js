@@ -216,74 +216,104 @@ function doPost(e) {
     var sheet = getSpreadsheet().getActiveSheet();
     ensureColumns(sheet, 30); // Pastikan memiliki minimal 30 kolom
     
-    // 1. TAMBAH BARU (OPERATOR INPUT)
-    if (payload.action === 'create') {
-      var data = payload.data;
-      var key = data.key || generateUniqueKey();
-      var tanggal = data.tanggal || new Date().toISOString().slice(0, 10);
+    // 1. TAMBAH BARU (OPERATOR INPUT - SINGLE ATAU BATCH MULTI-ITEM INTEGRASI V2.0)
+    if (payload.action === 'create' || payload.action === 'create_batch') {
+      var items = Array.isArray(payload.data) ? payload.data : [payload.data];
+      var sharedKey = (items.length > 0 && items[0].key) ? items[0].key : generateUniqueKey();
       var timeStr = getLocalDateTimeString();
       
-      var values = [
-        key,
-        tanggal,
-        data.fasilitasi,
-        data.operator,
-        data.pemohon,
-        data.alamat,
-        data.no_hp,
-        data.email,
-        data.integrasi,
-        data.jenis_layanan,
-        data.sub_layanan,
-        "", // link_file (kosong awal)
-        "1_PETUGAS_SCAN", // status_alur
-        "", // status_tte
-        "", // penerima
-        "", // catatan_scan
-        "", // catatan_kasie
-        "", // catatan_kabid
-        "", // catatan_kadis
-        "", // catatan_upt
-        "", // catatan_print
-        data.riwayat_pending || "", // riwayat_pending
-        timeStr, // tgl_operator (W)
-        "", // tgl_scan (X)
-        "", // tgl_kasie (Y)
-        "", // tgl_upt (Z)
-        "", // tgl_kabid (AA)
-        "", // tgl_kadis (AB)
-        "", // tgl_tte (AC)
-        ""  // tgl_print (AD)
-      ];
-      
-      // Cari jika data key sudah ada (mengupdate berkas pending yang diperbaiki operator)
-      var foundRow = findRowByKey(sheet, key);
-      if (foundRow !== -1) {
-        sheet.getRange(foundRow, 1, 1, 30).setValues([values]);
-      } else {
-        sheet.insertRowBefore(2);
-        sheet.getRange(2, 1, 1, 30).setValues([values]);
+      for (var k = 0; k < items.length; k++) {
+        var itemData = items[k];
+        var itemKey = itemData.key || sharedKey;
+        var tanggal = itemData.tanggal || new Date().toISOString().slice(0, 10);
+        
+        var values = [
+          itemKey,
+          tanggal,
+          itemData.fasilitasi || "Dinas",
+          itemData.operator || "Operator",
+          itemData.pemohon || "",
+          itemData.alamat || "",
+          itemData.no_hp || "",
+          itemData.email || "",
+          itemData.integrasi || "tunggal",
+          itemData.jenis_layanan || "",
+          itemData.sub_layanan || "",
+          "", // link_file
+          "1_PETUGAS_SCAN", // status_alur
+          "", // status_tte
+          "", // penerima
+          "", // catatan_scan
+          "", // catatan_kasie
+          "", // catatan_kabid
+          "", // catatan_kadis
+          "", // catatan_upt
+          "", // catatan_print
+          itemData.riwayat_pending || "",
+          timeStr, // tgl_operator
+          "", "", "", "", "", "", ""
+        ];
+        
+        // Cari jika baris dengan key & sub_layanan ini sudah ada (update perbaikan pending)
+        var lastR = sheet.getLastRow();
+        var updatedExisting = false;
+        if (lastR > 1) {
+          var existingValues = sheet.getRange(2, 1, lastR - 1, 11).getValues();
+          for (var r = 0; r < existingValues.length; r++) {
+            if (existingValues[r][0].toString() === itemKey && existingValues[r][10].toString() === itemData.sub_layanan) {
+              sheet.getRange(r + 2, 1, 1, 30).setValues([values]);
+              updatedExisting = true;
+              break;
+            }
+          }
+        }
+        if (!updatedExisting) {
+          sheet.insertRowBefore(2);
+          sheet.getRange(2, 1, 1, 30).setValues([values]);
+        }
       }
       
       // Kirim Notifikasi WA HANYA ke Grup Khusus Target
       try {
+        var firstItem = items[0];
+        var mandatoryItem = items[0];
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].isMandatory || items[i].jenis_layanan === "Pencatatan Sipil" || items[i].sub_layanan === "Pindah Domisili") {
+            mandatoryItem = items[i];
+            break;
+          }
+        }
+        var mandatoryPemohon = mandatoryItem.pemohon || firstItem.pemohon || "";
+
         var ss = getSpreadsheet();
-        var userDetails = getUserDetailsFromPetugasSheet(ss, data.operator || data.userName);
-        var namaLengkap = userDetails.name || data.operator || data.userName || "Operator";
+        var userDetails = getUserDetailsFromPetugasSheet(ss, firstItem.operator || firstItem.userName);
+        var namaLengkap = userDetails.name || firstItem.operator || firstItem.userName || "Operator";
         var roleTitle = userDetails.role || "Operator";
-        var fasTag = formatFasilitasiTag(data.fasilitasi, data.operator || data.userName, ss);
+        var fasTag = formatFasilitasiTag(firstItem.fasilitasi, firstItem.operator || firstItem.userName, ss);
         
-        var waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + data.sub_layanan + "* (" + fasTag + ") atas nama *" + data.pemohon + "* telah di input.\n" +
-                    "Selanjutnya mohon petugas scan proses lanjut.\n\n" +
-                    "Terima Kasih";
+        var waMsg = "";
+        if (items.length > 1 || (firstItem.integrasi && firstItem.integrasi !== "tunggal")) {
+          var docListStr = "";
+          for (var d = 0; d < items.length; d++) {
+            var itemPemohon = items[d].pemohon || mandatoryPemohon;
+            docListStr += (d + 1) + ". " + items[d].sub_layanan + " - " + itemPemohon + "\n";
+          }
+          waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa permohonan Terintegrasi *" + firstItem.integrasi + "* (Kode Unik: *" + sharedKey + "*) atas nama *" + mandatoryPemohon + "* (" + fasTag + ") telah di-input.\n\n" +
+                  "📋 *Daftar Sub Layanan Terintegrasi (" + items.length + " Dokumen):*\n\n" + docListStr + "\n" +
+                  "Selanjutnya mohon Petugas Scan memproses dokumen tersebut.\n\n" +
+                  "Terima Kasih";
+        } else {
+          waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa berkas permohonan *" + firstItem.sub_layanan + "* atas nama *" + firstItem.pemohon + "* (" + fasTag + ") Kode Unik *" + sharedKey + "* telah di-input.\n\n" +
+                  "Selanjutnya mohon Petugas Scan memproses berkas tersebut.\n\n" +
+                  "Terima Kasih";
+        }
         
-        // Kirim Notifikasi WA ke Grup Target (Dinas/UPT) & Admin 082397724667
-        sendWhatsAppNotification(waMsg, data.fasilitasi);
+        sendWhatsAppNotification(waMsg, firstItem.fasilitasi);
       } catch(waErr) {
         Logger.log("WA Error saat create: " + waErr.toString());
       }
       
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: { key: key } }))
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: { key: sharedKey, count: items.length } }))
         .setMimeType(ContentService.MimeType.JSON);
     }
     
