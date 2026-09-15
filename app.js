@@ -1875,7 +1875,6 @@ window.openActionModal = function(key) {
       saveModalBtn.textContent = '🚀 Upload & Kirim Berkas';
     }
     if (cancelModalBtn) cancelModalBtn.textContent = 'Batal';
-  }
   } else if (role === 'petugas_tte') {
     // Mode Khusus Petugas TTE: Sembunyikan Keputusan Tindakan (Lanjut/Pending), tampilkan hanya Status TTE / SIAK
     if (modalTitle) modalTitle.textContent = '✍️ Tindak Lanjut Petugas TTE / SIAK';
