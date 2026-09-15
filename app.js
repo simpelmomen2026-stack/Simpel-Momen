@@ -242,6 +242,7 @@ const MOCK_PETUGAS = [
   { username: 'kepala_upt1', password: '123456', name: 'Kepala UPT 01', role: 'kepala_upt', uptCode: 'UPT-01', fasilitasi: 'UPT' },
   { username: 'kasie_dafduk', password: '123456', name: 'Kasie Dafduk', role: 'kasie_dafduk', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'kasie_capil', password: '123456', name: 'Kasie Capil', role: 'kasie_capil', uptCode: null, fasilitasi: 'Dinas' },
+  { username: 'sursam02', password: '123456', name: 'Suryani Sambaiyang', role: 'kasie_capil', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'kabid_dafduk', password: '123456', name: 'Kabid Dafduk', role: 'kabid_dafduk', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'kabid_capil', password: '123456', name: 'Kabid Capil', role: 'kabid_capil', uptCode: null, fasilitasi: 'Dinas' },
   { username: 'kadis', password: '123456', name: 'Kepala Dinas', role: 'kadis', uptCode: null, fasilitasi: 'Dinas' },
@@ -279,7 +280,7 @@ if (loginForm) {
 
       // 2. Jika username kustom (misal: SURSAM02 / nama khusus), deteksi peran secara otomatis
       let detectedRole = 'operator';
-      if (inputClean.includes('capil') || inputClean.includes('sipil')) detectedRole = 'kasie_capil';
+      if (inputClean.includes('capil') || inputClean.includes('sipil') || inputClean.includes('sursam')) detectedRole = 'kasie_capil';
       else if (inputClean.includes('dafduk')) detectedRole = 'kasie_dafduk';
       else if (inputClean.includes('scan')) detectedRole = 'petugas_scan';
       else if (inputClean.includes('upt')) detectedRole = 'kepala_upt';
