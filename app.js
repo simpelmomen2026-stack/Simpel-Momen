@@ -323,10 +323,14 @@ if (loginForm) {
           showToast('Username atau password tidak ditemukan!', 'error');
         }
       } else {
-        // Login Online via Google Sheets Apps Script API
+        // Login Online via Google Sheets Apps Script API dengan Timeout Controller 3.5 Detik
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
         try {
           const loginUrl = `${API_URL}?action=login&username=${encodeURIComponent(usernameVal)}&password=${encodeURIComponent(passwordVal)}`;
-          const response = await fetch(loginUrl, { method: 'GET' });
+          const response = await fetch(loginUrl, { method: 'GET', signal: controller.signal });
+          clearTimeout(timeoutId);
           const textRes = await response.text();
           
           let result;
@@ -390,7 +394,8 @@ if (loginForm) {
             showToast(result.message || 'Respon login dari server tidak valid!', 'error');
           }
         } catch (fetchErr) {
-          console.warn('Koneksi online Apps Script gagal:', fetchErr);
+          clearTimeout(timeoutId);
+          console.warn('Koneksi online Apps Script gagal atau timeout:', fetchErr);
           const user = findMockUser();
           if (user) {
             currentUser = {
@@ -429,56 +434,60 @@ if (logoutBtn) {
     localStorage.removeItem('simpel_momen_user');
     sessionStorage.removeItem('simpel_momen_user');
     currentUser = null;
-    appWrapper.style.display = 'none';
-    loginWrapper.style.display = 'flex';
+    if (appWrapper) appWrapper.style.display = 'none';
+    if (loginWrapper) loginWrapper.style.display = 'flex';
   });
 }
 
-// Setup UI User Sesudah Login
+// Setup UI User Sesudah Login (Dengan Garansi Keamanan Tampilan DOM)
 function setupLoggedInUI() {
   if (!currentUser) return;
   
   if (loginWrapper) loginWrapper.style.display = 'none';
   if (appWrapper) appWrapper.style.display = 'flex';
-  
-  const displayName = currentUser.name || currentUser.username || 'User';
-  if (userDisplayName) userDisplayName.textContent = displayName;
-  
-  const initials = String(displayName).trim().split(/\s+/).map(n => n[0]).join('').slice(0, 2).toUpperCase();
-  if (userAvatar) userAvatar.textContent = initials || 'OP';
 
-  const fasilitasiStr = currentUser.fasilitasi || 'Dinas';
-  const uptCodeStr = currentUser.uptCode || '';
+  try {
+    const displayName = currentUser.name || currentUser.username || 'User';
+    if (userDisplayName) userDisplayName.textContent = displayName;
+    
+    const initials = String(displayName).trim().split(/\s+/).map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    if (userAvatar) userAvatar.textContent = initials || 'OP';
 
-  const roleTitleMap = {
-    'operator': `Operator ${fasilitasiStr} ${uptCodeStr}`.trim(),
-    'petugas_scan': `Petugas Scan ${fasilitasiStr} ${uptCodeStr}`.trim(),
-    'kasie_dafduk': 'Kasie Dafduk Dinas',
-    'kasie_capil': 'Kasie Capil Dinas',
-    'kepala_upt': `Kepala ${uptCodeStr || 'UPT'}`,
-    'kabid_dafduk': 'Kabid Dafduk',
-    'kabid_capil': 'Kabid Capil',
-    'kadis': 'Kepala Dinas (Kadis)',
-    'petugas_tte': 'Petugas TTE Dinas',
-    'petugas_pencetakan': `Petugas Cetak ${fasilitasiStr} ${uptCodeStr}`.trim(),
-    'monitoring': `Monitoring ${fasilitasiStr}`
-  };
+    const fasilitasiStr = currentUser.fasilitasi || 'Dinas';
+    const uptCodeStr = currentUser.uptCode || '';
 
-  if (userRoleBadge) userRoleBadge.textContent = roleTitleMap[currentUser.role] || currentUser.role || 'Petugas';
+    const roleTitleMap = {
+      'operator': `Operator ${fasilitasiStr} ${uptCodeStr}`.trim(),
+      'petugas_scan': `Petugas Scan ${fasilitasiStr} ${uptCodeStr}`.trim(),
+      'kasie_dafduk': 'Kasie Dafduk Dinas',
+      'kasie_capil': 'Kasie Capil Dinas',
+      'kepala_upt': `Kepala ${uptCodeStr || 'UPT'}`,
+      'kabid_dafduk': 'Kabid Dafduk',
+      'kabid_capil': 'Kabid Capil',
+      'kadis': 'Kepala Dinas (Kadis)',
+      'petugas_tte': 'Petugas TTE Dinas',
+      'petugas_pencetakan': `Petugas Cetak ${fasilitasiStr} ${uptCodeStr}`.trim(),
+      'monitoring': `Monitoring ${fasilitasiStr}`
+    };
 
-  if (menuInputForm) {
-    if (currentUser.role === 'operator') {
-      menuInputForm.style.display = 'flex';
-      if (formOperator) formOperator.value = displayName;
-      if (formFasilitasiDisplay) formFasilitasiDisplay.value = fasilitasiStr === 'UPT' ? `🏛️ ${uptCodeStr || 'UPT'}` : '🏢 Fasilitasi Dinas';
-    } else {
-      menuInputForm.style.display = 'none';
+    if (userRoleBadge) userRoleBadge.textContent = roleTitleMap[currentUser.role] || currentUser.role || 'Petugas';
+
+    if (menuInputForm) {
+      if (currentUser.role === 'operator') {
+        menuInputForm.style.display = 'flex';
+        if (formOperator) formOperator.value = displayName;
+        if (formFasilitasiDisplay) formFasilitasiDisplay.value = fasilitasiStr === 'UPT' ? `🏛️ ${uptCodeStr || 'UPT'}` : '🏢 Fasilitasi Dinas';
+      } else {
+        menuInputForm.style.display = 'none';
+      }
     }
-  }
 
-  updateSubLayananOptions();
-  switchPage('dashboard');
-  loadData(true);
+    updateSubLayananOptions();
+    switchPage('dashboard');
+    loadData(true);
+  } catch (err) {
+    console.error('Terjadi kesalahan minor saat setup UI:', err);
+  }
 }
 
 // Switch Sidebar Pages
