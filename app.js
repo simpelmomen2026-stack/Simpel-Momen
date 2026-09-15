@@ -4,8 +4,8 @@
 // Ubah IS_OFFLINE_MODE = true jika ingin mematikan koneksi database online sementara (Mode Pemeliharaan/Perbaikan)
 // Ubah IS_OFFLINE_MODE = false jika perbaikan sudah selesai dan ingin meng-online-kan kembali.
 const IS_OFFLINE_MODE = false; 
-// Mode Keamanan Ketat: true = hanya akun yang terdaftar di sheet Petugas yang boleh login (Ditolak jika tidak terdaftar)
-const ENFORCE_STRICT_AUTH = true; 
+// Mode Keamanan: false = Mengizinkan login akun peran bawaan (operator_dinas, kasie_capil, dsb.) & akun sheet online
+const ENFORCE_STRICT_AUTH = false; 
 
 let API_URL = IS_OFFLINE_MODE ? 'local' : 'https://script.google.com/macros/s/AKfycbxcYF0YeOTg106tFjE9rDWT9_hvUXN9Ai8fNzNKUYIJQGtBADqUi8DcAR1BVCGoROX5hg/exec';
 let currentUser = null;
