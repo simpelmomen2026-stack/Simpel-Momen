@@ -1783,11 +1783,28 @@ window.openActionModal = function(key) {
     const linkHtml = hasLink ? `<a href="${escapeHTML(item.link_file.trim())}" target="_blank" style="color:#60a5fa; font-weight:600;">📄 Buka Scan PDF</a>` : 'Belum ada file scan';
 
     const allBatchItems = allData.filter(d => String(d.key) === String(item.key));
+    allBatchItems.sort((a, b) => {
+      const isCapilA = String(a.jenis_layanan).toLowerCase().includes('capil') || String(a.jenis_layanan).toLowerCase().includes('pencatatan sipil');
+      const isCapilB = String(b.jenis_layanan).toLowerCase().includes('capil') || String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil');
+      if (isCapilA && !isCapilB) return -1;
+      if (!isCapilA && isCapilB) return 1;
+
+      const isPindahA = String(a.sub_layanan).toLowerCase().includes('pindah');
+      const isPindahB = String(b.sub_layanan).toLowerCase().includes('pindah');
+      if (isPindahA && !isPindahB) return -1;
+      if (!isPindahA && isPindahB) return 1;
+
+      if (a.isMandatory && !b.isMandatory) return -1;
+      if (!a.isMandatory && b.isMandatory) return 1;
+
+      return 0;
+    });
+
     let batchBannerHtml = '';
     if (allBatchItems.length > 1) {
       const followerListHtml = allBatchItems.map((it, idx) => {
-        const isMandatory = (it === item || it.isMandatory || String(it.jenis_layanan).toLowerCase().includes('capil') || String(it.sub_layanan).toLowerCase().includes('pindah'));
-        const tag = isMandatory ? '📌 MANDATORI UTAMA' : `📄 PENGIKUT #${idx + 1}`;
+        const isMandatory = (idx === 0);
+        const tag = isMandatory ? '📌 MANDATORI UTAMA' : `📄 PENGIKUT #${idx}`;
         const tagBg = isMandatory ? 'background:#3b82f6; color:#fff;' : 'background:rgba(139,92,246,0.3); color:#c084fc;';
         return `
           <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 12px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
@@ -2409,13 +2426,23 @@ async function handleOperatorFormSubmit(e) {
     }
   }
 
-  // 2. Prioritas Khusus Pindah Domisili pada Integrasi Dafduk - Dafduk
-  if (integrasiMode === 'Dafduk - Dafduk' && currentDraftItems.length > 1) {
+  // 2. Prioritas Mandatori Utama: Capil untuk Dafduk - Capil, Pindah Domisili untuk Dafduk - Dafduk
+  if (integrasiMode === 'Dafduk - Capil') {
+    const capilIdx = currentDraftItems.findIndex(it => {
+      const jl = (it.jenis_layanan || '').toLowerCase();
+      return jl.includes('capil') || jl.includes('pencatatan sipil');
+    });
+    if (capilIdx > 0) {
+      const [capilItem] = currentDraftItems.splice(capilIdx, 1);
+      currentDraftItems.unshift(capilItem);
+      showToast('💡 Dokumen Pencatatan Sipil diutamakan sebagai Dokumen Mandatori Utama!', 'info');
+    }
+  } else if (integrasiMode === 'Dafduk - Dafduk' && currentDraftItems.length > 1) {
     const pindahIdx = currentDraftItems.findIndex(it => it.sub_layanan === 'Pindah Domisili');
     if (pindahIdx > 0) {
       const [pindahItem] = currentDraftItems.splice(pindahIdx, 1);
       currentDraftItems.unshift(pindahItem);
-      showToast('💡 Dokumen Pindah Domisili diutamakan sebagai dokumen mandatori utama!', 'info');
+      showToast('💡 Dokumen Pindah Domisili diutamakan sebagai Dokumen Mandatori Utama!', 'info');
     }
   }
 
