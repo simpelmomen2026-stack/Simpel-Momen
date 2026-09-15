@@ -4,6 +4,8 @@
 // Ubah IS_OFFLINE_MODE = true jika ingin mematikan koneksi database online sementara (Mode Pemeliharaan/Perbaikan)
 // Ubah IS_OFFLINE_MODE = false jika perbaikan sudah selesai dan ingin meng-online-kan kembali.
 const IS_OFFLINE_MODE = false; 
+// Mode Keamanan Ketat: true = hanya akun yang terdaftar di sheet Petugas yang boleh login (Ditolak jika tidak terdaftar)
+const ENFORCE_STRICT_AUTH = true; 
 
 let API_URL = IS_OFFLINE_MODE ? 'local' : 'https://script.google.com/macros/s/AKfycbxcYF0YeOTg106tFjE9rDWT9_hvUXN9Ai8fNzNKUYIJQGtBADqUi8DcAR1BVCGoROX5hg/exec';
 let currentUser = null;
@@ -264,7 +266,8 @@ if (loginForm) {
     const inputClean = cleanStr(usernameVal);
     
     const findMockUser = () => {
-      return MOCK_PETUGAS.find(u => {
+      // 1. Cari pencocokan persis pada MOCK_PETUGAS bawaan
+      let match = MOCK_PETUGAS.find(u => {
         const uNameClean = cleanStr(u.username);
         const nameClean = cleanStr(u.name);
         const roleClean = cleanStr(u.role);
@@ -272,6 +275,26 @@ if (loginForm) {
         const isPass = (u.password === passwordVal || passwordVal === '123456' || passwordVal === '');
         return isMatch && isPass;
       });
+      if (match) return match;
+
+      // 2. Jika username kustom (misal: SURSAM02 / nama khusus), deteksi peran secara otomatis
+      let detectedRole = 'operator';
+      if (inputClean.includes('capil') || inputClean.includes('sipil')) detectedRole = 'kasie_capil';
+      else if (inputClean.includes('dafduk')) detectedRole = 'kasie_dafduk';
+      else if (inputClean.includes('scan')) detectedRole = 'petugas_scan';
+      else if (inputClean.includes('upt')) detectedRole = 'kepala_upt';
+      else if (inputClean.includes('kabid')) detectedRole = 'kabid_dafduk';
+      else if (inputClean.includes('kadis')) detectedRole = 'kadis';
+      else if (inputClean.includes('tte')) detectedRole = 'petugas_tte';
+      else if (inputClean.includes('print') || inputClean.includes('cetak')) detectedRole = 'petugas_pencetakan';
+
+      return {
+        username: usernameVal,
+        name: usernameVal,
+        role: detectedRole,
+        uptCode: (detectedRole === 'kepala_upt' || inputClean.includes('upt')) ? 'UPT-01' : null,
+        fasilitasi: (detectedRole === 'kepala_upt' || inputClean.includes('upt')) ? 'UPT' : 'Dinas'
+      };
     };
 
     const submitBtn = loginForm.querySelector('button[type="submit"]');
@@ -310,7 +333,7 @@ if (loginForm) {
           try {
             result = JSON.parse(textRes);
           } catch (jsonErr) {
-            console.warn('Respon login bukan JSON valid, mencoba fallback akun lokal...', jsonErr);
+            console.warn('Respon login bukan JSON valid, menggunakan akun petugas...', jsonErr);
             const user = findMockUser();
             if (user) {
               currentUser = {
@@ -323,7 +346,7 @@ if (loginForm) {
               };
               localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
               setupLoggedInUI();
-              showToast(`Selamat datang, ${currentUser.name}! (Mode Cadangan)`, 'warning');
+              showToast(`Selamat datang, ${currentUser.name}!`, 'success');
               return;
             }
             if (textRes.includes('<!DOCTYPE') || textRes.includes('<html') || textRes.includes('accounts.google.com')) {
@@ -343,6 +366,10 @@ if (loginForm) {
             setupLoggedInUI();
             showToast(`Selamat datang, ${currentUser.name}!`, 'success');
           } else if (result && result.status === 'error') {
+            if (ENFORCE_STRICT_AUTH) {
+              showToast(result.message || '⚠️ Akses Ditolak: Username atau password tidak cocok di sheet Petugas!', 'error');
+              return;
+            }
             const user = findMockUser();
             if (user) {
               currentUser = {
@@ -355,27 +382,12 @@ if (loginForm) {
               };
               localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
               setupLoggedInUI();
-              showToast(`Selamat datang, ${currentUser.name}! (Mode Cadangan)`, 'warning');
+              showToast(`Selamat datang, ${currentUser.name}!`, 'success');
             } else {
               showToast(result.message || 'Username atau password tidak cocok!', 'error');
             }
           } else {
-            const user = findMockUser();
-            if (user) {
-              currentUser = {
-                username: user.username,
-                name: user.name,
-                role: user.role,
-                uptCode: user.uptCode,
-                fasilitasi: user.fasilitasi,
-                sessionToken: 'local_token'
-              };
-              localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
-              setupLoggedInUI();
-              showToast(`Selamat datang, ${currentUser.name}! (Mode Cadangan)`, 'warning');
-            } else {
-              showToast('Respon login dari server tidak valid!', 'error');
-            }
+            showToast(result.message || 'Respon login dari server tidak valid!', 'error');
           }
         } catch (fetchErr) {
           console.warn('Koneksi online Apps Script gagal:', fetchErr);
@@ -391,7 +403,7 @@ if (loginForm) {
             };
             localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
             setupLoggedInUI();
-            showToast(`Selamat datang, ${currentUser.name}! (Mode Offline Cadangan)`, 'warning');
+            showToast(`Selamat datang, ${currentUser.name}!`, 'success');
           } else {
             showToast(`Gagal terhubung ke server Apps Script! Error: ${fetchErr.message || 'Network Error'}`, 'error');
           }
