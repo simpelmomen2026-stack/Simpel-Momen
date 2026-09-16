@@ -2206,13 +2206,17 @@ function renderOperatorItemsCards() {
 
     if (integrasiMode === 'Dafduk - Capil') {
       if (isFirstItem) {
-        jenisOptionsHtml = `<option value="Pencatatan Sipil" selected>Pencatatan Sipil (Capil - MANDATORI)</option>`;
+        jenisOptionsHtml = `<option value="Pencatatan Sipil" selected>Pencatatan Sipil (Capil - MANDATORI UTAMA)</option>`;
         const capilOpts = SUB_LAYANAN_OPTIONS["Pencatatan Sipil"] || [];
         subOptionsHtml = capilOpts.map(opt => `<option value="${opt}" ${item.sub_layanan === opt ? 'selected' : ''}>${opt}</option>`).join('');
       } else {
-        jenisOptionsHtml = `<option value="Pendaftaran Penduduk" selected>Pendaftaran Penduduk (Dafduk)</option>`;
-        const dafdukOpts = SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"] || [];
-        subOptionsHtml = dafdukOpts.map(opt => `<option value="${opt}" ${item.sub_layanan === opt ? 'selected' : ''}>${opt}</option>`).join('');
+        const currentJenis = item.jenis_layanan || 'Pendaftaran Penduduk';
+        jenisOptionsHtml = `
+          <option value="Pendaftaran Penduduk" ${currentJenis === 'Pendaftaran Penduduk' ? 'selected' : ''}>Pendaftaran Penduduk (Dafduk)</option>
+          <option value="Pencatatan Sipil" ${currentJenis === 'Pencatatan Sipil' ? 'selected' : ''}>Pencatatan Sipil (Capil)</option>
+        `;
+        const currentOpts = SUB_LAYANAN_OPTIONS[currentJenis] || SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"];
+        subOptionsHtml = currentOpts.map(opt => `<option value="${opt}" ${item.sub_layanan === opt ? 'selected' : ''}>${opt}</option>`).join('');
       }
     } else if (integrasiMode === 'Dafduk - Dafduk') {
       jenisOptionsHtml = `<option value="Pendaftaran Penduduk" selected>Pendaftaran Penduduk (Dafduk)</option>`;
