@@ -2247,7 +2247,7 @@ function renderOperatorItemsCards() {
         <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; margin-bottom: 1.25rem;">
           <div class="form-group">
             <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Baris 3: Kategori Layanan *</label>
-            <select class="item-jenis-layanan" data-index="${index}" ${integrasiMode !== 'tunggal' ? 'disabled' : ''} style="width: 100%; padding: 11px 14px; background: rgba(17, 24, 39, 0.9); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+            <select class="item-jenis-layanan" data-index="${index}" ${isFirstItem ? 'disabled' : ''} style="width: 100%; padding: 11px 14px; background: rgba(17, 24, 39, 0.9); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
               ${jenisOptionsHtml}
             </select>
           </div>
