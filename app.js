@@ -2046,23 +2046,19 @@ if (actionForm) {
             }
             showToast(`🎉 Berhasil! Dokumen Pencatatan Sipil (Kode Unik: ${key}) diverifikasi & diteruskan ke Kabid Capil. Dokumen Pendaftaran Penduduk sekarang aktif di Meja Kasie Dafduk untuk diproses selanjutnya!`, 'success');
           } else if (currentUser.role === 'kasie_dafduk') {
-            if (isDafdukDafduk && !fullBatch.some(b => String(b.sub_layanan).toLowerCase().includes('pindah'))) {
-              allData.forEach(item => {
-                if (String(item.key) === String(key)) {
+            let updatedDafdukCount = 0;
+            allData.forEach(item => {
+              if (String(item.key) === String(key)) {
+                const jl = String(item.jenis_layanan || '').toLowerCase();
+                if (jl.includes('dafduk') || jl.includes('pendaftaran')) {
                   item.status_alur = '3_VALIDASI_KABID';
                   item.catatan_kasie = notes;
                   item.tgl_kasie = timeStr;
+                  updatedDafdukCount++;
                 }
-              });
-              showToast(`🎉 Berhasil! Seluruh dokumen Dafduk terintegrasi (Kode Unik: ${key}) telah diverifikasi & diteruskan ke Kabid Dafduk!`, 'success');
-            } else {
-              if (sampleItem) {
-                sampleItem.status_alur = '3_VALIDASI_KABID';
-                sampleItem.catatan_kasie = notes;
-                sampleItem.tgl_kasie = timeStr;
               }
-              showToast(`🎉 Berhasil! Dokumen Pendaftaran Penduduk (Kode Unik: ${key}) diverifikasi & diteruskan ke Kabid Dafduk!`, 'success');
-            }
+            });
+            showToast(`🎉 Berhasil! ${updatedDafdukCount > 1 ? updatedDafdukCount + ' Dokumen Pendaftaran Penduduk' : 'Dokumen Pendaftaran Penduduk'} (Kode Unik: ${key}) telah diverifikasi & diteruskan ke Kabid Dafduk!`, 'success');
           } else if (currentUser.role === 'kepala_upt') {
             if (isDafdukCapil) {
               allData.forEach(item => {
