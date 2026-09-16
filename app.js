@@ -870,20 +870,24 @@ function renderCounterDesk() {
       return item === mandatoryItem;
     }
 
-    if (role === 'kasie_capil') {
-      // Kasie Capil melihat dokumen Pencatatan Sipil secara langsung
+    if (role === 'kasie_capil' || role === 'kabid_capil') {
+      // Kasie Capil / Kabid Capil melihat dokumen Pencatatan Sipil Dinas secara langsung
       return true;
     }
 
-    if (role === 'kasie_dafduk') {
+    if (role === 'kasie_dafduk' || role === 'kabid_dafduk') {
       if (isDafdukCapil) {
-        // C.1 Integrasi Layanan Dafduk - Capil di Dinas:
-        // Dokumen Dafduk HANYA DITAMPILKAN jika dokumen Capil yang se-Kode Unik SUDAH DIVERIFIKASI oleh Kasie Capil (status Capil bukan 2_VERIFIKASI_KASIE lagi)!
+        // D.1 Integrasi Layanan Dafduk - Capil (Fasilitasi Dinas):
+        // Dokumen Dafduk HANYA DITAMPILKAN jika dokumen Capil se-Kode Unik SUDAH DIVERIFIKASI/DILANJUTKAN oleh Kasie Capil / Kabid Capil!
+        // (Jika status Capil se-Kode Unik MASIH 2_VERIFIKASI_KASIE atau 3_VALIDASI_KABID, sembunyikan dokumen Dafduk dari lembar kerja!)
         const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
         if (capilItem) {
           const capilStatus = String(capilItem.status_alur || '');
-          if (capilStatus === '2_VERIFIKASI_KASIE') {
-            // Kasie Capil belum memverifikasi -> Dokumen Dafduk SEOLAH-OLAH ADA TETAPI JANGAN DULU DITAMPILKAN!
+          if (role === 'kasie_dafduk' && capilStatus === '2_VERIFIKASI_KASIE') {
+            return false;
+          }
+          if (role === 'kabid_dafduk' && (capilStatus === '2_VERIFIKASI_KASIE' || capilStatus === '3_VALIDASI_KABID')) {
+            // Kabid Capil belum memverifikasi -> Dokumen Dafduk SEOLAH-OLAH ADA TETAPI JANGAN DULU DITAMPILKAN pada lembar kerja Kabid Dafduk!
             return false;
           }
         }
@@ -891,13 +895,8 @@ function renderCounterDesk() {
       }
 
       if (isDafdukDafduk) {
-        // C.2 Integrasi Layanan Dafduk - Dafduk di Dinas:
-        // Khusus jika ada sub_layanan Pindah: Kasie Dafduk mengeksekusi secara terpisah & kekhususan mandatori diabaikan!
-        const hasPindah = fullBatch.some(b => String(b.sub_layanan).toLowerCase().includes('pindah'));
-        if (hasPindah) {
-          return true; // Tampilkan setiap item Pindah / Dafduk secara terpisah!
-        }
-        // Tanpa Pindah: Tampilkan HANYA 1 dokumen mandatori!
+        // C.2 Integrasi Layanan Dafduk - Dafduk (Dinas & UPT):
+        // Tampilkan HANYA 1 dokumen mandatori utama! Dokumen Dafduk pengikut disembunyikan.
         const mandatoryItem = getMandatoryItemForBatch(fullBatch);
         return item === mandatoryItem;
       }
@@ -2059,6 +2058,41 @@ if (actionForm) {
               }
             });
             showToast(`🎉 Berhasil! ${updatedDafdukCount > 1 ? updatedDafdukCount + ' Dokumen Pendaftaran Penduduk' : 'Dokumen Pendaftaran Penduduk'} (Kode Unik: ${key}) telah diverifikasi & diteruskan ke Kabid Dafduk!`, 'success');
+          } else if (currentUser.role === 'kabid_capil') {
+            let targetNextStatus = '4_SERTIFIKASI_KADIS';
+            allData.forEach(item => {
+              if (String(item.key) === String(key)) {
+                const jl = String(item.jenis_layanan || '').toLowerCase();
+                if (jl.includes('capil') || jl.includes('pencatatan sipil')) {
+                  if (item.status_tte === 'Belum diajukan SIAK' || item.status_tte === 'Belum Verifikasi SIAK') {
+                    targetNextStatus = '5_TTE';
+                  }
+                  item.status_alur = targetNextStatus;
+                  item.catatan_kabid = notes;
+                  item.tgl_kabid = timeStr;
+                }
+              }
+            });
+            showToast(`🎉 Berhasil! Dokumen Pencatatan Sipil (Kode Unik: ${key}) divalidasi Kabid Capil & diteruskan ke ${targetNextStatus === '5_TTE' ? 'Petugas TTE' : 'Kadis'}. Dokumen Pendaftaran Penduduk se-Kode Unik sekarang otomatis TAMPIL di Meja Kabid Dafduk!`, 'success');
+          } else if (currentUser.role === 'kabid_dafduk') {
+            let updatedDafdukCount = 0;
+            let targetNextStatus = '4_SERTIFIKASI_KADIS';
+            allData.forEach(item => {
+              if (String(item.key) === String(key)) {
+                const jl = String(item.jenis_layanan || '').toLowerCase();
+                if (jl.includes('dafduk') || jl.includes('pendaftaran')) {
+                  if (item.status_tte === 'Belum diajukan SIAK' || item.status_tte === 'Belum Verifikasi SIAK') {
+                    targetNextStatus = '5_TTE';
+                  }
+                  item.status_alur = targetNextStatus;
+                  item.catatan_kabid = notes;
+                  item.tgl_kabid = timeStr;
+                  updatedDafdukCount++;
+                }
+              }
+            });
+            const detailStr = updatedDafdukCount > 1 ? `${updatedDafdukCount} Dokumen Pendaftaran Penduduk` : 'Dokumen Pendaftaran Penduduk';
+            showToast(`🎉 Berhasil! ${detailStr} (Kode Unik: ${key}) telah divalidasi Kabid Dafduk & diteruskan ke ${targetNextStatus === '5_TTE' ? 'Petugas TTE' : 'Kadis'}!`, 'success');
           } else if (currentUser.role === 'kepala_upt') {
             if (isDafdukCapil) {
               allData.forEach(item => {
