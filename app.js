@@ -1371,7 +1371,67 @@ window.exportMonitoringDocToPDF = function() {
   const clone = container.cloneNode(true);
   clone.style.background = '#ffffff';
   clone.style.color = '#000000';
-  clone.style.padding = '15px';
+  clone.style.padding = '20px';
+
+  // Paksa semua elemen teks dalam PDF menjadi warna hitam tegas agar mudah dibaca
+  clone.querySelectorAll('*').forEach(el => {
+    el.style.color = '#000000';
+    if (el.tagName === 'H2' || el.tagName === 'H3' || el.tagName === 'SPAN' || el.tagName === 'TD' || el.tagName === 'TH' || el.tagName === 'DIV') {
+      el.style.color = '#000000';
+    }
+  });
+
+  const table = clone.querySelector('table');
+  if (table) {
+    table.style.color = '#000000';
+    table.style.borderCollapse = 'collapse';
+    table.style.width = '100%';
+    table.querySelectorAll('th, td').forEach(el => {
+      el.style.border = '1px solid #475569';
+      el.style.padding = '8px 12px';
+      if (el.tagName === 'TH') {
+        el.style.background = '#e2e8f0';
+        el.style.color = '#000000';
+        el.style.fontWeight = '700';
+        el.style.fontSize = '0.95rem';
+      } else {
+        el.style.color = '#000000';
+      }
+    });
+
+    // Khusus Kolom Counter: Pastikan teks nama counter berwarna HITAM PEKAT dan TEBAL pada PDF
+    table.querySelectorAll('tr td:first-child').forEach(td => {
+      td.style.color = '#000000';
+      td.style.fontWeight = '700';
+      td.querySelectorAll('*').forEach(child => {
+        child.style.color = '#000000';
+        child.style.fontWeight = '700';
+      });
+    });
+  }
+
+  // Styling badge angka metrik dalam PDF dengan kontras tinggi
+  clone.querySelectorAll('.badge').forEach(badge => {
+    badge.style.border = '1px solid #475569';
+    badge.style.fontWeight = '700';
+    if (badge.classList.contains('info')) {
+      badge.style.background = '#dbeafe';
+      badge.style.color = '#1e40af';
+    } else if (badge.classList.contains('danger')) {
+      badge.style.background = '#fee2e2';
+      badge.style.color = '#991b1b';
+    } else if (badge.classList.contains('selesai')) {
+      badge.style.background = '#d1fae5';
+      badge.style.color = '#065f46';
+    }
+  });
+
+  const wrapper = document.createElement('div');
+  wrapper.style.position = 'fixed';
+  wrapper.style.left = '-9999px';
+  wrapper.style.top = '0';
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
 
   const opt = {
     margin: 0.4,
@@ -1383,12 +1443,15 @@ window.exportMonitoringDocToPDF = function() {
 
   if (typeof html2pdf !== 'undefined') {
     html2pdf().set(opt).from(clone).save().then(() => {
+      document.body.removeChild(wrapper);
       showToast('🎉 File PDF Summary Monitoring berhasil dibuat!', 'success');
     }).catch(err => {
+      document.body.removeChild(wrapper);
       console.error('Gagal export PDF:', err);
       showToast('⚠️ Terjadi kendala saat export PDF.', 'error');
     });
   } else {
+    document.body.removeChild(wrapper);
     window.print();
   }
 };
