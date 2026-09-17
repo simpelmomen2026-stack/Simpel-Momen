@@ -937,6 +937,26 @@ function renderCounterDesk() {
       return true;
     }
 
+    if (role === 'kadis') {
+      if (isDafdukCapil) {
+        // E.1 Integrasi Layanan Dafduk - Capil di Kadis:
+        // Tampilkan HANYA dokumen Capil terlebih dahulu! Dokumen Dafduk disembunyikan ("seolah-olah ada namun jangan dulu ditampilkan").
+        const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
+        if (capilItem) {
+          return item === capilItem;
+        }
+      }
+
+      if (isDafdukDafduk) {
+        // E.2 Integrasi Layanan Dafduk - Dafduk di Kadis:
+        // Tampilkan HANYA 1 dokumen mandatori utama! Dokumen Dafduk pengikut disembunyikan.
+        const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+        return item === mandatoryItem;
+      }
+
+      return true;
+    }
+
     return true;
   });
 
@@ -2030,6 +2050,12 @@ if (actionForm) {
               } else if (currentUser.role === 'kepala_upt') {
                 item.catatan_upt = notes;
                 item.tgl_upt = timeStr;
+              } else if (currentUser.role === 'kabid_capil' || currentUser.role === 'kabid_dafduk') {
+                item.catatan_kabid = notes;
+                item.tgl_kabid = timeStr;
+              } else if (currentUser.role === 'kadis') {
+                item.catatan_kadis = notes;
+                item.tgl_kadis = timeStr;
               }
               updatedCount++;
             }
@@ -2093,6 +2119,18 @@ if (actionForm) {
             });
             const detailStr = updatedDafdukCount > 1 ? `${updatedDafdukCount} Dokumen Pendaftaran Penduduk` : 'Dokumen Pendaftaran Penduduk';
             showToast(`🎉 Berhasil! ${detailStr} (Kode Unik: ${key}) telah divalidasi Kabid Dafduk & diteruskan ke ${targetNextStatus === '5_TTE' ? 'Petugas TTE' : 'Kadis'}!`, 'success');
+          } else if (currentUser.role === 'kadis') {
+            let updatedCount = 0;
+            allData.forEach(item => {
+              if (String(item.key) === String(key)) {
+                item.status_alur = '5_TTE';
+                item.catatan_kadis = notes;
+                item.tgl_kadis = timeStr;
+                updatedCount++;
+              }
+            });
+            const detailStr = updatedCount > 1 ? `${updatedCount} dokumen terintegrasi` : 'dokumen';
+            showToast(`🎉 Berhasil! ${detailStr} (Kode Unik: ${key}) telah disertifikasi oleh Kadis & seluruhnya terkirim ke Meja Petugas TTE!`, 'success');
           } else if (currentUser.role === 'kepala_upt') {
             if (isDafdukCapil) {
               allData.forEach(item => {
