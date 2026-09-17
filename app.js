@@ -1290,8 +1290,18 @@ function renderMonitoringDocTable() {
 
 // MODAL CATATAN MONITORING
 window.openMonitoringNoteModal = function(key, subLayanan) {
-  const item = allData.find(d => String(d.key) === String(key) && (!subLayanan || String(d.sub_layanan) === String(subLayanan)));
-  if (!item) return;
+  const keyStr = String(key || '').trim();
+  const subStr = String(subLayanan || '').trim();
+
+  let item = allData.find(d => String(d.key || '').trim() === keyStr && (!subStr || String(d.sub_layanan || '').trim() === subStr));
+  if (!item) {
+    item = allData.find(d => String(d.key || '').trim() === keyStr);
+  }
+  if (!item) {
+    console.error('Dokumen tidak ditemukan:', key, subLayanan);
+    showToast('⚠️ Data dokumen tidak ditemukan!', 'error');
+    return;
+  }
 
   if (monModalKey) monModalKey.value = item.key;
   if (monModalSubLayanan) monModalSubLayanan.value = item.sub_layanan || '';
@@ -1309,13 +1319,29 @@ window.openMonitoringNoteModal = function(key, subLayanan) {
   }
 
   if (monitoringNoteModal) {
-    monitoringNoteModal.style.display = 'flex';
+    monitoringNoteModal.classList.add('active');
+    monitoringNoteModal.style.setProperty('position', 'fixed', 'important');
+    monitoringNoteModal.style.setProperty('top', '0', 'important');
+    monitoringNoteModal.style.setProperty('left', '0', 'important');
+    monitoringNoteModal.style.setProperty('right', '0', 'important');
+    monitoringNoteModal.style.setProperty('bottom', '0', 'important');
+    monitoringNoteModal.style.setProperty('width', '100vw', 'important');
+    monitoringNoteModal.style.setProperty('height', '100vh', 'important');
+    monitoringNoteModal.style.setProperty('z-index', '9999999', 'important');
+    monitoringNoteModal.style.setProperty('background', 'rgba(11, 15, 25, 0.85)', 'important');
+    monitoringNoteModal.style.setProperty('backdrop-filter', 'blur(12px)', 'important');
+    monitoringNoteModal.style.setProperty('display', 'flex', 'important');
+    monitoringNoteModal.style.setProperty('align-items', 'center', 'important');
+    monitoringNoteModal.style.setProperty('justify-content', 'center', 'important');
+    monitoringNoteModal.style.setProperty('padding', '1.5rem', 'important');
+    monitoringNoteModal.style.setProperty('overflow-y', 'auto', 'important');
   }
 };
 
 window.closeMonitoringNoteModal = function() {
   if (monitoringNoteModal) {
-    monitoringNoteModal.style.display = 'none';
+    monitoringNoteModal.classList.remove('active');
+    monitoringNoteModal.style.setProperty('display', 'none', 'important');
   }
 };
 
@@ -2290,6 +2316,11 @@ window.openActionModal = function(key, subLayanan) {
   // Penanganan Khusus User Monitoring vs Petugas/Eksekutor Biasa
   if (role === 'monitoring') {
     if (modalTitle) modalTitle.textContent = '👁️ Detail & Rekam Jejak Dokumen';
+    if (standardActionGroup) standardActionGroup.style.display = 'none';
+    if (scanLinkGroup) scanLinkGroup.style.display = 'none';
+    if (tteStatusGroup) tteStatusGroup.style.display = 'none';
+    if (tteNotesGroup) tteNotesGroup.style.display = 'none';
+    if (penerimaGroup) penerimaGroup.style.display = 'none';
     if (modalNotesGroup) modalNotesGroup.style.display = 'none';
     if (saveModalBtn) saveModalBtn.style.display = 'none';
     if (cancelModalBtn) cancelModalBtn.textContent = '❌ Tutup';
