@@ -1001,36 +1001,36 @@ function renderCounterDesk() {
     let actionBtnHtml = '';
     if (role === 'monitoring') {
       actionBtnHtml = `
-        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')">
           👁️ Detail & Riwayat
         </button>
       `;
     } else if (isSelesai) {
       actionBtnHtml = `
         <span class="badge selesai" style="margin-right:4px;">✅ Selesai</span>
-        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">👁️ Detail</button>
+        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')">👁️ Detail</button>
       `;
     } else if (role === 'petugas_pencetakan') {
       actionBtnHtml = `
-        <button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')">
           🎉 Cetak & Selesaikan
         </button>
       `;
     } else if (role === 'operator' && isPending) {
       actionBtnHtml = `
-        <button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')">
           🛠️ Perbaiki & Kirim Ulang
         </button>
       `;
     } else if (role === 'petugas_scan') {
       actionBtnHtml = `
-        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')">
           📄 Scan & Kirim Berkas
         </button>
       `;
     } else {
       actionBtnHtml = `
-        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}')">
+        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')">
           ⚡ Setujui / Lanjutkan
         </button>
       `;
@@ -1771,11 +1771,19 @@ window.openReadOnlyDetailModal = function(key) {
 };
 
 // MODAL ACTION & TINDAK LANJUT
-window.openActionModal = function(key) {
-  const item = allData.find(d => String(d.key) === String(key));
+window.openActionModal = function(key, subLayanan) {
+  let item = null;
+  if (subLayanan) {
+    item = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayanan));
+  }
+  if (!item) {
+    item = allData.find(d => String(d.key) === String(key));
+  }
   if (!item || !actionModal) return;
 
   modalKey.value = item.key;
+  const modalSubLayanan = document.getElementById('modalSubLayanan');
+  if (modalSubLayanan) modalSubLayanan.value = item.sub_layanan || '';
   if (modalKodeText) modalKodeText.textContent = item.key;
   if (modalPemohonText) modalPemohonText.textContent = item.pemohon || '-';
   if (modalLayananText) modalLayananText.textContent = `${item.jenis_layanan || ''} (${item.sub_layanan || ''})`;
@@ -1977,6 +1985,8 @@ if (actionForm) {
   actionForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const key = modalKey.value;
+    const modalSubLayanan = document.getElementById('modalSubLayanan');
+    const subLayananVal = modalSubLayanan ? modalSubLayanan.value : '';
     let executeAction = modalExecuteAction ? modalExecuteAction.value : 'approve';
     let notes = modalNotes ? modalNotes.value.trim() : '';
     const statusTteVal = tteStatus ? tteStatus.value : '';
@@ -2037,6 +2047,23 @@ if (actionForm) {
           const followerCount = updatedCount - 1;
           const detailStr = updatedCount > 1 ? `${updatedCount} dokumen terintegrasi (1 Mandatori + ${followerCount} Dokumen Pengikut)` : 'dokumen';
           showToast(`🎉 Berhasil! Link PDF scan pada dokumen mandatori telah mewakili & terisi untuk ${detailStr} (Kode Unik: ${key}) & seluruhnya terkirim ke Meja ${targetDestName}. Tugas scan Anda selesai dengan baik!`, 'success');
+        } else if (currentUser.role === 'petugas_tte') {
+          let targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal));
+          if (!targetItem) targetItem = sampleItem;
+          if (targetItem) {
+            targetItem.status_tte = statusTteVal;
+            targetItem.tgl_tte = timeStr;
+            const isUptTarget = String(targetItem.fasilitasi || '').toLowerCase().includes('upt');
+            const isPendaftaran = String(targetItem.jenis_layanan || '').toLowerCase().includes('pendaftaran');
+            let nextStatusTte = isUptTarget ? '6_PENCETAKAN_UPT' : '6_PENCETAKAN_DINAS';
+            if (statusTteVal === 'Belum diajukan SIAK') {
+              nextStatusTte = (isUptTarget && isPendaftaran) ? '2_VERIFIKASI_UPT' : '2_VERIFIKASI_KASIE';
+            } else if (statusTteVal === 'Belum Verifikasi SIAK') {
+              nextStatusTte = '3_VALIDASI_KABID';
+            }
+            targetItem.status_alur = nextStatusTte;
+          }
+          showToast(`🎉 Berhasil! Status TTE dokumen ${escapeHTML(targetItem.sub_layanan)} (${escapeHTML(targetItem.pemohon || '-')}) telah diperbarui!`, 'success');
         } else if (executeAction === 'pending') {
           // PENDING ALL
           let updatedCount = 0;
@@ -2177,6 +2204,16 @@ if (actionForm) {
               }
             });
             showToast(`🎉 Berhasil! Dokumen perbaikan (Kode Unik: ${key}) beserta ${updatedCount > 1 ? updatedCount + ' dokumen terintegrasi' : 'berkas'} telah dikirim ulang ke Petugas Scan!`, 'success');
+          } else if (currentUser.role === 'petugas_pencetakan') {
+            let targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal));
+            if (!targetItem) targetItem = sampleItem;
+            if (targetItem) {
+              targetItem.penerima = penerimaVal;
+              targetItem.catatan_print = notes;
+              targetItem.tgl_print = timeStr;
+              targetItem.status_alur = '7_SELESAI';
+            }
+            showToast(`🎉 Berhasil! Dokumen ${escapeHTML(targetItem.sub_layanan)} (${escapeHTML(targetItem.pemohon || '-')}) telah dicetak & diserahkan kepada ${escapeHTML(penerimaVal || '-')}!`, 'success');
           } else {
             if (sampleItem) sampleItem.status_alur = '7_SELESAI';
             showToast('Berkas berhasil diperbarui (Local)', 'success');
@@ -2194,6 +2231,7 @@ if (actionForm) {
           body: JSON.stringify({
             action: 'update',
             key: key,
+            sub_layanan: subLayananVal,
             role: currentUser.role,
             userName: currentUser.name,
             executeAction: executeAction,
