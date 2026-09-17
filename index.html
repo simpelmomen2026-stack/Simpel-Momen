@@ -71,6 +71,10 @@
           <span class="nav-icon">📊</span>
           <span class="nav-text">Kerja Counter</span>
         </a>
+        <a href="#" class="nav-link" data-page="monitoring-doc" id="menuMonitoringDoc">
+          <span class="nav-icon">📋</span>
+          <span class="nav-text">Monitoring Dokumen</span>
+        </a>
         <a href="#" class="nav-link" data-page="input-form" id="menuInputForm">
           <span class="nav-icon">📝</span>
           <span class="nav-text">Pendaftaran Berkas</span>
@@ -267,6 +271,51 @@
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+
+        <!-- ================= PAGE 2.5: MONITORING DOKUMEN (SUMMARY COUNTER) ================= -->
+        <div class="page-container" id="page-monitoring-doc" style="display: none;">
+          <div class="card" style="margin-bottom: 1.25rem; padding: 1rem 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <label for="monitoringDocDateFilter" style="font-weight: 700; color: #f8fafc; font-size: 0.95rem;">Tanggal :</label>
+                <input type="date" id="monitoringDocDateFilter" title="Memilih Tanggal Pelayanan" style="padding: 7px 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.88rem;">
+                <span style="color: var(--text-muted); font-size: 0.82rem; font-style: italic;">(memilih tanggal pelayanan)</span>
+                <button class="btn btn-secondary btn-xs" id="btnResetDocDate" style="padding: 6px 12px; font-size: 0.8rem;">🔄 Reset Tanggal</button>
+              </div>
+              <div>
+                <button class="btn btn-primary btn-sm" onclick="exportMonitoringDocToPDF()" style="padding: 7px 16px; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); border: none;">
+                  📄 Export PDF / Cetak Summary
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card table-card" id="monitoringDocPrintContainer">
+            <div class="table-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <h2 style="margin:0; font-size: 1.15rem;">📊 Tabel Summary Monitoring Counter Dokumen</h2>
+                <span class="entries-count" id="monitoringDocTotalInfo">Menampilkan ringkasan status counter per tanggal pelayanan</span>
+              </div>
+            </div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 34%; font-size: 0.95rem;">Counter</th>
+                    <th style="width: 22%; text-align: center; font-size: 0.95rem;">Sementara berjalan</th>
+                    <th style="width: 22%; text-align: center; font-size: 0.95rem;">Pending</th>
+                    <th style="width: 22%; text-align: center; font-size: 0.95rem;">Selesai Eksekusi</th>
+                  </tr>
+                </thead>
+                <tbody id="monitoringDocTableBody">
+                  <tr>
+                    <td colspan="4" class="text-center text-muted" style="padding: 2rem;">Memuat tabel summary monitoring...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -488,9 +537,61 @@
     </div>
   </div>
 
+  <!-- Modal Catatan / Informasi Tim Monitoring (Khusus User Monitoring di Meja Kerja Pending) -->
+  <div class="modal-overlay" id="monitoringNoteModal" style="display: none;">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3 style="margin:0; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
+          💡 Catatan & Informasi Tim Monitoring
+        </h3>
+        <button class="modal-close" onclick="closeMonitoringNoteModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 1.25rem;">
+        <input type="hidden" id="monModalKey">
+        <input type="hidden" id="monModalSubLayanan">
+
+        <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+          <div style="font-size: 0.85rem; color: #94a3b8;">Dokumen Pending:</div>
+          <div style="font-weight: 700; color: #60a5fa; font-size: 1rem; margin-top: 2px;" id="monModalDocTitle">-</div>
+          <div style="font-size: 0.85rem; color: #cbd5e1; margin-top: 4px;" id="monModalPemohonInfo">-</div>
+          <div style="font-size: 0.8rem; color: #f87171; margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.1);" id="monModalPendingReason">-</div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 15px;">
+          <label style="font-weight: 700; color: #f8fafc; margin-bottom: 6px; display: block;">📢 Pilihan Sasaran Informasi Pending: *</label>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 10px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 10px 14px; border-radius: 8px; cursor: pointer;">
+              <input type="radio" name="monInfoTarget" value="PEMOHON" checked style="width: 18px; height: 18px; accent-color: #3b82f6;">
+              <div>
+                <strong style="color: #60a5fa; display: block;">📲 Sudah Diinformasikan kepada Pemohon</strong>
+                <span style="font-size: 0.78rem; color: #94a3b8;">(Pilih jika pending disebabkan oleh kekurangan berkas/persyaratan pemohon)</span>
+              </div>
+            </label>
+            <label style="display: flex; align-items: center; gap: 10px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); padding: 10px 14px; border-radius: 8px; cursor: pointer;">
+              <input type="radio" name="monInfoTarget" value="OPERATOR" style="width: 18px; height: 18px; accent-color: #f59e0b;">
+              <div>
+                <strong style="color: #fbbf24; display: block;">🏢 Sudah Diinformasikan kepada Operator / Petugas</strong>
+                <span style="font-size: 0.78rem; color: #94a3b8;">(Pilih jika pending disebabkan oleh kelalaian/kesalahan internal petugas)</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 15px;">
+          <label for="monCatatanInput" style="font-weight: 700; color: #f8fafc; margin-bottom: 6px; display: block;">✍️ Catatan Tambahan Monitoring: (opsional)</label>
+          <textarea id="monCatatanInput" rows="3" class="form-control" style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 0.88rem;" placeholder="Tuliskan catatan tindak lanjut monitoring (misal: 'Sudah dihubungi via WA pukul 10:00 WITA')..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 1rem 1.25rem; display: flex; justify-content: flex-end; gap: 10px; background: rgba(15, 23, 42, 0.6); border-top: 1px solid var(--border-color);">
+        <button class="btn btn-secondary" onclick="closeMonitoringNoteModal()">Batal</button>
+        <button class="btn btn-primary" id="btnSaveMonitoringNote" onclick="saveMonitoringNote()" style="font-weight: 700; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none;">💾 Simpan & Perbarui Status</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="app.js?v=20260917_1030"></script>
+  <script src="app.js?v=20260917_1630"></script>
 </body>
 </html>

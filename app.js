@@ -113,6 +113,20 @@ const monitoringSearchInput = document.getElementById('monitoringSearchInput');
 const monitoringCount = document.getElementById('monitoringCount');
 const monitoringTableBody = document.getElementById('monitoringTableBody');
 
+const menuMonitoringDoc = document.getElementById('menuMonitoringDoc');
+const monitoringDocDateFilter = document.getElementById('monitoringDocDateFilter');
+const btnResetDocDate = document.getElementById('btnResetDocDate');
+const monitoringDocTotalInfo = document.getElementById('monitoringDocTotalInfo');
+const monitoringDocTableBody = document.getElementById('monitoringDocTableBody');
+
+const monitoringNoteModal = document.getElementById('monitoringNoteModal');
+const monModalKey = document.getElementById('monModalKey');
+const monModalSubLayanan = document.getElementById('monModalSubLayanan');
+const monModalDocTitle = document.getElementById('monModalDocTitle');
+const monModalPemohonInfo = document.getElementById('monModalPemohonInfo');
+const monModalPendingReason = document.getElementById('monModalPendingReason');
+const monCatatanInput = document.getElementById('monCatatanInput');
+
 const rekapTotal = document.getElementById('rekapTotal');
 const rekapSelesai = document.getElementById('rekapSelesai');
 const rekapProses = document.getElementById('rekapProses');
@@ -521,6 +535,10 @@ function switchPage(pageId) {
       formFasilitasiDisplay.value = currentUser.fasilitasi === 'UPT' ? `🏛️ ${currentUser.uptCode || 'UPT'}` : '🏢 Fasilitasi Dinas';
     }
     initOperatorDraftItems();
+  } else if (pageId === 'monitoring-doc') {
+    if (pageTitle) pageTitle.textContent = `Monitoring Dokumen Counter`;
+    if (pageSubtitle) pageSubtitle.textContent = `Ringkasan statistik alur berkas: Sementara berjalan, Pending, dan Selesai eksekusi per counter.`;
+    renderMonitoringDocTable();
   } else if (pageId === 'monitoring') {
     if (pageTitle) pageTitle.textContent = `Monitoring Alur Pelayanan`;
     if (pageSubtitle) pageSubtitle.textContent = `Lacak perjalanan dan verifikasi dokumen secara real-time.`;
@@ -570,6 +588,17 @@ if (fasilitasiFilterEl) {
 
 if (monitoringSearchInput) {
   monitoringSearchInput.addEventListener('input', renderMonitoringTable);
+}
+
+if (monitoringDocDateFilter) {
+  monitoringDocDateFilter.addEventListener('change', renderMonitoringDocTable);
+}
+
+if (btnResetDocDate) {
+  btnResetDocDate.addEventListener('click', () => {
+    if (monitoringDocDateFilter) monitoringDocDateFilter.value = '';
+    renderMonitoringDocTable();
+  });
 }
 
 if (filterFasilitasi) {
@@ -841,7 +870,9 @@ function renderCounterDesk() {
       if (!isUpt) return false;
     }
 
-    if (role === 'monitoring') return true;
+    if (role === 'monitoring') {
+      return item.status_alur === 'PENDING_OPERATOR' || String(item.status_alur).includes('PENDING');
+    }
     return userActiveDeskItems.includes(item);
   });
 
@@ -877,9 +908,6 @@ function renderCounterDesk() {
 
     if (role === 'kasie_dafduk' || role === 'kabid_dafduk') {
       if (isDafdukCapil) {
-        // D.1 Integrasi Layanan Dafduk - Capil (Fasilitasi Dinas):
-        // Dokumen Dafduk HANYA DITAMPILKAN jika dokumen Capil se-Kode Unik SUDAH DIVERIFIKASI/DILANJUTKAN oleh Kasie Capil / Kabid Capil!
-        // (Jika status Capil se-Kode Unik MASIH 2_VERIFIKASI_KASIE atau 3_VALIDASI_KABID, sembunyikan dokumen Dafduk dari lembar kerja!)
         const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
         if (capilItem) {
           const capilStatus = String(capilItem.status_alur || '');
@@ -887,7 +915,6 @@ function renderCounterDesk() {
             return false;
           }
           if (role === 'kabid_dafduk' && (capilStatus === '2_VERIFIKASI_KASIE' || capilStatus === '3_VALIDASI_KABID')) {
-            // Kabid Capil belum memverifikasi -> Dokumen Dafduk SEOLAH-OLAH ADA TETAPI JANGAN DULU DITAMPILKAN pada lembar kerja Kabid Dafduk!
             return false;
           }
         }
@@ -895,8 +922,6 @@ function renderCounterDesk() {
       }
 
       if (isDafdukDafduk) {
-        // C.2 Integrasi Layanan Dafduk - Dafduk (Dinas & UPT):
-        // Tampilkan HANYA 1 dokumen mandatori utama! Dokumen Dafduk pengikut disembunyikan.
         const mandatoryItem = getMandatoryItemForBatch(fullBatch);
         return item === mandatoryItem;
       }
@@ -906,8 +931,6 @@ function renderCounterDesk() {
 
     if (role === 'kepala_upt') {
       if (isDafdukCapil) {
-        // C.1 Integrasi Layanan Dafduk - Capil di UPT:
-        // Tampilkan HANYA dokumen Capil terlebih dahulu! Dokumen Dafduk disembunyikan ("seolah-olah ada namun jangan dulu ditampilkan").
         const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
         if (capilItem) {
           return item === capilItem;
@@ -915,8 +938,6 @@ function renderCounterDesk() {
       }
 
       if (isDafdukDafduk) {
-        // C.2 Integrasi Layanan Dafduk - Dafduk di UPT:
-        // Tampilkan HANYA dokumen mandatori! Dokumen Dafduk lainnya disembunyikan.
         const mandatoryItem = getMandatoryItemForBatch(fullBatch);
         return item === mandatoryItem;
       }
@@ -925,7 +946,6 @@ function renderCounterDesk() {
     }
 
     if (role === 'operator') {
-      // Stay Mode Pending Operator:
       if (isDafdukCapil) {
         const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
         if (capilItem) return item === capilItem;
@@ -939,8 +959,6 @@ function renderCounterDesk() {
 
     if (role === 'kadis') {
       if (isDafdukCapil) {
-        // E.1 Integrasi Layanan Dafduk - Capil di Kadis:
-        // Tampilkan HANYA dokumen Capil terlebih dahulu! Dokumen Dafduk disembunyikan ("seolah-olah ada namun jangan dulu ditampilkan").
         const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
         if (capilItem) {
           return item === capilItem;
@@ -948,8 +966,6 @@ function renderCounterDesk() {
       }
 
       if (isDafdukDafduk) {
-        // E.2 Integrasi Layanan Dafduk - Dafduk di Kadis:
-        // Tampilkan HANYA 1 dokumen mandatori utama! Dokumen Dafduk pengikut disembunyikan.
         const mandatoryItem = getMandatoryItemForBatch(fullBatch);
         return item === mandatoryItem;
       }
@@ -972,6 +988,32 @@ function renderCounterDesk() {
 
   if (counterEntriesCount) counterEntriesCount.textContent = `Menampilkan ${displayList.length} berkas`;
 
+  // Update Header Tabel Meja Kerja Khusus User Monitoring
+  const headRow = counterTableBody.closest('table') ? counterTableBody.closest('table').querySelector('thead tr') : null;
+  if (headRow) {
+    if (role === 'monitoring') {
+      headRow.innerHTML = `
+        <th>Kode Berkas</th>
+        <th>Tanggal</th>
+        <th>Nama Pemohon</th>
+        <th>Jenis Layanan</th>
+        <th>Sub Menu Layanan</th>
+        <th>Status Workflow</th>
+        <th class="text-center">Tindakan</th>
+      `;
+    } else {
+      headRow.innerHTML = `
+        <th>Kode Berkas</th>
+        <th>Tanggal</th>
+        <th>Nama Pemohon</th>
+        <th>Jenis Layanan</th>
+        <th>Integrasi</th>
+        <th>Status Workflow</th>
+        <th class="text-center">Tindakan</th>
+      `;
+    }
+  }
+
   if (displayList.length === 0) {
     counterTableBody.innerHTML = `
       <tr>
@@ -992,6 +1034,41 @@ function renderCounterDesk() {
     const hasLink = row.link_file && row.link_file.trim().startsWith('http');
     const linkBtnHtml = hasLink ? 
       `<br><a href="${escapeHTML(row.link_file.trim())}" target="_blank" class="btn btn-secondary btn-xs" style="color:#60a5fa; margin-top:4px; font-size:0.75rem; padding:2px 8px;">📄 Buka Scan PDF</a>` : '';
+
+    if (role === 'monitoring') {
+      const hasMonInfo = row.info_monitoring && row.info_monitoring.trim() !== "";
+      const infoText = row.info_monitoring === 'PEMOHON' ? 
+        '📱 Diinfokan ke Pemohon' : 
+        (row.info_monitoring === 'OPERATOR' ? '🏢 Diinfokan ke Operator' : '');
+      const infoBadge = hasMonInfo ? 
+        `<br><span class="badge ${row.info_monitoring === 'PEMOHON' ? 'info' : 'warning'}" style="font-size:0.75rem; margin-top:4px;">${infoText}</span>` : 
+        `<br><span class="badge danger" style="font-size:0.72rem; margin-top:4px;">⚠️ Belum Diinfokan</span>`;
+
+      const monNoteText = row.catatan_monitoring ? `<br><small style="color: #94a3b8; font-style: italic;">Note: ${escapeHTML(row.catatan_monitoring)}</small>` : '';
+
+      return `
+        <tr style="background: rgba(239, 68, 68, 0.08);">
+          <td><span class="code-key-badge">${escapeHTML(row.key)}</span></td>
+          <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
+          <td><strong>${escapeHTML(row.pemohon)}</strong></td>
+          <td>${escapeHTML(row.jenis_layanan)}</td>
+          <td><strong style="color:#60a5fa;">${escapeHTML(row.sub_layanan)}</strong>${linkBtnHtml}</td>
+          <td>
+            <span class="badge danger">pending</span>
+            ${infoBadge}
+            ${monNoteText}
+          </td>
+          <td class="text-center">
+            <button class="btn btn-warning btn-xs" onclick="openMonitoringNoteModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')" style="font-weight:700; white-space:nowrap; padding: 4px 8px;">
+              💡 Informasikan / Catat
+            </button>
+            <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')" style="margin-left:4px; padding: 4px 8px;">
+              👁️ Detail
+            </button>
+          </td>
+        </tr>
+      `;
+    }
 
     // Catatan Pending jika ada
     const pendingText = row.riwayat_pending || row.catatan_pending;
@@ -1067,6 +1144,254 @@ function renderCounterDesk() {
     `;
   }).join('');
 }
+
+// RENDER TABEL MONITORING DOKUMEN (SUMMARY STATISTIK COUNTER)
+function renderMonitoringDocTable() {
+  if (!monitoringDocTableBody) return;
+
+  const dateFilterInput = document.getElementById('monitoringDocDateFilter');
+  const selectedDate = dateFilterInput ? dateFilterInput.value : "";
+
+  // List role/counter dari Sheet Petugas
+  const countersList = [
+    { label: "Operator Dinas", role: "operator", fasilitasi: "Dinas" },
+    { label: "Operator UPT 01", role: "operator", fasilitasi: "UPT", uptCode: "UPT-01" },
+    { label: "Petugas Scan Dinas", role: "petugas_scan", fasilitasi: "Dinas" },
+    { label: "Petugas Scan UPT 01", role: "petugas_scan", fasilitasi: "UPT", uptCode: "UPT-01" },
+    { label: "Kasie Dafduk", role: "kasie_dafduk", fasilitasi: "Dinas" },
+    { label: "Kasie Capil", role: "kasie_capil", fasilitasi: "Dinas" },
+    { label: "Kepala UPT 01", role: "kepala_upt", fasilitasi: "UPT", uptCode: "UPT-01" },
+    { label: "Kabid Dafduk", role: "kabid_dafduk", fasilitasi: "Dinas" },
+    { label: "Kabid Capil", role: "kabid_capil", fasilitasi: "Dinas" },
+    { label: "Kepala Dinas (Kadis)", role: "kadis", fasilitasi: "Dinas" },
+    { label: "Petugas TTE", role: "petugas_tte", fasilitasi: "Dinas" },
+    { label: "Petugas Cetak Dinas", role: "petugas_pencetakan", fasilitasi: "Dinas" },
+    { label: "Petugas Cetak UPT 01", role: "petugas_pencetakan", fasilitasi: "UPT", uptCode: "UPT-01" }
+  ];
+
+  // Filter data berdasarkan tanggal pelayanan jika diisi
+  const targetData = selectedDate ? allData.filter(item => {
+    const rawDate = item.tanggal || item.tgl_operator || "";
+    return rawDate.startsWith(selectedDate);
+  }) : allData;
+
+  if (monitoringDocTotalInfo) {
+    const dateText = selectedDate ? `Tanggal: ${formatDate(selectedDate)}` : "Semua Tanggal Pelayanan";
+    monitoringDocTotalInfo.textContent = `Menampilkan data summary counter (${dateText}) - Total ${targetData.length} dokumen`;
+  }
+
+  monitoringDocTableBody.innerHTML = countersList.map(c => {
+    // 1. Sementara Berjalan: Dokumen aktif yang sedang berada di antrean counter/role ini
+    const countBerjalan = targetData.filter(item => {
+      const statusAlur = String(item.status_alur || "");
+      const itemFas = String(item.fasilitasi || "");
+      const itemJenis = String(item.jenis_layanan || "").trim().toLowerCase();
+
+      if (statusAlur === 'PENDING_OPERATOR' || statusAlur === '7_SELESAI') return false;
+
+      if (c.role === 'operator') {
+        return statusAlur === '0_BARU';
+      } else if (c.role === 'petugas_scan') {
+        if (c.fasilitasi === 'UPT') return statusAlur === '1_PETUGAS_SCAN' && itemFas.includes('UPT');
+        return statusAlur === '1_PETUGAS_SCAN' && !itemFas.includes('UPT');
+      } else if (c.role === 'kasie_dafduk') {
+        return statusAlur === '2_VERIFIKASI_KASIE' && itemJenis === 'pendaftaran penduduk';
+      } else if (c.role === 'kasie_capil') {
+        return statusAlur === '2_VERIFIKASI_KASIE' && itemJenis !== 'pendaftaran penduduk';
+      } else if (c.role === 'kepala_upt') {
+        return statusAlur === '2_VERIFIKASI_UPT';
+      } else if (c.role === 'kabid_dafduk') {
+        return statusAlur === '3_VALIDASI_KABID' && itemJenis === 'pendaftaran penduduk';
+      } else if (c.role === 'kabid_capil') {
+        return statusAlur === '3_VALIDASI_KABID' && itemJenis !== 'pendaftaran penduduk';
+      } else if (c.role === 'kadis') {
+        return statusAlur === '4_SERTIFIKASI_KADIS';
+      } else if (c.role === 'petugas_tte') {
+        return statusAlur === '5_TTE';
+      } else if (c.role === 'petugas_pencetakan') {
+        if (c.fasilitasi === 'UPT') return statusAlur === '6_PENCETAKAN_UPT';
+        return statusAlur === '6_PENCETAKAN_DINAS';
+      }
+      return false;
+    }).length;
+
+    // 2. Pending: Dokumen yang mengalami pending dari counter/role ini
+    const countPending = targetData.filter(item => {
+      const isPending = item.status_alur === 'PENDING_OPERATOR' || String(item.status_alur).includes('PENDING');
+      if (!isPending) return false;
+
+      const riwayat = String(item.riwayat_pending || item.catatan_pending || "").toLowerCase();
+
+      if (c.role === 'operator') return true; // operator menampung seluruh dokumen pending
+      if (c.role === 'kasie_capil') return riwayat.includes('kasie_capil') || (item.catatan_kasie && item.jenis_layanan.toLowerCase().includes('capil'));
+      if (c.role === 'kasie_dafduk') return riwayat.includes('kasie_dafduk') || (item.catatan_kasie && item.jenis_layanan.toLowerCase().includes('pendaftaran'));
+      if (c.role === 'kepala_upt') return riwayat.includes('kepala_upt') || !!item.catatan_upt;
+      if (c.role === 'kabid_capil') return riwayat.includes('kabid_capil') || (item.catatan_kabid && item.jenis_layanan.toLowerCase().includes('capil'));
+      if (c.role === 'kabid_dafduk') return riwayat.includes('kabid_dafduk') || (item.catatan_kabid && item.jenis_layanan.toLowerCase().includes('pendaftaran'));
+      if (c.role === 'kadis') return riwayat.includes('kadis') || !!item.catatan_kadis;
+      
+      return false;
+    }).length;
+
+    // 3. Selesai Eksekusi: Dokumen yang telah selesai diproses oleh counter ini
+    const countSelesai = targetData.filter(item => {
+      const statusAlur = String(item.status_alur || "");
+      const itemJenis = String(item.jenis_layanan || "").trim().toLowerCase();
+
+      if (c.role === 'operator') {
+        return statusAlur !== '0_BARU';
+      } else if (c.role === 'petugas_scan') {
+        return !!item.tgl_scan || (statusAlur !== '1_PETUGAS_SCAN' && statusAlur !== '0_BARU');
+      } else if (c.role === 'kasie_dafduk') {
+        if (itemJenis !== 'pendaftaran penduduk') return false;
+        return !!item.tgl_kasie || (statusAlur !== '1_PETUGAS_SCAN' && statusAlur !== '2_VERIFIKASI_KASIE');
+      } else if (c.role === 'kasie_capil') {
+        if (itemJenis === 'pendaftaran penduduk') return false;
+        return !!item.tgl_kasie || (statusAlur !== '1_PETUGAS_SCAN' && statusAlur !== '2_VERIFIKASI_KASIE');
+      } else if (c.role === 'kepala_upt') {
+        return !!item.tgl_upt || (statusAlur !== '1_PETUGAS_SCAN' && statusAlur !== '2_VERIFIKASI_UPT');
+      } else if (c.role === 'kabid_dafduk') {
+        if (itemJenis !== 'pendaftaran penduduk') return false;
+        return !!item.tgl_kabid || (statusAlur === '4_SERTIFIKASI_KADIS' || statusAlur === '5_TTE' || statusAlur === '6_PENCETAKAN_DINAS' || statusAlur === '7_SELESAI');
+      } else if (c.role === 'kabid_capil') {
+        if (itemJenis === 'pendaftaran penduduk') return false;
+        return !!item.tgl_kabid || (statusAlur === '4_SERTIFIKASI_KADIS' || statusAlur === '5_TTE' || statusAlur === '6_PENCETAKAN_DINAS' || statusAlur === '7_SELESAI');
+      } else if (c.role === 'kadis') {
+        return !!item.tgl_kadis || (statusAlur === '5_TTE' || statusAlur === '6_PENCETAKAN_DINAS' || statusAlur === '6_PENCETAKAN_UPT' || statusAlur === '7_SELESAI');
+      } else if (c.role === 'petugas_tte') {
+        return !!item.tgl_tte || (statusAlur === '6_PENCETAKAN_DINAS' || statusAlur === '6_PENCETAKAN_UPT' || statusAlur === '7_SELESAI');
+      } else if (c.role === 'petugas_pencetakan') {
+        return statusAlur === '7_SELESAI' || !!item.tgl_print;
+      }
+      return false;
+    }).length;
+
+    return `
+      <tr>
+        <td style="font-weight: 700; color: #f8fafc; font-size: 0.95rem;">
+          <span style="display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #3b82f6;"></span>
+            ${escapeHTML(c.label)}
+          </span>
+        </td>
+        <td class="text-center" style="font-weight: 700; color: #60a5fa; font-size: 1rem;">
+          ${countBerjalan > 0 ? `<span class="badge info" style="font-size: 0.9rem; padding: 4px 10px;">${countBerjalan}</span>` : '<span style="color:var(--text-muted); font-weight: 400;">0</span>'}
+        </td>
+        <td class="text-center" style="font-weight: 700; color: #f87171; font-size: 1rem;">
+          ${countPending > 0 ? `<span class="badge danger" style="font-size: 0.9rem; padding: 4px 10px;">${countPending}</span>` : '<span style="color:var(--text-muted); font-weight: 400;">0</span>'}
+        </td>
+        <td class="text-center" style="font-weight: 700; color: #34d399; font-size: 1rem;">
+          ${countSelesai > 0 ? `<span class="badge selesai" style="font-size: 0.9rem; padding: 4px 10px;">${countSelesai}</span>` : '<span style="color:var(--text-muted); font-weight: 400;">0</span>'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// MODAL CATATAN MONITORING
+window.openMonitoringNoteModal = function(key, subLayanan) {
+  const item = allData.find(d => String(d.key) === String(key) && (!subLayanan || String(d.sub_layanan) === String(subLayanan)));
+  if (!item) return;
+
+  if (monModalKey) monModalKey.value = item.key;
+  if (monModalSubLayanan) monModalSubLayanan.value = item.sub_layanan || '';
+  if (monModalDocTitle) monModalDocTitle.textContent = `${item.sub_layanan || item.jenis_layanan} (Kode: ${item.key})`;
+  if (monModalPemohonInfo) monModalPemohonInfo.textContent = `Pemohon: ${item.pemohon} | No HP: ${item.no_hp || '-'}`;
+  if (monModalPendingReason) monModalPendingReason.textContent = `⚠️ Catatan Pending: ${item.riwayat_pending || item.catatan_pending || 'Tidak ada catatan'}`;
+  
+  if (monCatatanInput) monCatatanInput.value = item.catatan_monitoring || '';
+
+  const radios = document.getElementsByName('monInfoTarget');
+  if (radios) {
+    radios.forEach(r => {
+      r.checked = (r.value === (item.info_monitoring || 'PEMOHON'));
+    });
+  }
+
+  if (monitoringNoteModal) {
+    monitoringNoteModal.style.display = 'flex';
+  }
+};
+
+window.closeMonitoringNoteModal = function() {
+  if (monitoringNoteModal) {
+    monitoringNoteModal.style.display = 'none';
+  }
+};
+
+window.saveMonitoringNote = function() {
+  const key = monModalKey ? monModalKey.value : '';
+  const subLayanan = monModalSubLayanan ? monModalSubLayanan.value : '';
+  const catatan = monCatatanInput ? monCatatanInput.value.trim() : '';
+
+  let infoTarget = 'PEMOHON';
+  const radios = document.getElementsByName('monInfoTarget');
+  if (radios) {
+    radios.forEach(r => {
+      if (r.checked) infoTarget = r.value;
+    });
+  }
+
+  if (!key) return;
+
+  // Update data lokal
+  const item = allData.find(d => String(d.key) === String(key) && (!subLayanan || String(d.sub_layanan) === String(subLayanan)));
+  if (item) {
+    item.info_monitoring = infoTarget;
+    item.catatan_monitoring = catatan;
+  }
+
+  // Submit ke backend Apps Script API
+  postToApi({
+    action: 'monitoring_note',
+    key: key,
+    sub_layanan: subLayanan,
+    info_monitoring: infoTarget,
+    catatan_monitoring: catatan,
+    user_name: currentUser ? currentUser.name : 'Monitoring'
+  });
+
+  showToast(`🎉 Catatan monitoring berhasil diperbarui (${infoTarget === 'PEMOHON' ? 'Pemohon' : 'Operator'})!`, 'success');
+  closeMonitoringNoteModal();
+  renderCounterDesk();
+  renderMonitoringDocTable();
+};
+
+window.exportMonitoringDocToPDF = function() {
+  const container = document.getElementById('monitoringDocPrintContainer');
+  if (!container) return;
+
+  const dateFilterInput = document.getElementById('monitoringDocDateFilter');
+  const selectedDate = dateFilterInput ? dateFilterInput.value : "";
+  const dateStr = selectedDate ? selectedDate : "Semua_Tanggal";
+
+  const fileName = `Summary_Monitoring_Counter_${dateStr}.pdf`;
+  showToast('Sedang membuat file PDF Summary Monitoring...', 'info');
+
+  const clone = container.cloneNode(true);
+  clone.style.background = '#ffffff';
+  clone.style.color = '#000000';
+  clone.style.padding = '15px';
+
+  const opt = {
+    margin: 0.4,
+    filename: fileName,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+  };
+
+  if (typeof html2pdf !== 'undefined') {
+    html2pdf().set(opt).from(clone).save().then(() => {
+      showToast('🎉 File PDF Summary Monitoring berhasil dibuat!', 'success');
+    }).catch(err => {
+      console.error('Gagal export PDF:', err);
+      showToast('⚠️ Terjadi kendala saat export PDF.', 'error');
+    });
+  } else {
+    window.print();
+  }
+};
 
 // RENDER MONITORING ALUR TABLE
 function renderMonitoringTable() {
