@@ -1830,19 +1830,32 @@ window.openActionModal = function(key, subLayanan) {
     let batchBannerHtml = '';
     if (allBatchItems.length > 1) {
       const followerListHtml = allBatchItems.map((it, idx) => {
+        const isCurrentActive = (String(it.sub_layanan) === String(item.sub_layanan));
         const isMandatory = (idx === 0);
-        const tag = isMandatory ? '📌 MANDATORI UTAMA' : `📄 PENGIKUT #${idx}`;
-        const tagBg = isMandatory ? 'background:#3b82f6; color:#fff;' : 'background:rgba(139,92,246,0.3); color:#c084fc;';
+        let tag = isCurrentActive ? '📍 DOKUMEN SAAT INI' : (isMandatory ? '📌 MANDATORI UTAMA' : `📄 PENGIKUT #${idx}`);
+        let tagBg = isCurrentActive ? 'background:#10b981; color:#fff;' : (isMandatory ? 'background:#3b82f6; color:#fff;' : 'background:rgba(139,92,246,0.3); color:#c084fc;');
+        
+        const isReadyForPrint = String(it.status_alur).includes('6_PENCETAKAN');
+        const isAlreadyDone = String(it.status_alur).includes('7_SELESAI');
+        let statusBadge = isAlreadyDone ? '✅ Sudah Dicetak' : (isReadyForPrint ? '🖨️ Siap Dicetak' : it.status_alur);
+        let statusColor = isAlreadyDone ? '#34d399' : (isReadyForPrint ? '#60a5fa' : '#a78bfa');
+
         return `
-          <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 12px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="background: ${isCurrentActive ? 'rgba(16, 185, 129, 0.12)' : 'rgba(15,23,42,0.6)'}; border: 1px solid ${isCurrentActive ? 'rgba(16, 185, 129, 0.4)' : 'rgba(255,255,255,0.08)'}; border-radius: 8px; padding: 8px 12px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
             <div>
               <strong style="color: #fff; font-size: 0.85rem;">${idx + 1}. ${escapeHTML(it.sub_layanan)}</strong>
-              <div style="font-size: 0.78rem; color: var(--text-muted);">Pemohon: ${escapeHTML(it.pemohon || '-')} | Jenis: ${escapeHTML(it.jenis_layanan || '-')} | Status: <span style="color:#a78bfa;">${escapeHTML(it.status_alur)}</span></div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">Pemohon: ${escapeHTML(it.pemohon || '-')} | Status: <span style="color:${statusColor}; font-weight:700;">${escapeHTML(statusBadge)}</span></div>
             </div>
             <span style="font-size: 0.7rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; ${tagBg}">${tag}</span>
           </div>
         `;
       }).join('');
+
+      let bannerSubtitle = role === 'petugas_pencetakan' ?
+        `🖨️ <strong>Informasi Petugas Cetak: Berkas ini merupakan bagian dari ${allBatchItems.length} dokumen terintegrasi se-Kode Unik. Silakan periksa daftar dokumen di bawah ini dan lakukan pencetakan lanjutan untuk dokumen pasangannya:</strong>` :
+        (role === 'petugas_tte' ?
+          `✍️ <strong>Informasi Petugas TTE: Berkas ini merupakan bagian dari ${allBatchItems.length} dokumen terintegrasi se-Kode Unik. Eksekusi TTE dilakukan secara mandiri per-dokumen di bawah ini:</strong>` :
+          `💡 <strong>Tindakan yang dieksekusi pada dokumen mandatori ini secara otomatis mewakili & memproses seluruh ${allBatchItems.length} dokumen terintegrasi di bawah ini:</strong>`);
 
       batchBannerHtml = `
         <div style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
@@ -1850,7 +1863,7 @@ window.openActionModal = function(key, subLayanan) {
             ⚡ RINCIAN DOKUMEN TERINTEGRASI KODE UNIK (${escapeHTML(item.key)}) - TOTAL ${allBatchItems.length} DOKUMEN
           </div>
           <div style="font-size: 0.82rem; color: #e9d5ff; margin-bottom: 8px; line-height: 1.5;">
-            💡 <strong>Tindakan yang dieksekusi pada dokumen mandatori ini secara otomatis mewakili & memproses seluruh ${allBatchItems.length} dokumen terintegrasi di bawah ini:</strong>
+            ${bannerSubtitle}
           </div>
           ${followerListHtml}
         </div>
