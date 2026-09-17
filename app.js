@@ -1338,6 +1338,30 @@ window.openMonitoringNoteModal = function(key, subLayanan) {
   }
 };
 
+// FUNGSI PEMBANTU POST payload KE APPS SCRIPT API
+async function postToApi(payload) {
+  if (!API_URL || useLocalSim) {
+    console.log('postToApi running in local simulation mode:', payload);
+    return { status: 'success', local: true };
+  }
+  try {
+    const fetchPromise = fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    }).then(res => res.json());
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('TIMEOUT')), 8000);
+    });
+
+    return await Promise.race([fetchPromise, timeoutPromise]);
+  } catch (err) {
+    console.warn('postToApi request failed or timed out:', err);
+    return { status: 'error', message: err.toString() };
+  }
+}
+
 window.closeMonitoringNoteModal = function() {
   if (monitoringNoteModal) {
     monitoringNoteModal.classList.remove('active');
@@ -1345,7 +1369,7 @@ window.closeMonitoringNoteModal = function() {
   }
 };
 
-window.saveMonitoringNote = function() {
+window.saveMonitoringNote = async function() {
   const key = monModalKey ? monModalKey.value : '';
   const subLayanan = monModalSubLayanan ? monModalSubLayanan.value : '';
   const catatan = monCatatanInput ? monCatatanInput.value.trim() : '';
@@ -1358,29 +1382,39 @@ window.saveMonitoringNote = function() {
     });
   }
 
-  if (!key) return;
+  const keyStr = String(key || '').trim();
+  const subStr = String(subLayanan || '').trim();
 
-  // Update data lokal
-  const item = allData.find(d => String(d.key) === String(key) && (!subLayanan || String(d.sub_layanan) === String(subLayanan)));
+  if (!keyStr) {
+    showToast('⚠️ Kode berkas tidak ditemukan!', 'error');
+    return;
+  }
+
+  // Update data lokal secara presisi
+  let item = allData.find(d => String(d.key || '').trim() === keyStr && (!subStr || String(d.sub_layanan || '').trim() === subStr));
+  if (!item) {
+    item = allData.find(d => String(d.key || '').trim() === keyStr);
+  }
   if (item) {
     item.info_monitoring = infoTarget;
     item.catatan_monitoring = catatan;
   }
 
-  // Submit ke backend Apps Script API
-  postToApi({
-    action: 'monitoring_note',
-    key: key,
-    sub_layanan: subLayanan,
-    info_monitoring: infoTarget,
-    catatan_monitoring: catatan,
-    user_name: currentUser ? currentUser.name : 'Monitoring'
-  });
-
-  showToast(`🎉 Catatan monitoring berhasil diperbarui (${infoTarget === 'PEMOHON' ? 'Pemohon' : 'Operator'})!`, 'success');
+  // Perbarui tampilan UI secara instan
+  showToast(`🎉 Catatan monitoring berhasil diperbarui (${infoTarget === 'PEMOHON' ? 'Diinfokan ke Pemohon' : 'Diinfokan ke Operator'})!`, 'success');
   closeMonitoringNoteModal();
   renderCounterDesk();
   renderMonitoringDocTable();
+
+  // Kirim data ke Google Apps Script backend secara async
+  await postToApi({
+    action: 'monitoring_note',
+    key: keyStr,
+    sub_layanan: subStr,
+    info_monitoring: infoTarget,
+    catatan_monitoring: catatan,
+    user_name: currentUser ? (currentUser.name || currentUser.username) : 'Monitoring'
+  });
 };
 
 window.exportMonitoringDocToPDF = function() {
