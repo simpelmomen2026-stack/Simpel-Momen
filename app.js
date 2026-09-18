@@ -1673,11 +1673,6 @@ function renderMonitoringTable() {
   const filterFas = filterFasilitasi ? filterFasilitasi.value : "ALL";
 
   const filtered = allData.filter(item => {
-    // 🛑 Filter Utama UPT: Sembunyikan berkas Dinas dan berkas UPT lain bagi user tingkatan UPT
-    if (isUserUpt(currentUser) && !matchItemToUserUpt(item, currentUser)) {
-      return false;
-    }
-
     // Filter Fasilitasi Dropdown
     if (filterFas === 'Dinas' && item.fasilitasi === 'UPT') return false;
     if (filterFas === 'UPT' && item.fasilitasi !== 'UPT') return false;
@@ -1693,7 +1688,8 @@ function renderMonitoringTable() {
     const jenisMatch = String(item.jenis_layanan || "").toLowerCase().includes(query);
     const subMatch = String(item.sub_layanan || "").toLowerCase().includes(query);
     const operatorMatch = String(item.operator || "").toLowerCase().includes(query);
-    return !query || keyMatch || pemohonMatch || jenisMatch || subMatch || operatorMatch;
+    const integrasiMatch = String(item.integrasi || "").toLowerCase().includes(query);
+    return !query || keyMatch || pemohonMatch || jenisMatch || subMatch || operatorMatch || integrasiMatch;
   });
 
   if (monitoringCount) monitoringCount.textContent = `Menampilkan ${filtered.length} berkas`;
@@ -1717,13 +1713,15 @@ function renderMonitoringTable() {
     const linkBtnHtml = hasLink ? 
       `<br><a href="${escapeHTML(row.link_file.trim())}" target="_blank" class="btn btn-secondary btn-xs" style="color:#60a5fa; margin-top:4px; font-size:0.75rem; padding:2px 8px;">📄 Buka Scan PDF</a>` : '';
 
+    const integrasiBadge = `<span class="badge" style="background: rgba(139, 92, 246, 0.2); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.4); font-size:0.78rem; text-transform: uppercase;">${escapeHTML(row.integrasi || row.fasilitasi || 'tunggal')}</span>`;
+
     return `
       <tr>
         <td><span class="code-key-badge">${escapeHTML(row.key)}</span></td>
         <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
         <td><strong>${escapeHTML(row.pemohon)}</strong></td>
         <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small>${linkBtnHtml}</td>
-        <td>${escapeHTML(row.operator || '-')}</td>
+        <td>${integrasiBadge}</td>
         <td style="font-weight: 500;">${escapeHTML(row.status_alur)}</td>
         <td><small style="color:var(--text-muted);">${escapeHTML(row.riwayat_pending || row.catatan_print || row.catatan_kadis || '-')}</small></td>
         <td class="text-center no-print">
@@ -1817,14 +1815,17 @@ function isItemExecutedByUser(item, user) {
   const nameStr = (user.name || "").toLowerCase().trim();
   const unameStr = (user.username || "").toLowerCase().trim();
 
+  if (!nameStr && !unameStr) return false;
+
   const isMatch = (val) => {
     if (!val) return false;
     const s = String(val).toLowerCase().trim();
     return (nameStr && s.includes(nameStr)) || (unameStr && s.includes(unameStr));
   };
 
-  // Cek apakah user tercatat sebagai pembuat atau eksekutor pada alur berkas
+  // Cek apakah user spesifik ini tercatat pada salah satu properti eksekusi/input/note
   return isMatch(item.operator) ||
+         isMatch(item.target_operator) ||
          isMatch(item.petugas_scan) ||
          isMatch(item.eksekutor_scan) ||
          isMatch(item.kasie) ||
@@ -1836,7 +1837,16 @@ function isItemExecutedByUser(item, user) {
          isMatch(item.kepala_upt) ||
          isMatch(item.eksekutor_upt) ||
          isMatch(item.petugas_cetak) ||
-         isMatch(item.eksekutor_cetak);
+         isMatch(item.eksekutor_cetak) ||
+         isMatch(item.penerima) ||
+         isMatch(item.catatan_scan) ||
+         isMatch(item.catatan_kasie) ||
+         isMatch(item.catatan_kabid) ||
+         isMatch(item.catatan_kadis) ||
+         isMatch(item.catatan_upt) ||
+         isMatch(item.catatan_print) ||
+         isMatch(item.catatan_monitoring) ||
+         isMatch(item.riwayat_pending);
 }
 
 // Daftar Tanggal Merah / Libur Nasional (Format: MM-DD)
@@ -1988,11 +1998,23 @@ function renderRekapitulasi() {
     return true;
   });
 
-  // Tentukan Daftar Uraian Sub Layanan (Semua Sub Layanan)
-  const subLayananList = [
-    ...SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"],
-    ...SUB_LAYANAN_OPTIONS["Pencatatan Sipil"]
-  ];
+  // Tentukan Daftar Uraian Sub Layanan Berdasarkan Peran User:
+  // 1. Kelompok User Dafduk (kasie_dafduk & kabid_dafduk) => HANYA Pendaftaran Penduduk
+  // 2. Kelompok User Capil (kasie_capil & kabid_capil) => HANYA Pencatatan Sipil
+  // 3. Selain kedua kelompok tersebut => Seluruh Sub Menu Layanan (Dafduk + Capil)
+  let subLayananList = [];
+  const currentRole = currentUser ? currentUser.role : '';
+
+  if (currentRole === 'kasie_dafduk' || currentRole === 'kabid_dafduk') {
+    subLayananList = [...SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"]];
+  } else if (currentRole === 'kasie_capil' || currentRole === 'kabid_capil') {
+    subLayananList = [...SUB_LAYANAN_OPTIONS["Pencatatan Sipil"]];
+  } else {
+    subLayananList = [
+      ...SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"],
+      ...SUB_LAYANAN_OPTIONS["Pencatatan Sipil"]
+    ];
+  }
 
   // Matriks Hitungan per Sub Layanan per Hari
   const matrix = {};
