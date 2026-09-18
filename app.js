@@ -1505,13 +1505,30 @@ window.saveMonitoringNote = async function() {
     item.target_operator = (infoTarget === 'OPERATOR') ? targetOperatorVal : '';
   }
 
+  // Trigger pengiriman WA langsung via Fonnte Client API sebagai jaminan tambahan
+  const docSub = item ? (item.sub_layanan || item.jenis_layanan || subStr) : subStr;
+  const docPemohon = item ? (item.pemohon || '-') : '-';
+  const rawPending = item ? (item.riwayat_pending || item.catatan_pending || 'Persyaratan belum lengkap') : 'Persyaratan belum lengkap';
+  const cleanReason = String(rawPending).split('\n')[0].replace(/^PENDING by [^:]+:\s*/, '');
+
+  let directWaMsg = "";
+  if (infoTarget === 'PEMOHON') {
+    directWaMsg = `Mohon izin pimpinan, menginformasikan bahwa dokumen pending *${docSub}* atas nama *${docPemohon}* telah kami informasikan kepada masyarakat tersebut dengan info *${catatanPemohon}*\n\nMakasih`;
+  } else if (infoTarget === 'OPERATOR') {
+    directWaMsg = `Mohon izin pimpinan, menginformasikan bahwa dokumen pending *${docSub}* atas nama *${docPemohon}* dengan catatan pending *${cleanReason}* telah kami sampaikan kepada petugas *${targetOperatorVal}*\n\nMakasih`;
+  }
+
+  if (directWaMsg) {
+    sendFonnteDirectWA("120363417098026103@g.us,120363409941075173@g.us,082397724667", directWaMsg);
+  }
+
   // Perbarui tampilan UI secara instan (dokumen langsung hilang dari meja kerja monitoring)
   showToast(`🎉 Catatan monitoring berhasil disimpan & notifikasi WA dikirim (${infoTarget === 'PEMOHON' ? 'Diinfokan ke Pemohon' : 'Diinfokan ke Operator'})!`, 'success');
   closeMonitoringNoteModal();
   renderCounterDesk();
   renderMonitoringDocTable();
 
-  // Kirim data ke Google Apps Script backend secara async (Apps Script akan mengirimkan pesan WA)
+  // Kirim data ke Google Apps Script backend secara async (Apps Script akan menyimpan ke Sheet dan mengirimkan pesan WA)
   await postToApi({
     action: 'monitoring_note',
     key: keyStr,
@@ -1523,6 +1540,29 @@ window.saveMonitoringNote = async function() {
     user_name: currentUser ? (currentUser.name || currentUser.username) : 'Monitoring'
   });
 };
+
+async function sendFonnteDirectWA(target, message) {
+  const token = "miMYecGgHMbMw3kZPmCM";
+  if (!token || !target || !message) return;
+  try {
+    const formData = new FormData();
+    formData.append('target', target);
+    formData.append('message', message);
+    formData.append('countryCode', '62');
+
+    fetch('https://api.fonnte.com/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': token
+      },
+      body: formData
+    }).then(res => res.text()).then(t => {
+      console.log('Direct Fonnte WA Response:', t);
+    }).catch(e => console.warn('Direct Fonnte fetch error:', e));
+  } catch (err) {
+    console.warn('sendFonnteDirectWA error:', err);
+  }
+}
 
 window.exportMonitoringDocToPDF = function() {
   const container = document.getElementById('monitoringDocPrintContainer');

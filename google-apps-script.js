@@ -144,7 +144,7 @@ function doGet(e) {
     }
 
     var sheet = getSpreadsheet().getActiveSheet();
-    ensureColumns(sheet, 30); // Pastikan memiliki minimal 30 kolom
+    ensureColumns(sheet, 33); // Pastikan memiliki minimal 33 kolom
     var lastRow = sheet.getLastRow();
     
     // Jika sheet kosong (hanya ada header atau kosong sama sekali)
@@ -153,8 +153,8 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
     
-    // Baca 30 kolom dari A sampai AD
-    var dataRange = sheet.getRange(2, 1, lastRow - 1, 30);
+    // Baca 33 kolom dari A sampai AG
+    var dataRange = sheet.getRange(2, 1, lastRow - 1, 33);
     var values = dataRange.getValues();
     var records = [];
     
@@ -192,7 +192,10 @@ function doGet(e) {
           tgl_kabid: row[26] ? row[26].toString() : "",
           tgl_kadis: row[27] ? row[27].toString() : "",
           tgl_tte: row[28] ? row[28].toString() : "",
-          tgl_print: row[29] ? row[29].toString() : ""
+          tgl_print: row[29] ? row[29].toString() : "",
+          catatan_monitoring: row[30] ? row[30].toString() : "",
+          info_monitoring: row[31] ? row[31].toString() : "",
+          target_operator: row[32] ? row[32].toString() : ""
         });
       }
     }
@@ -210,7 +213,7 @@ function doGet(e) {
 function doPost(e) {
   try {
     if (!e || !e.postData || !e.postData.contents) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Pengujian doPost langsung dari editor memerlukan data payload JSON. Silakan uji coba melalui aplikasi web atau jalankan fungsi testSendWA." }))
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Pengujian doPost langsung dari editor memerlukan data payload JSON." }))
         .setMimeType(ContentService.MimeType.JSON);
     }
     
@@ -225,9 +228,63 @@ function doPost(e) {
     if (payload.action === 'check_session') {
       return handleCheckSession(payload.username, payload.sessionToken);
     }
+
+    // 0.6 SIMPAN CATATAN & INFORMASI TIM MONITORING + NOTIFIKASI WA GRUP
+    if (payload.action === 'monitoring_note') {
+      var sheet = getSpreadsheet().getActiveSheet();
+      ensureColumns(sheet, 33);
+      var key = payload.key;
+      var subLayanan = payload.sub_layanan;
+      var infoMon = payload.info_monitoring || "";
+      var catMon = payload.catatan_monitoring || "";
+      var metodeMon = payload.metode_monitoring || "";
+      var targetOperator = payload.target_operator || "";
+      
+      var foundRow = findRowByKeyAndSub(sheet, key, subLayanan);
+      if (foundRow !== -1) {
+        var detailInfo = (infoMon === "OPERATOR") ? targetOperator : (metodeMon ? ("Metode: " + metodeMon) : "");
+        sheet.getRange(foundRow, 31).setValue(catMon);     // Col AE (31)
+        sheet.getRange(foundRow, 32).setValue(infoMon);    // Col AF (32)
+        sheet.getRange(foundRow, 33).setValue(detailInfo); // Col AG (33)
+
+        var pemohonName = sheet.getRange(foundRow, 5).getValue().toString(); // Col E
+        var currentSubLayanan = sheet.getRange(foundRow, 11).getValue().toString() || subLayanan; // Col K
+        var riwayatPending = sheet.getRange(foundRow, 22).getValue().toString(); // Col V
+        var catatanKasie = sheet.getRange(foundRow, 17).getValue().toString();   // Col Q
+        var catatanUpt = sheet.getRange(foundRow, 20).getValue().toString();     // Col T
+        var catatanKabid = sheet.getRange(foundRow, 18).getValue().toString();   // Col R
+        var catatanKadis = sheet.getRange(foundRow, 19).getValue().toString();   // Col S
+
+        var rawReason = riwayatPending || catatanKadis || catatanKabid || catatanKasie || catatanUpt || "Persyaratan belum lengkap";
+        var lines = rawReason.split("\n");
+        var cleanPendingReason = lines[0] ? lines[0].replace(/^PENDING by [^:]+:\s*/, "") : rawReason;
+
+        var waMsg = "";
+        if (infoMon === "PEMOHON") {
+          waMsg = "Mohon izin pimpinan, menginformasikan bahwa dokumen pending *" + currentSubLayanan + "* atas nama *" + pemohonName + "* telah kami informasikan kepada masyarakat tersebut dengan info *" + catMon + "*\n\nMakasih";
+        } else if (infoMon === "OPERATOR") {
+          waMsg = "Mohon izin pimpinan, menginformasikan bahwa dokumen pending *" + currentSubLayanan + "* atas nama *" + pemohonName + "* dengan catatan pending *" + cleanPendingReason + "* telah kami sampaikan kepada petugas *" + targetOperator + "*\n\nMakasih";
+        }
+
+        if (waMsg) {
+          var fasilitasi = sheet.getRange(foundRow, 3).getValue().toString(); // Col C
+          var isUpt = fasilitasi ? (fasilitasi.toUpperCase().indexOf("UPT") !== -1) : false;
+          var targetGroup = isUpt ? WA_GROUP_UPT : WA_GROUP_DINAS;
+          
+          var allTargets = [targetGroup, WA_GROUP_DINAS, WA_GROUP_UPT, WA_ADMIN_NUMBER].filter(Boolean).join(",");
+          sendWhatsAppMessage(allTargets, waMsg);
+        }
+
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Catatan monitoring berhasil disimpan & notifikasi WA terkirim." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      } else {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Dokumen tidak ditemukan." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
     
     var sheet = getSpreadsheet().getActiveSheet();
-    ensureColumns(sheet, 30); // Pastikan memiliki minimal 30 kolom
+    ensureColumns(sheet, 32); // Pastikan memiliki minimal 32 kolom
     
     // 1. TAMBAH BARU (OPERATOR INPUT - SINGLE ATAU BATCH MULTI-ITEM INTEGRASI V2.0)
     if (payload.action === 'create' || payload.action === 'create_batch') {
@@ -359,9 +416,10 @@ function doPost(e) {
       var role = payload.role;
       var executeAction = payload.executeAction; // 'approve' atau 'pending'
       var notes = payload.notes || "";
+      var subLayananInput = payload.sub_layanan || "";
       var timeStr = getLocalDateTimeString();
       
-      var foundRow = findRowByKey(sheet, key);
+      var foundRow = findRowByKeyAndSub(sheet, key, subLayananInput);
       if (foundRow === -1) {
         throw new Error("Berkas dengan Key " + key + " tidak ditemukan.");
       }
@@ -403,10 +461,10 @@ function doPost(e) {
       var hasPindah = batchRows.some(function(b) { return b.sub_layanan.toLowerCase().indexOf("pindah") !== -1; });
 
       var targetItem = batchRows.find(function(b) {
-        return (payload.sub_layanan && b.sub_layanan === payload.sub_layanan) || b.rowIndex === foundRow;
-      }) || sampleItem;
+        return b.rowIndex === foundRow;
+      }) || (subLayananInput ? batchRows.find(function(b) { return b.sub_layanan === subLayananInput; }) : null) || sampleItem;
 
-      var currentFasilitasi = sampleItem.fasilitasi;
+      var currentFasilitasi = targetItem.fasilitasi || sampleItem.fasilitasi;
       var pemohonName = targetItem.pemohon || sampleItem.pemohon;
       var currentLayanan = targetItem.jenis_layanan || sheet.getRange(foundRow, 10).getValue().toString();
       var currentSubLayanan = targetItem.sub_layanan || sheet.getRange(foundRow, 11).getValue().toString();
@@ -553,9 +611,12 @@ function doPost(e) {
         } 
         
         else if (role === 'kadis') {
-          sheet.getRange(foundRow, 19).setValue(notes); // Col S (Catatan Kadis)
-          sheet.getRange(foundRow, 28).setValue(timeStr); // Col AB (tgl_kadis)
-          sheet.getRange(foundRow, 13).setValue("5_TTE");
+          for (var i = 0; i < batchRows.length; i++) {
+            var rIdx = batchRows[i].rowIndex;
+            sheet.getRange(rIdx, 19).setValue(notes);   // Col S (Catatan Kadis)
+            sheet.getRange(rIdx, 28).setValue(timeStr); // Col AB (tgl_kadis)
+            sheet.getRange(rIdx, 13).setValue("5_TTE");  // Col M (Status Alur)
+          }
         } 
         
         else if (role === 'petugas_tte') {
@@ -691,23 +752,9 @@ function doPost(e) {
                     "Operator tolong disesuaikan kembali.\n\n" +
                     "Terima Kasih.";
           } else {
-            var dafdukDocList = "";
-            if (dafdukRows.length > 1) {
-              for (var d = 0; d < dafdukRows.length; d++) {
-                dafdukDocList += (d + 1) + ". " + dafdukRows[d].sub_layanan + " - " + (dafdukRows[d].pemohon || dafdukPemohon) + "\n";
-              }
-            }
-
-            if (dafdukRows.length > 1) {
-              waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa seluruh dokumen Pendaftaran Penduduk terintegrasi (" + dafdukRows.length + " Dokumen, Kode Unik: *" + key + "*) (" + fasTag + ") telah kami verifikasi.\n\n" +
-                      "📋 *Daftar Dokumen Pendaftaran Penduduk Diteruskan ke Kabid Dafduk:*\n\n" + dafdukDocList + "\n" +
-                      "Mohon selanjutnya Kepala Bidang Dafduk dapat memvalidasi dokumen tersebut.\n\n" +
-                      "Terima Kasih.";
-            } else {
-              waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen Pendaftaran Penduduk *" + dafdukSubLayanan + "* (" + fasTag + ") Kode Unik *" + key + "* atas nama *" + dafdukPemohon + "* telah kami verifikasi.\n" +
-                      "Mohon selanjutnya Kepala Bidang Dafduk dapat memvalidasi dokumen tersebut.\n\n" +
-                      "Terima Kasih.";
-            }
+            waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen Pendaftaran Penduduk *" + dafdukSubLayanan + "* (" + fasTag + ") Kode Unik *" + key + "* atas nama *" + dafdukPemohon + "* telah kami verifikasi dan diteruskan ke Kabid Dafduk.\n" +
+                    "Dokumen Pendaftaran Penduduk terintegrasi saat ini otomatis diaktifkan di counter Kabid Dafduk untuk verifikasi selanjutnya.\n\n" +
+                    "Terima Kasih.";
           }
         } 
         else if (role === 'kepala_upt') {
@@ -723,8 +770,8 @@ function doPost(e) {
                       "• Dokumen Pendaftaran Penduduk otomatis terkirim langsung ke Kabid Dafduk.\n\n" +
                       "Terima Kasih.";
             } else if (isDafdukDafduk) {
-              waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa permohonan Terintegrasi Dafduk - Dafduk (Kode Unik: *" + key + "*) atas nama *" + pemohonName + "* (" + fasTag + ") telah kami verifikasi.\n\n" +
-                      "📋 *Daftar Dokumen Diteruskan ke Kabid Dafduk:*\n\n" + docListStr + "\n" +
+              waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen Pendaftaran Penduduk *" + currentSubLayanan + "* (" + fasTag + ") Kode Unik *" + key + "* atas nama *" + pemohonName + "* telah kami verifikasi dan diteruskan ke Kabid Dafduk.\n" +
+                      "Dokumen Pendaftaran Penduduk terintegrasi saat ini otomatis diaktifkan di counter Kabid Dafduk untuk verifikasi selanjutnya.\n\n" +
                       "Terima Kasih.";
             } else {
               var isCapil = currentLayanan.toLowerCase().indexOf("capil") !== -1 || currentLayanan.toLowerCase().indexOf("pencatatan sipil") !== -1;
@@ -792,33 +839,71 @@ function doPost(e) {
                     "Petugas TTE, dokumen *" + dafdukSubLayanan + "* (" + fasTag + ") atas nama *" + dafdukPemohon + "* silahkan di TTE.\n\n" +
                     "Terima Kasih.";
           } else {
-            var dafdukDocList = "";
-            if (dafdukRows.length > 1) {
-              for (var d = 0; d < dafdukRows.length; d++) {
-                dafdukDocList += (d + 1) + ". " + dafdukRows[d].sub_layanan + " - " + (dafdukRows[d].pemohon || dafdukPemohon) + "\n";
-              }
-            }
-
-            if (dafdukRows.length > 1) {
-              waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa seluruh dokumen Pendaftaran Penduduk terintegrasi (" + dafdukRows.length + " Dokumen, Kode Unik: *" + key + "*) (" + fasTag + ") atas nama *" + dafdukPemohon + "* telah kami verifikasi.\n\n" +
-                      "📋 *Daftar Dokumen Pendaftaran Penduduk Diteruskan ke Kadis:*\n\n" + dafdukDocList + "\n" +
-                      "Mohon selanjutnya Kepala Dinas dapat melakukan sertifikasi dokumen tersebut.\n\n" +
-                      "Terima Kasih.";
-            } else {
-              waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen Pendaftaran Penduduk *" + dafdukSubLayanan + "* (" + fasTag + ") Kode Unik *" + key + "* atas nama *" + dafdukPemohon + "* telah kami verifikasi.\n" +
-                      "Mohon selanjutnya Kepala Dinas dapat melakukan sertifikasi dokumen tersebut.\n\n" +
-                      "Terima Kasih.";
-            }
+            waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen Pendaftaran Penduduk *" + dafdukSubLayanan + "* (" + fasTag + ") Kode Unik *" + key + "* atas nama *" + dafdukPemohon + "* telah kami verifikasi dan diteruskan ke Kadis.\n" +
+                    "Dokumen Pendaftaran Penduduk terintegrasi saat ini otomatis diaktifkan di counter Kadis untuk verifikasi selanjutnya.\n\n" +
+                    "Terima Kasih.";
           }
         } 
         else if (role === 'kadis') {
           if (executeAction === 'pending') {
-            waMsg = "Saya selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + currentSubLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah kami uji petik dan dokumen tersebut harus di PENDING untuk melengkapi *" + (notes || "kelengkapan berkas") + "*.\n" +
+            var mandatoryItem = null;
+            if (isDafdukCapil) {
+              mandatoryItem = batchRows.find(function(b) {
+                var jl = (b.jenis_layanan || "").toLowerCase();
+                return jl.indexOf("capil") !== -1 || jl.indexOf("pencatatan sipil") !== -1;
+              });
+            } else if (isDafdukDafduk) {
+              mandatoryItem = batchRows.find(function(b) {
+                var sl = (b.sub_layanan || "").toLowerCase();
+                return sl.indexOf("pindah") !== -1;
+              }) || batchRows[0];
+            }
+            if (!mandatoryItem) mandatoryItem = batchRows[0] || { sub_layanan: currentSubLayanan, pemohon: pemohonName };
+
+            var mandatoriSub = mandatoryItem.sub_layanan || currentSubLayanan;
+            var mandatoriPemohon = mandatoryItem.pemohon || pemohonName;
+            var fasText = (currentFasilitasi && currentFasilitasi.toUpperCase().indexOf("UPT") !== -1) ? "Fasilitasi: UPT" : "Fasilitasi: Dinas";
+
+            var followerRows = batchRows.filter(function(b) { return b !== mandatoryItem; });
+            var followerText = "";
+            if (followerRows.length > 0) {
+              for (var f = 0; f < followerRows.length; f++) {
+                var fPemohon = followerRows[f].pemohon || mandatoriPemohon;
+                followerText += (f + 1) + ". " + followerRows[f].sub_layanan + " - " + fPemohon + "\n";
+              }
+            }
+
+            waMsg = "Saya selaku kadis menyampaikan bahwa dokumen *" + mandatoriSub + "* *(" + fasText + ")* atas nama *" + mandatoriPemohon + "* telah kami uji petik dan dokumen tersebut harus di PENDING untuk melengkapi *" + (notes || "kelengkapan berkas") + "*.\n\n" +
+                    (followerText ? "*_Dokumen yang turut dipending adalah :_*\n" + followerText + "\n" : "") +
                     "Operator tolong disesuaikan.\n\n" +
                     "Terima Kasih.";
           } else {
-            waMsg = "Petugas TTE, dokumen *" + currentSubLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* silahkan di TTE.\n\n" +
-                    "Terima Kasih.";
+            if (isDafdukCapil) {
+              var capilSubLayanan = currentSubLayanan;
+              var capilItem = batchRows.find(function(b) {
+                var jl = (b.jenis_layanan || "").toLowerCase();
+                return jl.indexOf("capil") !== -1 || jl.indexOf("pencatatan sipil") !== -1;
+              });
+              if (capilItem && capilItem.sub_layanan) capilSubLayanan = capilItem.sub_layanan;
+
+              waMsg = "Saya selaku *" + roleTitle + "* menyampaikan bahwa dokumen Pencatatan Sipil *" + capilSubLayanan + "* (" + fasTag + ") Kode Unik *" + key + "* atas nama *" + pemohonName + "* telah kami sertifikasi dan diteruskan ke Petugas TTE.\n" +
+                      "Dokumen Pendaftaran Penduduk terintegrasi saat ini otomatis diaktifkan di counter Petugas TTE untuk verifikasi selanjutnya.\n\n" +
+                      "Terima Kasih.";
+            } else if (isDafdukDafduk) {
+              var dafdukSubLayanan = currentSubLayanan;
+              var mandatoryItem = batchRows.find(function(b) {
+                var sl = (b.sub_layanan || "").toLowerCase();
+                return sl.indexOf("pindah") !== -1;
+              }) || batchRows[0];
+              if (mandatoryItem && mandatoryItem.sub_layanan) dafdukSubLayanan = mandatoryItem.sub_layanan;
+
+              waMsg = "Saya selaku *" + roleTitle + "* menyampaikan bahwa dokumen Pendaftaran Penduduk *" + dafdukSubLayanan + "* (" + fasTag + ") Kode Unik *" + key + "* atas nama *" + pemohonName + "* telah kami sertifikasi dan diteruskan ke Petugas TTE.\n" +
+                      "Dokumen Pendaftaran Penduduk terintegrasi saat ini otomatis diaktifkan di counter Petugas TTE untuk verifikasi selanjutnya.\n\n" +
+                      "Terima Kasih.";
+            } else {
+              waMsg = "Petugas TTE, dokumen *" + currentSubLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* silahkan di TTE.\n\n" +
+                      "Terima Kasih.";
+            }
           }
         } 
         else if (role === 'petugas_tte') {
@@ -1092,18 +1177,30 @@ function getUserDetailsFromPetugasSheet(ss, searchUser) {
   return result;
 }
 
-// Fungsi Pembantu: Cari nomor baris berdasarkan nilai Key
-function findRowByKey(sheet, key) {
+// Fungsi Pembantu: Cari nomor baris berdasarkan nilai Key & Sub Layanan Spesifik
+function findRowByKeyAndSub(sheet, key, subLayanan) {
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) return -1;
   
-  var keys = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  for (var i = 0; i < keys.length; i++) {
-    if (keys[i][0].toString() === key) {
+  var vals = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
+  if (subLayanan && subLayanan.toString().trim() !== "") {
+    var subClean = subLayanan.toString().trim().toLowerCase();
+    for (var i = 0; i < vals.length; i++) {
+      if (vals[i][0].toString() === key && vals[i][10].toString().trim().toLowerCase() === subClean) {
+        return i + 2;
+      }
+    }
+  }
+  for (var i = 0; i < vals.length; i++) {
+    if (vals[i][0].toString() === key) {
       return i + 2;
     }
   }
   return -1;
+}
+
+function findRowByKey(sheet, key) {
+  return findRowByKeyAndSub(sheet, key, "");
 }
 
 // Fungsi Pembantu: Generate Key Unik Acak
@@ -1239,6 +1336,19 @@ function normalizeUserRole(rawRole) {
   return str.replace(/\s+/g, '_');
 }
 
+function syncFonnteGroups() {
+  if (!FONNTE_TOKEN) return;
+  try {
+    UrlFetchApp.fetch("https://api.fonnte.com/fetch-group", {
+      method: "post",
+      headers: { "Authorization": FONNTE_TOKEN },
+      muteHttpExceptions: true
+    });
+  } catch (e) {
+    Logger.log("fetch-group error: " + e.toString());
+  }
+}
+
 // FUNGSI UTAMA PENGIRIMAN WA VIA FONNTE API (Dengan Logging Respon Lengkap & Resolusi Otomatis ID Grup)
 function sendWhatsAppMessage(target, message) {
   if (!FONNTE_TOKEN || !target) {
@@ -1247,6 +1357,11 @@ function sendWhatsAppMessage(target, message) {
   }
   
   var cleanTarget = resolveTargetGroupId(target);
+
+  // Jika target mengandung grup WA (@g.us), pastikan grup disinkronkan terlebih dahulu
+  if (cleanTarget.indexOf("@g.us") !== -1) {
+    syncFonnteGroups();
+  }
   
   var url = "https://api.fonnte.com/send";
   var payload = {
@@ -1280,6 +1395,10 @@ function resolveTargetGroupId(target) {
   if (!target) return "";
   var cleanTarget = target.toString().trim();
   
+  if (cleanTarget.indexOf(",") !== -1) {
+    return cleanTarget;
+  }
+
   if (cleanTarget.substr(0, 2) === "08") {
     return "628" + cleanTarget.substr(2);
   }
@@ -1287,9 +1406,12 @@ function resolveTargetGroupId(target) {
   if (cleanTarget.indexOf("@g.us") !== -1 || /^[0-9+]+$/.test(cleanTarget)) {
     return cleanTarget;
   }
+
+  if (cleanTarget.toUpperCase().indexOf("UPT") !== -1) {
+    return WA_GROUP_UPT || "120363409941075173@g.us";
+  }
   
-  // Pemetaan langsung ke Group ID JID resmi Fonnte untuk grup "TEKNIS PELAYANAN DOKUMEN"
-  return "120363417098026103@g.us";
+  return WA_GROUP_DINAS || "120363417098026103@g.us";
 }
 
 function getRoleDisplayName(role) {
