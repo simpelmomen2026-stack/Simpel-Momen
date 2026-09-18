@@ -871,7 +871,9 @@ function renderCounterDesk() {
     }
 
     if (role === 'monitoring') {
-      return item.status_alur === 'PENDING_OPERATOR' || String(item.status_alur).includes('PENDING');
+      const isPending = item.status_alur === 'PENDING_OPERATOR' || String(item.status_alur).includes('PENDING');
+      const isAlreadyMonitored = item.info_monitoring && String(item.info_monitoring).trim() !== '';
+      return isPending && !isAlreadyMonitored;
     }
     return userActiveDeskItems.includes(item);
   });
@@ -1288,6 +1290,74 @@ function renderMonitoringDocTable() {
   }).join('');
 }
 
+// TOGGLE SUB MENU PILIHAN SASARAN MONITORING
+window.toggleMonTargetFields = function() {
+  const monGroupPemohon = document.getElementById('monGroupPemohon');
+  const monGroupOperator = document.getElementById('monGroupOperator');
+  
+  let target = 'PEMOHON';
+  const radios = document.getElementsByName('monInfoTarget');
+  if (radios) {
+    radios.forEach(r => { if (r.checked) target = r.value; });
+  }
+
+  if (target === 'PEMOHON') {
+    if (monGroupPemohon) monGroupPemohon.style.display = 'block';
+    if (monGroupOperator) monGroupOperator.style.display = 'none';
+  } else {
+    if (monGroupPemohon) monGroupPemohon.style.display = 'none';
+    if (monGroupOperator) monGroupOperator.style.display = 'block';
+    populateMonitoringOperatorOptions();
+  }
+};
+
+function populateMonitoringOperatorOptions() {
+  const monOperatorSelect = document.getElementById('monOperatorSelect');
+  if (!monOperatorSelect) return;
+
+  const operatorSet = new Set();
+
+  if (typeof MOCK_PETUGAS !== 'undefined' && Array.isArray(MOCK_PETUGAS)) {
+    MOCK_PETUGAS.forEach(p => {
+      if (p.role === 'operator' && p.name) {
+        let label = p.name;
+        if (p.uptCode) label += ` (${p.uptCode})`;
+        else if (p.fasilitasi) label += ` (${p.fasilitasi})`;
+        operatorSet.add(label);
+      }
+    });
+  }
+
+  if (Array.isArray(allData)) {
+    allData.forEach(item => {
+      if (item.operator && item.operator.trim()) {
+        const opName = item.operator.trim();
+        let found = false;
+        operatorSet.forEach(existing => {
+          if (existing === opName || existing.startsWith(opName)) found = true;
+        });
+        if (!found) {
+          const fas = item.fasilitasi || item.integrasi || '';
+          const label = fas ? `${opName} (${fas})` : opName;
+          operatorSet.add(label);
+        }
+      }
+    });
+  }
+
+  if (operatorSet.size === 0) {
+    operatorSet.add("Operator Dinas (Dinas)");
+    operatorSet.add("Operator UPT 01 (UPT-01)");
+    operatorSet.add("User01 (UPT-01)");
+  }
+
+  let html = `<option value="">-- Pilih Nama Petugas Operator --</option>`;
+  operatorSet.forEach(op => {
+    html += `<option value="${escapeHTML(op)}">${escapeHTML(op)}</option>`;
+  });
+  monOperatorSelect.innerHTML = html;
+}
+
 // MODAL CATATAN MONITORING
 window.openMonitoringNoteModal = function(key, subLayanan) {
   const keyStr = String(key || '').trim();
@@ -1309,13 +1379,25 @@ window.openMonitoringNoteModal = function(key, subLayanan) {
   if (monModalPemohonInfo) monModalPemohonInfo.textContent = `Pemohon: ${item.pemohon} | No HP: ${item.no_hp || '-'}`;
   if (monModalPendingReason) monModalPendingReason.textContent = `⚠️ Catatan Pending: ${item.riwayat_pending || item.catatan_pending || 'Tidak ada catatan'}`;
   
-  if (monCatatanInput) monCatatanInput.value = item.catatan_monitoring || '';
+  const monMetodeSelect = document.getElementById('monMetodeSelect');
+  const monCatatanPemohonInput = document.getElementById('monCatatanPemohonInput');
+  const monOperatorSelect = document.getElementById('monOperatorSelect');
 
+  if (monMetodeSelect) monMetodeSelect.value = item.metode_monitoring || 'WhatsApp / WA';
+  if (monCatatanPemohonInput) monCatatanPemohonInput.value = item.catatan_monitoring || '';
+
+  const defaultTarget = item.info_monitoring || 'PEMOHON';
   const radios = document.getElementsByName('monInfoTarget');
   if (radios) {
     radios.forEach(r => {
-      r.checked = (r.value === (item.info_monitoring || 'PEMOHON'));
+      r.checked = (r.value === defaultTarget);
     });
+  }
+
+  toggleMonTargetFields();
+
+  if (monOperatorSelect && item.target_operator) {
+    monOperatorSelect.value = item.target_operator;
   }
 
   if (monitoringNoteModal) {
@@ -1372,7 +1454,6 @@ window.closeMonitoringNoteModal = function() {
 window.saveMonitoringNote = async function() {
   const key = monModalKey ? monModalKey.value : '';
   const subLayanan = monModalSubLayanan ? monModalSubLayanan.value : '';
-  const catatan = monCatatanInput ? monCatatanInput.value.trim() : '';
 
   let infoTarget = 'PEMOHON';
   const radios = document.getElementsByName('monInfoTarget');
@@ -1380,6 +1461,28 @@ window.saveMonitoringNote = async function() {
     radios.forEach(r => {
       if (r.checked) infoTarget = r.value;
     });
+  }
+
+  const monMetodeSelect = document.getElementById('monMetodeSelect');
+  const monCatatanPemohonInput = document.getElementById('monCatatanPemohonInput');
+  const monOperatorSelect = document.getElementById('monOperatorSelect');
+
+  const metodeVal = monMetodeSelect ? monMetodeSelect.value : 'WhatsApp / WA';
+  const catatanPemohon = monCatatanPemohonInput ? monCatatanPemohonInput.value.trim() : '';
+  const targetOperatorVal = monOperatorSelect ? monOperatorSelect.value.trim() : '';
+
+  if (infoTarget === 'PEMOHON') {
+    if (!catatanPemohon) {
+      showToast('⚠️ Info Pesan kepada Masyarakat wajib diisi!', 'error');
+      if (monCatatanPemohonInput) monCatatanPemohonInput.focus();
+      return;
+    }
+  } else if (infoTarget === 'OPERATOR') {
+    if (!targetOperatorVal) {
+      showToast('⚠️ Harap pilih nama petugas operator!', 'error');
+      if (monOperatorSelect) monOperatorSelect.focus();
+      return;
+    }
   }
 
   const keyStr = String(key || '').trim();
@@ -1397,22 +1500,26 @@ window.saveMonitoringNote = async function() {
   }
   if (item) {
     item.info_monitoring = infoTarget;
-    item.catatan_monitoring = catatan;
+    item.catatan_monitoring = (infoTarget === 'PEMOHON') ? catatanPemohon : '';
+    item.metode_monitoring = (infoTarget === 'PEMOHON') ? metodeVal : '';
+    item.target_operator = (infoTarget === 'OPERATOR') ? targetOperatorVal : '';
   }
 
-  // Perbarui tampilan UI secara instan
-  showToast(`🎉 Catatan monitoring berhasil diperbarui (${infoTarget === 'PEMOHON' ? 'Diinfokan ke Pemohon' : 'Diinfokan ke Operator'})!`, 'success');
+  // Perbarui tampilan UI secara instan (dokumen langsung hilang dari meja kerja monitoring)
+  showToast(`🎉 Catatan monitoring berhasil disimpan & notifikasi WA dikirim (${infoTarget === 'PEMOHON' ? 'Diinfokan ke Pemohon' : 'Diinfokan ke Operator'})!`, 'success');
   closeMonitoringNoteModal();
   renderCounterDesk();
   renderMonitoringDocTable();
 
-  // Kirim data ke Google Apps Script backend secara async
+  // Kirim data ke Google Apps Script backend secara async (Apps Script akan mengirimkan pesan WA)
   await postToApi({
     action: 'monitoring_note',
     key: keyStr,
     sub_layanan: subStr,
     info_monitoring: infoTarget,
-    catatan_monitoring: catatan,
+    catatan_monitoring: (infoTarget === 'PEMOHON') ? catatanPemohon : '',
+    metode_monitoring: (infoTarget === 'PEMOHON') ? metodeVal : '',
+    target_operator: (infoTarget === 'OPERATOR') ? targetOperatorVal : '',
     user_name: currentUser ? (currentUser.name || currentUser.username) : 'Monitoring'
   });
 };
