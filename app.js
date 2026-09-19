@@ -671,6 +671,36 @@ async function checkSessionTokenOnline() {
   return true;
 }
 
+function updateDbConnectionIndicator(isOnline, statusMessage) {
+  const dbStatusDot = document.getElementById('dbStatusDot');
+  const dbStatusText = document.getElementById('dbStatusText');
+  const dbConnectionIndicator = document.getElementById('dbConnectionIndicator');
+
+  if (!dbStatusDot || !dbStatusText) return;
+
+  if (isOnline) {
+    dbStatusDot.style.background = '#10b981';
+    dbStatusDot.style.boxShadow = '0 0 10px #10b981, 0 0 18px rgba(16, 185, 129, 0.6)';
+    dbStatusText.style.color = '#34d399';
+    dbStatusText.textContent = statusMessage || 'Terkoneksi DB';
+    if (dbConnectionIndicator) {
+      dbConnectionIndicator.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+      dbConnectionIndicator.style.background = 'rgba(16, 185, 129, 0.1)';
+      dbConnectionIndicator.title = '🟢 Status: Terkoneksi ke Live Database Google Sheets';
+    }
+  } else {
+    dbStatusDot.style.background = '#ef4444';
+    dbStatusDot.style.boxShadow = '0 0 10px #ef4444, 0 0 18px rgba(239, 68, 68, 0.6)';
+    dbStatusText.style.color = '#fca5a5';
+    dbStatusText.textContent = statusMessage || 'Terputus DB';
+    if (dbConnectionIndicator) {
+      dbConnectionIndicator.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+      dbConnectionIndicator.style.background = 'rgba(239, 68, 68, 0.1)';
+      dbConnectionIndicator.title = '🔴 Status: Terputus dari Database (Offline / Kendala Jaringan)';
+    }
+  }
+}
+
 // ================= DATA FETCHER & RENDERING =================
 async function loadData(skipSessionCheck = false) {
   if (!skipSessionCheck) {
@@ -694,6 +724,7 @@ async function loadData(skipSessionCheck = false) {
   
   if (API_URL === 'local') {
     allData = getLocalDB();
+    updateDbConnectionIndicator(false, 'Terputus DB');
     populateFasilitasiFilterOptions();
     renderCounterDesk();
     renderMonitoringTable();
@@ -714,12 +745,14 @@ async function loadData(skipSessionCheck = false) {
       allData = [];
     }
     
+    updateDbConnectionIndicator(true, 'Terkoneksi DB');
     populateFasilitasiFilterOptions();
     renderCounterDesk();
     renderMonitoringTable();
     renderRekapitulasi();
   } catch (error) {
     console.error('Gagal mengambil data dari Google Sheets:', error);
+    updateDbConnectionIndicator(false, 'Terputus DB');
     showToast('Koneksi ke Google Sheets terganggu. Menampilkan data cadangan sementara.', 'warning');
     allData = getLocalDB();
     populateFasilitasiFilterOptions();

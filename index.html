@@ -104,7 +104,12 @@
           <h1 id="pageTitle">Kerja Counter Desk</h1>
           <p id="pageSubtitle">Monitoring dan verifikasi alur pergerakan berkas</p>
         </div>
-        <div class="header-actions">
+        <div class="header-actions" style="display: flex; align-items: center; gap: 12px;">
+          <!-- Indikator Lampu Koneksi Database -->
+          <div id="dbConnectionIndicator" title="Status Koneksi Database" style="display: flex; align-items: center; gap: 8px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.4); padding: 6px 14px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; transition: all 0.3s ease;">
+            <span id="dbStatusDot" style="width: 10px; height: 10px; border-radius: 50%; background: #10b981; box-shadow: 0 0 10px #10b981; display: inline-block;"></span>
+            <span id="dbStatusText" style="color: #34d399;">Database Online</span>
+          </div>
           <button class="btn btn-primary" id="refreshBtn">🔄 Segarkan Data</button>
         </div>
       </header>
@@ -614,6 +619,6 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="app.js?v=20260918_1225"></script>
+  <script src="app.js?v=20260919_0850"></script>
 </body>
 </html>
