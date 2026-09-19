@@ -1542,17 +1542,19 @@ window.saveMonitoringNote = async function() {
   const docSub = item ? (item.sub_layanan || item.jenis_layanan || subStr) : subStr;
   const docPemohon = item ? (item.pemohon || '-') : '-';
   const rawPending = item ? (item.riwayat_pending || item.catatan_pending || 'Persyaratan belum lengkap') : 'Persyaratan belum lengkap';
-  const cleanReason = String(rawPending).split('\n')[0].replace(/^PENDING by [^:]+:\s*/, '');
+  const cleanReason = cleanPendingNoteText(rawPending);
 
   let directWaMsg = "";
   if (infoTarget === 'PEMOHON') {
     directWaMsg = `Mohon izin pimpinan, menginformasikan bahwa dokumen pending *${docSub}* atas nama *${docPemohon}* telah kami informasikan kepada masyarakat tersebut dengan info *${catatanPemohon}*\n\nMakasih`;
   } else if (infoTarget === 'OPERATOR') {
-    directWaMsg = `Mohon izin pimpinan, menginformasikan bahwa dokumen pending *${docSub}* atas nama *${docPemohon}* dengan catatan pending *${cleanReason}* telah kami sampaikan kepada petugas *${targetOperatorVal}*\n\nMakasih`;
+    directWaMsg = `Mohon izin pimpinan, menginformasikan bahwa dokumen pending *${docSub}* atas nama *${docPemohon}* dengan catatan pending *${cleanReason}* telah kami sampaikan kepada petugas *${targetOperatorVal}* untuk selanjutnya dapat di tindaklanjuti berdasarkan catatan pendingnya\n\nMakasih`;
   }
 
   if (directWaMsg) {
-    sendFonnteDirectWA("120363417098026103@g.us,120363409941075173@g.us,082397724667", directWaMsg);
+    const isUptDoc = item ? String(item.fasilitasi || item.integrasi || '').toUpperCase().includes('UPT') : false;
+    const targetGroupJid = isUptDoc ? "120363409941075173@g.us" : "120363417098026103@g.us";
+    sendFonnteDirectWA(`${targetGroupJid},082397724667`, directWaMsg);
   }
 
   // Perbarui tampilan UI secara instan (dokumen langsung hilang dari meja kerja monitoring)
@@ -1573,6 +1575,24 @@ window.saveMonitoringNote = async function() {
     user_name: currentUser ? (currentUser.name || currentUser.username) : 'Monitoring'
   });
 };
+
+function cleanPendingNoteText(rawText) {
+  if (!rawText) return "Persyaratan belum lengkap";
+  let line = String(rawText).split('\n')[0] || String(rawText);
+  
+  // Hapus prefix PENDING by [Role] / PERBAIKAN OPERATOR
+  line = line.replace(/^PENDING by [^:]+:\s*/i, '');
+  line = line.replace(/^PERBAIKAN OPERATOR pada [^:]+:\s*/i, '');
+  
+  // Hapus timestamp seperti 2026-09-19 09:30:26:12: atau 26:12: atau 09:30:26:12
+  line = line.replace(/\d{4}-\d{2}-\d{2}\s*\d{2}:\d{2}:\d{2}(:\d{2})?:?\s*/g, '');
+  line = line.replace(/\b\d{2}:\d{2}:\d{2}:\d{2}:?\s*/g, '');
+  line = line.replace(/\b\d{2}:\d{2}:\d{2}:?\s*/g, '');
+  line = line.replace(/\b\d{2}:\d{2}:?\s*/g, '');
+  
+  line = line.trim();
+  return line || "Persyaratan belum lengkap";
+}
 
 async function sendFonnteDirectWA(target, message) {
   const token = "miMYecGgHMbMw3kZPmCM";
