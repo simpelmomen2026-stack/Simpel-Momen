@@ -5,7 +5,7 @@
 // Ubah IS_OFFLINE_MODE = false jika perbaikan sudah selesai dan ingin meng-online-kan kembali.
 const IS_OFFLINE_MODE = false; 
 // Mode Keamanan: false = Mengizinkan login akun peran bawaan (operator_dinas, kasie_capil, dsb.) & akun sheet online
-const ENFORCE_STRICT_AUTH = false; 
+const ENFORCE_STRICT_AUTH = true; 
 
 let API_URL = IS_OFFLINE_MODE ? 'local' : 'https://script.google.com/macros/s/AKfycbxcYF0YeOTg106tFjE9rDWT9_hvUXN9Ai8fNzNKUYIJQGtBADqUi8DcAR1BVCGoROX5hg/exec';
 let currentUser = null;
@@ -281,7 +281,7 @@ if (loginForm) {
     const inputClean = cleanStr(usernameVal);
     
     const findMockUser = () => {
-      // 1. Cari pencocokan persis pada MOCK_PETUGAS bawaan
+      // Cari pencocokan persis pada MOCK_PETUGAS bawaan
       let match = MOCK_PETUGAS.find(u => {
         const uNameClean = cleanStr(u.username);
         const nameClean = cleanStr(u.name);
@@ -290,26 +290,7 @@ if (loginForm) {
         const isPass = (u.password === passwordVal || passwordVal === '123456' || passwordVal === '');
         return isMatch && isPass;
       });
-      if (match) return match;
-
-      // 2. Jika username kustom (misal: SURSAM02 / nama khusus), deteksi peran secara otomatis
-      let detectedRole = 'operator';
-      if (inputClean.includes('capil') || inputClean.includes('sipil') || inputClean.includes('sursam')) detectedRole = 'kasie_capil';
-      else if (inputClean.includes('dafduk')) detectedRole = 'kasie_dafduk';
-      else if (inputClean.includes('scan')) detectedRole = 'petugas_scan';
-      else if (inputClean.includes('upt')) detectedRole = 'kepala_upt';
-      else if (inputClean.includes('kabid')) detectedRole = 'kabid_dafduk';
-      else if (inputClean.includes('kadis')) detectedRole = 'kadis';
-      else if (inputClean.includes('tte')) detectedRole = 'petugas_tte';
-      else if (inputClean.includes('print') || inputClean.includes('cetak')) detectedRole = 'petugas_pencetakan';
-
-      return {
-        username: usernameVal,
-        name: usernameVal,
-        role: detectedRole,
-        uptCode: (detectedRole === 'kepala_upt' || inputClean.includes('upt')) ? 'UPT-01' : null,
-        fasilitasi: (detectedRole === 'kepala_upt' || inputClean.includes('upt')) ? 'UPT' : 'Dinas'
-      };
+      return match || null;
     };
 
     const submitBtn = loginForm.querySelector('button[type="submit"]');
