@@ -2978,7 +2978,10 @@ function renderOperatorItemsCards() {
     const isFirstItem = (index === 0);
     const itemNum = index + 1;
     const badgeColor = isFirstItem ? '#3b82f6' : '#8b5cf6';
-    const badgeTitle = isFirstItem ? '📌 DOKUMEN MANDATORI UTAMA (ITEM 1 - ACUAN ALUR)' : `📄 DOKUMEN PENGIKUT TERINTEGRASI (ITEM ${itemNum})`;
+    const badgeTitle = (integrasiMode === 'tunggal')
+      ? '📌 DOKUMEN PERMOHONAN LAYANAN TUNGGAL'
+      : (isFirstItem ? '📌 DOKUMEN MANDATORI UTAMA (ITEM 1 - ACUAN ALUR)' : `📄 DOKUMEN PENGIKUT TERINTEGRASI (ITEM ${itemNum})`);
+    const isJenisDisabled = (integrasiMode !== 'tunggal' && isFirstItem);
 
     let jenisOptionsHtml = '';
     let subOptionsHtml = '';
@@ -3026,7 +3029,7 @@ function renderOperatorItemsCards() {
         <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; margin-bottom: 1.25rem;">
           <div class="form-group">
             <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Baris 3: Kategori Layanan *</label>
-            <select class="item-jenis-layanan" data-index="${index}" ${isFirstItem ? 'disabled' : ''} style="width: 100%; padding: 11px 14px; background: rgba(17, 24, 39, 0.9); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
+            <select class="item-jenis-layanan" data-index="${index}" ${isJenisDisabled ? 'disabled' : ''} style="width: 100%; padding: 11px 14px; background: rgba(17, 24, 39, 0.9); border: 1px solid var(--card-border); border-radius: 10px; color: #fff; font-size: 0.9rem;">
               ${jenisOptionsHtml}
             </select>
           </div>
