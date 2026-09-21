@@ -277,17 +277,22 @@ if (loginForm) {
       return;
     }
     
-    const cleanStr = (s) => (s ? s.toString().toLowerCase().replace(/[^a-z0-9]/g, '') : '');
-    const inputClean = cleanStr(usernameVal);
+    const inputLower = usernameVal.toLowerCase();
     
     const findMockUser = () => {
-      // Cari pencocokan persis pada MOCK_PETUGAS bawaan
+      // Cari pencocokan presisi 100% pada MOCK_PETUGAS bawaan
       let match = MOCK_PETUGAS.find(u => {
-        const uNameClean = cleanStr(u.username);
-        const nameClean = cleanStr(u.name);
-        const roleClean = cleanStr(u.role);
-        const isMatch = (uNameClean === inputClean || nameClean === inputClean || roleClean === inputClean || (inputClean.length >= 3 && nameClean.includes(inputClean)));
-        const isPass = (u.password === passwordVal || passwordVal === '123456' || passwordVal === '');
+        const uLower = (u.username || '').toLowerCase();
+        const nLower = (u.name || '').toLowerCase();
+        const isMatch = (uLower === inputLower || (nLower && nLower === inputLower));
+        
+        const dbPass = u.password !== undefined && u.password !== null ? u.password.toString().trim() : '';
+        let isPass = false;
+        if (dbPass !== '') {
+          isPass = (dbPass === passwordVal);
+        } else {
+          isPass = (passwordVal === '123456' || passwordVal === '');
+        }
         return isMatch && isPass;
       });
       return match || null;
