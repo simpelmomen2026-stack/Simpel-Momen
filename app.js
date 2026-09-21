@@ -324,9 +324,9 @@ if (loginForm) {
           showToast('Username atau password tidak ditemukan!', 'error');
         }
       } else {
-        // Login Online via Google Sheets Apps Script API dengan Timeout Controller 3.5 Detik
+        // Login Online via Google Sheets Apps Script API dengan Timeout Controller 12 Detik (Toleransi Cold-Start Apps Script)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
 
         try {
           const loginUrl = `${API_URL}?action=login&username=${encodeURIComponent(usernameVal)}&password=${encodeURIComponent(passwordVal)}`;
@@ -397,19 +397,8 @@ if (loginForm) {
         } catch (fetchErr) {
           clearTimeout(timeoutId);
           console.warn('Koneksi online Apps Script gagal atau timeout:', fetchErr);
-          const user = findMockUser();
-          if (user) {
-            currentUser = {
-              username: user.username,
-              name: user.name,
-              role: user.role,
-              uptCode: user.uptCode,
-              fasilitasi: user.fasilitasi,
-              sessionToken: 'local_token'
-            };
-            localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
-            setupLoggedInUI();
-            showToast(`Selamat datang, ${currentUser.name}!`, 'success');
+          if (fetchErr.name === 'AbortError' || (fetchErr.message && fetchErr.message.includes('aborted'))) {
+            showToast('⏱️ Waktu respons server Apps Script habis (Timeout). Server sedang memproses, silakan coba klik "Masuk ke Sistem" sekali lagi!', 'error');
           } else {
             showToast(`Gagal terhubung ke server Apps Script! Error: ${fetchErr.message || 'Network Error'}`, 'error');
           }
