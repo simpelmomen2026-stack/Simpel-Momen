@@ -1904,6 +1904,20 @@ function isHolidayOrWeekend(year, monthIndex, dayNum) {
   return { isRed: false, label: "" };
 }
 
+function getItemUserExecutionDate(item, user) {
+  if (!item || !user) return null;
+  const role = user.role || '';
+  if (role === 'operator') return item.tgl_operator || item.tanggal;
+  if (role === 'petugas_scan') return item.tgl_scan || item.tanggal;
+  if (role === 'kasie_dafduk' || role === 'kasie_capil') return item.tgl_kasie || item.tgl_scan || item.tanggal;
+  if (role === 'kepala_upt') return item.tgl_upt || item.tgl_scan || item.tanggal;
+  if (role === 'kabid_dafduk' || role === 'kabid_capil') return item.tgl_kabid || item.tgl_kasie || item.tanggal;
+  if (role === 'kadis') return item.tgl_kadis || item.tgl_kabid || item.tanggal;
+  if (role === 'petugas_tte') return item.tgl_tte || item.tanggal;
+  if (role === 'petugas_pencetakan') return item.tgl_print || item.tanggal;
+  return item.tanggal || item.tgl_operator;
+}
+
 // RENDER REKAPITULASI (Format Matriks Harian 1-31 Berdasarkan Username & Rentang Tanggal)
 function renderRekapitulasi() {
   const rekapMatrixBody = document.getElementById('rekapMatrixBody');
@@ -2012,7 +2026,7 @@ function renderRekapitulasi() {
 
   // Filter Data menurut Username Eksekutor & Rentang Tanggal
   const monthData = userExecutedData.filter(item => {
-    const rawDate = item.tanggal || item.tgl_operator || item.tgl_scan;
+    const rawDate = getItemUserExecutionDate(item, currentUser) || item.tanggal || item.tgl_operator || item.tgl_scan;
     if (!rawDate) return false;
     const d = new Date(rawDate);
     if (isNaN(d.getTime())) return false;
@@ -2027,9 +2041,6 @@ function renderRekapitulasi() {
   });
 
   // Tentukan Daftar Uraian Sub Layanan Berdasarkan Peran User:
-  // 1. Kelompok User Dafduk (kasie_dafduk & kabid_dafduk) => HANYA Pendaftaran Penduduk
-  // 2. Kelompok User Capil (kasie_capil & kabid_capil) => HANYA Pencatatan Sipil
-  // 3. Selain kedua kelompok tersebut => Seluruh Sub Menu Layanan (Dafduk + Capil)
   let subLayananList = [];
   const currentRole = currentUser ? currentUser.role : '';
 
@@ -2052,7 +2063,7 @@ function renderRekapitulasi() {
 
   monthData.forEach(item => {
     const sub = item.sub_layanan;
-    const rawDate = item.tanggal || item.tgl_operator || item.tgl_scan;
+    const rawDate = getItemUserExecutionDate(item, currentUser) || item.tanggal || item.tgl_operator || item.tgl_scan;
     if (!rawDate) return;
     const d = new Date(rawDate);
     if (isNaN(d.getTime())) return;
