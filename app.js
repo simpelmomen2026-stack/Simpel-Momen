@@ -3132,13 +3132,13 @@ if (btnAddItemBtn) {
       id: currentDraftItems.length + 1,
       jenis_layanan: 'Pendaftaran Penduduk',
       sub_layanan: 'KK Baru',
-      pemohon: item1.pemohon || '',
+      pemohon: '', // Kosongkan nama pemohon agar diisi manual sesuai nama dokumen pengikut
       no_hp: item1.no_hp || '',
       email: item1.email || '',
       alamat: item1.alamat || ''
     });
     renderOperatorItemsCards();
-    showToast(`Dokumen pengikut baru (Item ${currentDraftItems.length}) ditambahkan. Silakan isi sub layanan.`, 'info');
+    showToast(`Dokumen pengikut baru (Item ${currentDraftItems.length}) ditambahkan. Silakan isi nama pemohon & sub layanan.`, 'info');
   });
 }
 
