@@ -1630,7 +1630,7 @@ window.exportMonitoringDocToPDF = function() {
   const clone = container.cloneNode(true);
   clone.style.background = '#ffffff';
   clone.style.color = '#000000';
-  clone.style.padding = '20px';
+  clone.style.padding = '0px 10px 0px 10px';
 
   // Paksa semua elemen teks dalam PDF menjadi warna hitam tegas agar mudah dibaca
   clone.querySelectorAll('*').forEach(el => {
@@ -1640,6 +1640,20 @@ window.exportMonitoringDocToPDF = function() {
     }
   });
 
+  const titleHeader = clone.querySelector('.table-header');
+  if (titleHeader) {
+    titleHeader.style.marginBottom = '6px';
+  }
+  const h2Title = clone.querySelector('h2');
+  if (h2Title) {
+    h2Title.style.margin = '0 0 2px 0';
+    h2Title.style.fontSize = '1.05rem';
+  }
+  const subtitleSpan = clone.querySelector('.entries-count');
+  if (subtitleSpan) {
+    subtitleSpan.style.fontSize = '0.8rem';
+  }
+
   const table = clone.querySelector('table');
   if (table) {
     table.style.color = '#000000';
@@ -1647,14 +1661,15 @@ window.exportMonitoringDocToPDF = function() {
     table.style.width = '100%';
     table.querySelectorAll('th, td').forEach(el => {
       el.style.border = '1px solid #475569';
-      el.style.padding = '8px 12px';
+      el.style.padding = '5px 8px';
       if (el.tagName === 'TH') {
         el.style.background = '#e2e8f0';
         el.style.color = '#000000';
         el.style.fontWeight = '700';
-        el.style.fontSize = '0.95rem';
+        el.style.fontSize = '0.85rem';
       } else {
         el.style.color = '#000000';
+        el.style.fontSize = '0.82rem';
       }
     });
 
@@ -1669,10 +1684,12 @@ window.exportMonitoringDocToPDF = function() {
     });
   }
 
-  // Styling badge angka metrik dalam PDF dengan kontras tinggi
+  // Styling badge angka metrik dalam PDF dengan kontras tinggi & ukuran ringkas
   clone.querySelectorAll('.badge').forEach(badge => {
     badge.style.border = '1px solid #475569';
     badge.style.fontWeight = '700';
+    badge.style.padding = '2px 6px';
+    badge.style.fontSize = '0.78rem';
     if (badge.classList.contains('info')) {
       badge.style.background = '#dbeafe';
       badge.style.color = '#1e40af';
@@ -1693,11 +1710,12 @@ window.exportMonitoringDocToPDF = function() {
   document.body.appendChild(wrapper);
 
   const opt = {
-    margin: 0.4,
+    margin: [0.25, 0.35, 0.25, 0.35],
     filename: fileName,
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
   };
 
   if (typeof html2pdf !== 'undefined') {
