@@ -569,6 +569,11 @@ if (monitoringDocDateFilter) {
   monitoringDocDateFilter.addEventListener('change', renderMonitoringDocTable);
 }
 
+const monitoringDocFasFilter = document.getElementById('monitoringDocFasFilter');
+if (monitoringDocFasFilter) {
+  monitoringDocFasFilter.addEventListener('change', renderMonitoringDocTable);
+}
+
 if (btnResetDocDate) {
   btnResetDocDate.addEventListener('click', () => {
     if (monitoringDocDateFilter) monitoringDocDateFilter.value = '';
@@ -1160,24 +1165,35 @@ function renderMonitoringDocTable() {
   if (!monitoringDocTableBody) return;
 
   const dateFilterInput = document.getElementById('monitoringDocDateFilter');
+  const docFasFilter = document.getElementById('monitoringDocFasFilter');
   const selectedDate = dateFilterInput ? dateFilterInput.value : "";
+  const selectedFas = docFasFilter ? docFasFilter.value : (isUserUpt(currentUser) ? (currentUser.uptCode || "UPT-01") : "Dinas");
 
-  // List role/counter dari Sheet Petugas
-  const countersList = [
+  // List role/counter Dinas (HANYA peran Dinas, TIDAK menyertakan Operator UPT, Scan UPT, Kepala UPT, atau Cetak UPT)
+  const dinasCountersList = [
     { label: "Operator Dinas", role: "operator", fasilitasi: "Dinas" },
-    { label: "Operator UPT 01", role: "operator", fasilitasi: "UPT", uptCode: "UPT-01" },
     { label: "Petugas Scan Dinas", role: "petugas_scan", fasilitasi: "Dinas" },
-    { label: "Petugas Scan UPT 01", role: "petugas_scan", fasilitasi: "UPT", uptCode: "UPT-01" },
     { label: "Kasie Dafduk", role: "kasie_dafduk", fasilitasi: "Dinas" },
     { label: "Kasie Capil", role: "kasie_capil", fasilitasi: "Dinas" },
-    { label: "Kepala UPT 01", role: "kepala_upt", fasilitasi: "UPT", uptCode: "UPT-01" },
     { label: "Kabid Dafduk", role: "kabid_dafduk", fasilitasi: "Dinas" },
     { label: "Kabid Capil", role: "kabid_capil", fasilitasi: "Dinas" },
     { label: "Kepala Dinas (Kadis)", role: "kadis", fasilitasi: "Dinas" },
     { label: "Petugas TTE", role: "petugas_tte", fasilitasi: "Dinas" },
-    { label: "Petugas Cetak Dinas", role: "petugas_pencetakan", fasilitasi: "Dinas" },
-    { label: "Petugas Cetak UPT 01", role: "petugas_pencetakan", fasilitasi: "UPT", uptCode: "UPT-01" }
+    { label: "Petugas Cetak Dinas", role: "petugas_pencetakan", fasilitasi: "Dinas" }
   ];
+
+  // Function pembuat list role/counter UPT (diakomodir terpisah berdasarkan Kode UPT)
+  function getUptCountersList(uptCode) {
+    const code = (uptCode && uptCode.toUpperCase().includes('UPT')) ? uptCode : 'UPT-01';
+    return [
+      { label: `Operator ${code}`, role: "operator", fasilitasi: "UPT", uptCode: code },
+      { label: `Petugas Scan ${code}`, role: "petugas_scan", fasilitasi: "UPT", uptCode: code },
+      { label: `Kepala ${code}`, role: "kepala_upt", fasilitasi: "UPT", uptCode: code },
+      { label: `Petugas Cetak ${code}`, role: "petugas_pencetakan", fasilitasi: "UPT", uptCode: code }
+    ];
+  }
+
+  const countersList = (selectedFas && selectedFas.toUpperCase().includes('UPT')) ? getUptCountersList(selectedFas) : dinasCountersList;
 
   // Filter data berdasarkan tanggal pelayanan jika diisi
   const targetData = selectedDate ? allData.filter(item => {
@@ -1572,10 +1588,18 @@ function cleanPendingNoteText(rawText) {
 async function sendFonnteDirectWA(target, message) {
   const token = "miMYecGgHMbMw3kZPmCM";
   if (!token || !target || !message) return;
+
+  let cleanMsg = message;
+  if (typeof cleanMsg === 'string') {
+    cleanMsg = cleanMsg.replace(/\*+\s*PENDING\s*\*+/gi, '*PENDING*')
+                       .replace(/\bPENDING\b/gi, '*PENDING*')
+                       .replace(/\bpending\b/gi, '*PENDING*');
+  }
+
   try {
     const formData = new FormData();
     formData.append('target', target);
-    formData.append('message', message);
+    formData.append('message', cleanMsg);
     formData.append('countryCode', '62');
 
     fetch('https://api.fonnte.com/send', {

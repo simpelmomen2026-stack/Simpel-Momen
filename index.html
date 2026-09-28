@@ -286,8 +286,13 @@
               <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <label for="monitoringDocDateFilter" style="font-weight: 700; color: #f8fafc; font-size: 0.95rem;">Tanggal :</label>
                 <input type="date" id="monitoringDocDateFilter" title="Memilih Tanggal Pelayanan" style="padding: 7px 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.88rem;">
-                <span style="color: var(--text-muted); font-size: 0.82rem; font-style: italic;">(memilih tanggal pelayanan)</span>
                 <button class="btn btn-secondary btn-xs" id="btnResetDocDate" style="padding: 6px 12px; font-size: 0.8rem;">🔄 Reset Tanggal</button>
+
+                <label for="monitoringDocFasFilter" style="font-weight: 700; color: #f8fafc; font-size: 0.95rem; margin-left: 10px;">Fasilitasi:</label>
+                <select id="monitoringDocFasFilter" title="Pilih Monitoring Counter Dinas atau UPT" style="padding: 7px 12px; background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: #fff; font-size: 0.88rem;">
+                  <option value="Dinas">🏢 Monitoring Dinas</option>
+                  <option value="UPT-01">🏛️ Monitoring UPT-01</option>
+                </select>
               </div>
               <div>
                 <button class="btn btn-primary btn-sm" onclick="exportMonitoringDocToPDF()" style="padding: 7px 16px; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); border: none;">
@@ -619,6 +624,6 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="app.js?v=20260927_0537"></script>
+  <script src="app.js?v=20260928_1918"></script>
 </body>
 </html>
