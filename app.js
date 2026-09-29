@@ -1555,7 +1555,7 @@ window.saveMonitoringNote = async function() {
   renderMonitoringDocTable();
 
   // Kirim data ke Google Apps Script backend secara async (Apps Script akan menyimpan ke Sheet dan mengirimkan pesan WA)
-  await postToApi({
+  const backendRes = await postToApi({
     action: 'monitoring_note',
     key: keyStr,
     sub_layanan: subStr,
@@ -1565,6 +1565,13 @@ window.saveMonitoringNote = async function() {
     target_operator: (infoTarget === 'OPERATOR') ? targetOperatorVal : '',
     user_name: currentUser ? (currentUser.name || currentUser.username) : 'Monitoring'
   });
+
+  if (backendRes && backendRes.status === 'success') {
+    console.log('Catatan monitoring berhasil disimpan ke Sheet:', backendRes);
+  } else {
+    console.error('Gagal menyimpan catatan monitoring di Sheet:', backendRes);
+    showToast(`⚠️ Perhatian: ${backendRes ? backendRes.message : 'Respon simpan database lambat'}`, 'warning');
+  }
 };
 
 function cleanPendingNoteText(rawText) {
