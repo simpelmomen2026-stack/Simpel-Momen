@@ -1444,12 +1444,14 @@ window.openMonitoringNoteModal = function(key, subLayanan) {
   }
 };
 
-// FUNGSI PEMBANTU POST payload KE APPS SCRIPT API
+// FUNGSI PEMBANTU POST payload KE APPS SCRIPT API (DENGAN DUAL FALLBACK GET BEBAS CORS 100%)
 async function postToApi(payload) {
   if (!API_URL || useLocalSim) {
     console.log('postToApi running in local simulation mode:', payload);
     return { status: 'success', local: true };
   }
+
+  // 1. Coba kirim via HTTP POST lebih dulu
   try {
     const fetchPromise = fetch(API_URL, {
       method: 'POST',
@@ -1458,13 +1460,31 @@ async function postToApi(payload) {
     }).then(res => res.json());
 
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('TIMEOUT')), 8000);
+      setTimeout(() => reject(new Error('TIMEOUT')), 5000);
     });
 
-    return await Promise.race([fetchPromise, timeoutPromise]);
+    const res = await Promise.race([fetchPromise, timeoutPromise]);
+    if (res && res.status === 'success') {
+      return res;
+    }
   } catch (err) {
-    console.warn('postToApi request failed or timed out:', err);
-    return { status: 'error', message: err.toString() };
+    console.warn('postToApi POST request failed or CORS blocked, attempting GET fallback:', err);
+  }
+
+  // 2. GET Fallback (Tembus blokir CORS 100% pada GitHub Pages)
+  try {
+    const queryParams = new URLSearchParams();
+    for (const k in payload) {
+      if (payload[k] !== undefined && payload[k] !== null) {
+        queryParams.append(k, payload[k]);
+      }
+    }
+    const getUrl = `${API_URL}?${queryParams.toString()}`;
+    const getRes = await fetch(getUrl).then(r => r.json());
+    return getRes;
+  } catch (getErr) {
+    console.error('postToApi GET fallback request failed:', getErr);
+    return { status: 'error', message: getErr.toString() };
   }
 }
 
