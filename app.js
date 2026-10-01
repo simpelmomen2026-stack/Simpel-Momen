@@ -473,6 +473,7 @@ function setupLoggedInUI() {
     }
 
     updateSubLayananOptions();
+    populateMonitoringDocFasFilterOptions();
     switchPage('dashboard');
     loadData(true);
   } catch (err) {
@@ -513,6 +514,7 @@ function switchPage(pageId) {
   } else if (pageId === 'monitoring-doc') {
     if (pageTitle) pageTitle.textContent = `Monitoring Dokumen Counter`;
     if (pageSubtitle) pageSubtitle.textContent = `Ringkasan statistik alur berkas: Sementara berjalan, Pending, dan Selesai eksekusi per counter.`;
+    populateMonitoringDocFasFilterOptions();
     renderMonitoringDocTable();
   } else if (pageId === 'monitoring') {
     if (pageTitle) pageTitle.textContent = `Monitoring Alur Pelayanan`;
@@ -728,6 +730,7 @@ async function loadData(skipSessionCheck = false) {
     
     updateDbConnectionIndicator(true, 'Terkoneksi DB');
     populateFasilitasiFilterOptions();
+    populateMonitoringDocFasFilterOptions();
     renderCounterDesk();
     renderMonitoringTable();
     renderRekapitulasi();
@@ -737,6 +740,7 @@ async function loadData(skipSessionCheck = false) {
     showToast('Koneksi ke Google Sheets terganggu. Menampilkan data cadangan sementara.', 'warning');
     allData = getLocalDB();
     populateFasilitasiFilterOptions();
+    populateMonitoringDocFasFilterOptions();
     renderCounterDesk();
     renderMonitoringTable();
     renderRekapitulasi();
@@ -1161,6 +1165,46 @@ function renderCounterDesk() {
   }).join('');
 }
 
+function populateMonitoringDocFasFilterOptions() {
+  const monitoringDocFasFilter = document.getElementById('monitoringDocFasFilter');
+  if (!monitoringDocFasFilter) return;
+
+  const currentVal = monitoringDocFasFilter.value;
+
+  const uptSet = new Set(['UPT-01', 'UPT-02', 'UPT-03', 'UPT-04', 'UPT-05', 'UPT-06', 'UPT-07']);
+  if (Array.isArray(allData)) {
+    allData.forEach(item => {
+      const fas = String(item.fasilitasi || '').trim();
+      if (fas.toUpperCase().startsWith('UPT-')) {
+        uptSet.add(fas.toUpperCase());
+      }
+    });
+  }
+
+  const sortedUptCodes = Array.from(uptSet).sort();
+
+  let html = `<option value="Dinas">🏢 Monitoring Dinas</option>`;
+  sortedUptCodes.forEach(code => {
+    html += `<option value="${code}">🏛️ Monitoring ${code}</option>`;
+  });
+  html += `<option value="ALL_UPT">🏛️ Monitoring Semua UPT</option>`;
+
+  monitoringDocFasFilter.innerHTML = html;
+
+  if (isUserUpt(currentUser)) {
+    const userUpt = (currentUser.uptCode || "UPT-01").toUpperCase();
+    if (sortedUptCodes.includes(userUpt)) {
+      monitoringDocFasFilter.value = userUpt;
+    } else {
+      monitoringDocFasFilter.value = sortedUptCodes[0] || 'UPT-01';
+    }
+  } else if (currentVal && Array.from(monitoringDocFasFilter.options).some(o => o.value === currentVal)) {
+    monitoringDocFasFilter.value = currentVal;
+  } else {
+    monitoringDocFasFilter.value = 'Dinas';
+  }
+}
+
 // RENDER TABEL MONITORING DOKUMEN (SUMMARY STATISTIK COUNTER)
 function renderMonitoringDocTable() {
   if (!monitoringDocTableBody) return;
@@ -1168,9 +1212,17 @@ function renderMonitoringDocTable() {
   const dateFilterInput = document.getElementById('monitoringDocDateFilter');
   const docFasFilter = document.getElementById('monitoringDocFasFilter');
   const selectedDate = dateFilterInput ? dateFilterInput.value : "";
-  const selectedFas = docFasFilter ? docFasFilter.value : (isUserUpt(currentUser) ? (currentUser.uptCode || "UPT-01") : "Dinas");
+  
+  let selectedFas = docFasFilter ? docFasFilter.value : "";
+  if (!selectedFas) {
+    if (isUserUpt(currentUser)) {
+      selectedFas = (currentUser.uptCode || "UPT-01").toUpperCase();
+    } else {
+      selectedFas = "Dinas";
+    }
+  }
 
-  // List role/counter Dinas (HANYA peran Dinas, TIDAK menyertakan Operator UPT, Scan UPT, Kepala UPT, atau Cetak UPT)
+  // List role/counter Dinas
   const dinasCountersList = [
     { label: "Operator Dinas", role: "operator", fasilitasi: "Dinas" },
     { label: "Petugas Scan Dinas", role: "petugas_scan", fasilitasi: "Dinas" },
@@ -1183,28 +1235,49 @@ function renderMonitoringDocTable() {
     { label: "Petugas Cetak Dinas", role: "petugas_pencetakan", fasilitasi: "Dinas" }
   ];
 
-  // Function pembuat list role/counter UPT (diakomodir terpisah berdasarkan Kode UPT)
+  // Function pembuat list role/counter UPT
   function getUptCountersList(uptCode) {
-    const code = (uptCode && uptCode.toUpperCase().includes('UPT')) ? uptCode : 'UPT-01';
+    const isAll = uptCode === 'ALL_UPT';
+    const codeLabel = isAll ? 'Semua UPT' : (uptCode || 'UPT');
     return [
-      { label: `Operator ${code}`, role: "operator", fasilitasi: "UPT", uptCode: code },
-      { label: `Petugas Scan ${code}`, role: "petugas_scan", fasilitasi: "UPT", uptCode: code },
-      { label: `Kepala ${code}`, role: "kepala_upt", fasilitasi: "UPT", uptCode: code },
-      { label: `Petugas Cetak ${code}`, role: "petugas_pencetakan", fasilitasi: "UPT", uptCode: code }
+      { label: `Operator ${codeLabel}`, role: "operator", fasilitasi: "UPT", uptCode: isAll ? "ALL_UPT" : uptCode },
+      { label: `Petugas Scan ${codeLabel}`, role: "petugas_scan", fasilitasi: "UPT", uptCode: isAll ? "ALL_UPT" : uptCode },
+      { label: `Kepala ${codeLabel}`, role: "kepala_upt", fasilitasi: "UPT", uptCode: isAll ? "ALL_UPT" : uptCode },
+      { label: `Petugas Cetak ${codeLabel}`, role: "petugas_pencetakan", fasilitasi: "UPT", uptCode: isAll ? "ALL_UPT" : uptCode }
     ];
   }
 
-  const countersList = (selectedFas && selectedFas.toUpperCase().includes('UPT')) ? getUptCountersList(selectedFas) : dinasCountersList;
+  const isUptSelection = selectedFas !== 'Dinas';
+  const countersList = isUptSelection ? getUptCountersList(selectedFas) : dinasCountersList;
 
-  // Filter data berdasarkan tanggal pelayanan jika diisi
-  const targetData = selectedDate ? allData.filter(item => {
+  // 1. Filter data berdasarkan tanggal pelayanan jika diisi
+  let targetData = selectedDate ? allData.filter(item => {
     const rawDate = item.tanggal || item.tgl_operator || "";
     return rawDate.startsWith(selectedDate);
   }) : allData;
 
+  // 2. Filter data berdasarkan Fasilitasi / UPT Scope
+  if (selectedFas === 'Dinas') {
+    targetData = targetData.filter(item => {
+      const fas = String(item.fasilitasi || item.integrasi || "Dinas").toUpperCase();
+      return !fas.includes('UPT');
+    });
+  } else if (selectedFas === 'ALL_UPT') {
+    targetData = targetData.filter(item => {
+      const fas = String(item.fasilitasi || item.integrasi || "").toUpperCase();
+      const op = String(item.operator || "").toUpperCase();
+      return fas.includes('UPT') || op.includes('UPT');
+    });
+  } else if (selectedFas && selectedFas.toUpperCase().startsWith('UPT')) {
+    targetData = targetData.filter(item => {
+      return matchItemToUserUpt(item, { fasilitasi: 'UPT', uptCode: selectedFas });
+    });
+  }
+
   if (monitoringDocTotalInfo) {
     const dateText = selectedDate ? `Tanggal: ${formatDate(selectedDate)}` : "Semua Tanggal Pelayanan";
-    monitoringDocTotalInfo.textContent = `Menampilkan data summary counter (${dateText}) - Total ${targetData.length} dokumen`;
+    const fasText = isUptSelection ? (selectedFas === 'ALL_UPT' ? "Semua UPT" : selectedFas) : "Dinas";
+    monitoringDocTotalInfo.textContent = `Menampilkan summary counter (${fasText} - ${dateText}) - Total ${targetData.length} dokumen`;
   }
 
   monitoringDocTableBody.innerHTML = countersList.map(c => {
@@ -1219,7 +1292,7 @@ function renderMonitoringDocTable() {
       if (c.role === 'operator') {
         return statusAlur === '0_BARU';
       } else if (c.role === 'petugas_scan') {
-        if (c.fasilitasi === 'UPT') return statusAlur === '1_PETUGAS_SCAN' && itemFas.includes('UPT');
+        if (c.fasilitasi === 'UPT') return statusAlur === '1_PETUGAS_SCAN';
         return statusAlur === '1_PETUGAS_SCAN' && !itemFas.includes('UPT');
       } else if (c.role === 'kasie_dafduk') {
         return statusAlur === '2_VERIFIKASI_KASIE' && itemJenis === 'pendaftaran penduduk';
