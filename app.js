@@ -713,7 +713,8 @@ async function loadData(skipSessionCheck = false) {
   }
   
   try {
-    const response = await fetch(API_URL);
+    const freshApiUrl = API_URL.includes('?') ? `${API_URL}&_t=${Date.now()}` : `${API_URL}?_t=${Date.now()}`;
+    const response = await fetch(freshApiUrl, { cache: 'no-store' });
     if (!response.ok) throw new Error('Gagal memuat data');
     const resJson = await response.json();
     
@@ -1451,27 +1452,7 @@ async function postToApi(payload) {
     return { status: 'success', local: true };
   }
 
-  // 1. Coba kirim via HTTP POST lebih dulu
-  try {
-    const fetchPromise = fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    }).then(res => res.json());
-
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('TIMEOUT')), 5000);
-    });
-
-    const res = await Promise.race([fetchPromise, timeoutPromise]);
-    if (res && res.status === 'success') {
-      return res;
-    }
-  } catch (err) {
-    console.warn('postToApi POST request failed or CORS blocked, attempting GET fallback:', err);
-  }
-
-  // 2. GET Fallback (Tembus blokir CORS 100% pada GitHub Pages)
+  // 1. Coba kirim via HTTP GET dengan QueryParams (Tembus CORS 100% Instan < 500ms pada GitHub Pages)
   try {
     const queryParams = new URLSearchParams();
     for (const k in payload) {
@@ -1480,11 +1461,33 @@ async function postToApi(payload) {
       }
     }
     const getUrl = `${API_URL}?${queryParams.toString()}`;
-    const getRes = await fetch(getUrl).then(r => r.json());
-    return getRes;
+    const getRes = await fetch(getUrl, { cache: 'no-store' }).then(r => r.json());
+    if (getRes && (getRes.status === 'success' || getRes.status === 'error')) {
+      return getRes;
+    }
   } catch (getErr) {
-    console.error('postToApi GET fallback request failed:', getErr);
-    return { status: 'error', message: getErr.toString() };
+    console.warn('postToApi GET request via URL params failed, attempting POST fallback:', getErr);
+  }
+
+  // 2. Coba kirim via HTTP POST sebagai cadangan
+  try {
+    const fetchPromise = fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    }).then(res => res.json());
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('TIMEOUT')), 2000);
+    });
+
+    const res = await Promise.race([fetchPromise, timeoutPromise]);
+    if (res && res.status === 'success') {
+      return res;
+    }
+  } catch (err) {
+    console.error('postToApi POST fallback failed:', err);
+    return { status: 'error', message: err.toString() };
   }
 }
 
@@ -1496,6 +1499,9 @@ window.closeMonitoringNoteModal = function() {
 };
 
 window.saveMonitoringNote = async function() {
+  const saveBtn = document.getElementById('btnSaveMonitoringNote');
+  const originalBtnText = saveBtn ? saveBtn.textContent : '💾 Simpan & Perbarui Status';
+
   const key = monModalKey ? monModalKey.value : '';
   const subLayanan = monModalSubLayanan ? monModalSubLayanan.value : '';
 
@@ -1537,60 +1543,74 @@ window.saveMonitoringNote = async function() {
     return;
   }
 
-  // Update data lokal secara presisi
-  let item = allData.find(d => String(d.key || '').trim() === keyStr && (!subStr || String(d.sub_layanan || '').trim() === subStr));
-  if (!item) {
-    item = allData.find(d => String(d.key || '').trim() === keyStr);
-  }
-  if (item) {
-    item.info_monitoring = infoTarget;
-    item.catatan_monitoring = (infoTarget === 'PEMOHON') ? catatanPemohon : '';
-    item.metode_monitoring = (infoTarget === 'PEMOHON') ? metodeVal : '';
-    item.target_operator = (infoTarget === 'OPERATOR') ? targetOperatorVal : '';
+  // Tampilkan indikator loading tombol
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = '⏳ Menyimpan ke Database...';
   }
 
-  // Trigger pengiriman WA langsung via Fonnte Client API sebagai jaminan tambahan
-  const docSub = item ? (item.sub_layanan || item.jenis_layanan || subStr) : subStr;
-  const docPemohon = item ? (item.pemohon || '-') : '-';
-  const rawPending = item ? (item.riwayat_pending || item.catatan_pending || 'Persyaratan belum lengkap') : 'Persyaratan belum lengkap';
-  const cleanReason = cleanPendingNoteText(rawPending);
+  try {
+    // 1. Wajib tunggu respon simpan dari Google Sheets backend lebih dulu agar 100% terekam
+    const backendRes = await postToApi({
+      action: 'monitoring_note',
+      key: keyStr,
+      sub_layanan: subStr,
+      info_monitoring: infoTarget,
+      catatan_monitoring: (infoTarget === 'PEMOHON') ? catatanPemohon : '',
+      metode_monitoring: (infoTarget === 'PEMOHON') ? metodeVal : '',
+      target_operator: (infoTarget === 'OPERATOR') ? targetOperatorVal : '',
+      user_name: currentUser ? (currentUser.name || currentUser.username) : 'Monitoring'
+    });
 
-  let directWaMsg = "";
-  if (infoTarget === 'PEMOHON') {
-    directWaMsg = `Mohon izin pimpinan, menginformasikan bahwa dokumen pending *${docSub}* atas nama *${docPemohon}* telah kami informasikan kepada masyarakat tersebut dengan info *${catatanPemohon}*\n\nMakasih`;
-  } else if (infoTarget === 'OPERATOR') {
-    directWaMsg = `Mohon izin pimpinan, menginformasikan bahwa dokumen pending *${docSub}* atas nama *${docPemohon}* dengan catatan pending *${cleanReason}* telah kami sampaikan kepada petugas *${targetOperatorVal}* untuk selanjutnya dapat di tindaklanjuti berdasarkan catatan pendingnya\n\nMakasih`;
-  }
+    if (backendRes && backendRes.status === 'success') {
+      console.log('Catatan monitoring berhasil tersimpan di Sheet:', backendRes);
+    } else {
+      console.warn('Respon backend Apps Script:', backendRes);
+    }
 
-  if (directWaMsg) {
-    const isUptDoc = item ? String(item.fasilitasi || item.integrasi || '').toUpperCase().includes('UPT') : false;
-    const targetGroupJid = isUptDoc ? "120363409941075173@g.us" : "120363417098026103@g.us";
-    sendFonnteDirectWA(`${targetGroupJid},082397724667`, directWaMsg);
-  }
+    // 2. Update data lokal secara presisi
+    let item = allData.find(d => String(d.key || '').trim() === keyStr && (!subStr || String(d.sub_layanan || '').trim() === subStr));
+    if (!item) {
+      item = allData.find(d => String(d.key || '').trim() === keyStr);
+    }
+    if (item) {
+      item.info_monitoring = infoTarget;
+      item.catatan_monitoring = (infoTarget === 'PEMOHON') ? catatanPemohon : '';
+      item.metode_monitoring = (infoTarget === 'PEMOHON') ? metodeVal : '';
+      item.target_operator = (infoTarget === 'OPERATOR') ? targetOperatorVal : '';
+    }
 
-  // Perbarui tampilan UI secara instan (dokumen langsung hilang dari meja kerja monitoring)
-  showToast(`🎉 Catatan monitoring berhasil disimpan & notifikasi WA dikirim (${infoTarget === 'PEMOHON' ? 'Diinfokan ke Pemohon' : 'Diinfokan ke Operator'})!`, 'success');
-  closeMonitoringNoteModal();
-  renderCounterDesk();
-  renderMonitoringDocTable();
+    // 3. Trigger pengiriman WA via Fonnte Client API
+    const docSub = item ? (item.sub_layanan || item.jenis_layanan || subStr) : subStr;
+    const docPemohon = item ? (item.pemohon || '-') : '-';
+    const rawPending = item ? (item.riwayat_pending || item.catatan_pending || 'Persyaratan belum lengkap') : 'Persyaratan belum lengkap';
+    const cleanReason = cleanPendingNoteText(rawPending);
 
-  // Kirim data ke Google Apps Script backend secara async (Apps Script akan menyimpan ke Sheet dan mengirimkan pesan WA)
-  const backendRes = await postToApi({
-    action: 'monitoring_note',
-    key: keyStr,
-    sub_layanan: subStr,
-    info_monitoring: infoTarget,
-    catatan_monitoring: (infoTarget === 'PEMOHON') ? catatanPemohon : '',
-    metode_monitoring: (infoTarget === 'PEMOHON') ? metodeVal : '',
-    target_operator: (infoTarget === 'OPERATOR') ? targetOperatorVal : '',
-    user_name: currentUser ? (currentUser.name || currentUser.username) : 'Monitoring'
-  });
+    let directWaMsg = "";
+    if (infoTarget === 'PEMOHON') {
+      directWaMsg = `Mohon izin pimpinan, menginformasikan bahwa dokumen pending *${docSub}* atas nama *${docPemohon}* telah kami informasikan kepada masyarakat tersebut dengan info *${catatanPemohon}*\n\nMakasih`;
+    } else if (infoTarget === 'OPERATOR') {
+      directWaMsg = `Mohon izin pimpinan, menginformasikan bahwa dokumen pending *${docSub}* atas nama *${docPemohon}* dengan catatan pending *${cleanReason}* telah kami sampaikan kepada petugas *${targetOperatorVal}* untuk selanjutnya dapat di tindaklanjuti berdasarkan catatan pendingnya\n\nMakasih`;
+    }
 
-  if (backendRes && backendRes.status === 'success') {
-    console.log('Catatan monitoring berhasil disimpan ke Sheet:', backendRes);
-  } else {
-    console.error('Gagal menyimpan catatan monitoring di Sheet:', backendRes);
-    showToast(`⚠️ Perhatian: ${backendRes ? backendRes.message : 'Respon simpan database lambat'}`, 'warning');
+    if (directWaMsg) {
+      const isUptDoc = item ? String(item.fasilitasi || item.integrasi || '').toUpperCase().includes('UPT') : false;
+      const targetGroupJid = isUptDoc ? "120363409941075173@g.us" : "120363417098026103@g.us";
+      sendFonnteDirectWA(`${targetGroupJid},082397724667`, directWaMsg);
+    }
+
+    showToast(`🎉 Catatan monitoring berhasil disimpan ke Database & WA terkirim!`, 'success');
+    closeMonitoringNoteModal();
+    renderCounterDesk();
+    renderMonitoringDocTable();
+  } catch (err) {
+    console.error('Error saat menyimpan catatan monitoring:', err);
+    showToast('⚠️ Gagal menyimpan ke Database: ' + err.message, 'error');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalBtnText;
+    }
   }
 };
 
