@@ -70,6 +70,36 @@ function getSpreadsheet() {
   throw new Error("Spreadsheet tidak terhubung! Silakan buka Apps Script dari menu Extensions > Apps Script pada file Google Sheet Anda.");
 }
 
+// FUNGSI KHUSUS UNTUK MEMASTIKAN MENGAKSES SHEET DOKUMEN (BUKAN SHEET PETUGAS)
+function getDataSheet(ss) {
+  if (!ss) ss = getSpreadsheet();
+  var sheets = ss.getSheets();
+  
+  // 1. Cari sheet yang baris 1 kolom A berisi "Key" / "Kode" (Header database dokumen)
+  for (var i = 0; i < sheets.length; i++) {
+    var sh = sheets[i];
+    var sName = sh.getName().toLowerCase().trim();
+    if (sName !== "petugas" && sName !== "users" && sName !== "user" && sName !== "data petugas") {
+      try {
+        var h1 = sh.getRange(1, 1).getValue().toString().trim().toLowerCase();
+        if (h1 === "key" || h1.indexOf("key") !== -1 || h1.indexOf("kode") !== -1) {
+          return sh;
+        }
+      } catch (e) {}
+    }
+  }
+  
+  // 2. Fallback: Sheet pertama yang bukan sheet Petugas
+  for (var j = 0; j < sheets.length; j++) {
+    var name = sheets[j].getName().toLowerCase().trim();
+    if (name !== "petugas" && name !== "users" && name !== "user" && name !== "data petugas") {
+      return sheets[j];
+    }
+  }
+  
+  return ss.getActiveSheet();
+}
+
 // FUNGSI UJI COBA WA GATEWAY LANGSUNG DARI APPS SCRIPT EDITOR
 function testSendWA() {
   var testMsgDinas = "🧪 *[SIMPEL MOMEN - TEST WA GATEWAY DINAS]*\n" +
@@ -143,8 +173,15 @@ function doGet(e) {
     if (action === 'check_session') {
       return handleCheckSession(params.username, params.sessionToken);
     }
+    
+    // Pengecekan Token / Tracking Dokumen via GET URL
+    if (action === 'track_token') {
+      var tokenQuery = params.token || params.key || "";
+      var senderQuery = params.sender || params.phone || "";
+      return handleFonnteIncomingWebhook(senderQuery, tokenQuery, params);
+    }
 
-    var sheet = getSpreadsheet().getActiveSheet();
+    var sheet = getDataSheet();
     ensureColumns(sheet, 34); // Pastikan memiliki minimal 34 kolom (A sampai AH)
     var lastRow = sheet.getLastRow();
     
@@ -211,15 +248,46 @@ function doGet(e) {
   }
 }
 
-// Menangani permintaan POST (Menyimpan data baru & memperbarui status/meja alur berkas)
+// Menangani permintaan POST (Menyimpan data baru, memperbarui status berkas, & Webhook Chatbot Fonnte)
 function doPost(e) {
   try {
-    if (!e || !e.postData || !e.postData.contents) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Pengujian doPost langsung dari editor memerlukan data payload JSON." }))
+    var payload = {};
+    var rawContents = (e && e.postData && e.postData.contents) ? e.postData.contents : "";
+    
+    if (rawContents) {
+      try {
+        payload = JSON.parse(rawContents);
+      } catch (jsonErr) {
+        payload = {};
+        var pairs = rawContents.split("&");
+        for (var p = 0; p < pairs.length; p++) {
+          var kv = pairs[p].split("=");
+          if (kv.length === 2) {
+            payload[decodeURIComponent(kv[0].trim())] = decodeURIComponent(kv[1].trim());
+          }
+        }
+      }
+    }
+    
+    if (e && e.parameter) {
+      for (var paramKey in e.parameter) {
+        if (!payload[paramKey]) {
+          payload[paramKey] = e.parameter[paramKey];
+        }
+      }
+    }
+    
+    if (!payload || Object.keys(payload).length === 0) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Data payload request kosong." }))
         .setMimeType(ContentService.MimeType.JSON);
     }
     
-    var payload = JSON.parse(e.postData.contents);
+    // 0. DETEKSI WEBHOOK FONNTE (CHATBOT BALASAN OTOMATIS BERDASARKAN NOMOR TOKEN / KODE UNIK)
+    var incomingSender = payload.sender || payload.from || "";
+    var incomingMessage = payload.message || payload.text || "";
+    if (payload.action === 'fonnte_webhook' || payload.action === 'webhook' || payload.action === 'track_token' || (!payload.action && incomingSender && incomingMessage)) {
+      return handleFonnteIncomingWebhook(incomingSender, incomingMessage, payload);
+    }
     
     // 0. AUTENTIKASI PETUGAS
     if (payload.action === 'login') {
@@ -233,7 +301,7 @@ function doPost(e) {
 
     // 0.6 SIMPAN CATATAN & INFORMASI TIM MONITORING + NOTIFIKASI WA GRUP
     if (payload.action === 'monitoring_note') {
-      var sheet = getSpreadsheet().getActiveSheet();
+      var sheet = getDataSheet();
       ensureColumns(sheet, 34); // Pastikan memiliki minimal 34 kolom (A sampai AH)
       var key = payload.key;
       var subLayanan = payload.sub_layanan;
@@ -287,7 +355,7 @@ function doPost(e) {
       }
     }
     
-    var sheet = getSpreadsheet().getActiveSheet();
+    var sheet = getDataSheet();
     ensureColumns(sheet, 32); // Pastikan memiliki minimal 32 kolom
     
     // 1. TAMBAH BARU (OPERATOR INPUT - SINGLE ATAU BATCH MULTI-ITEM INTEGRASI V2.0)
@@ -428,6 +496,22 @@ function doPost(e) {
         }
         
         sendWhatsAppNotification(waMsg, firstItem.fasilitasi);
+
+        // Kirim Notifikasi WhatsApp ke Pemohon (Masyarakat) Berdasarkan Nomor WA yang Terinput
+        var sentPhoneMapCreate = {};
+        for (var p = 0; p < items.length; p++) {
+          var pItem = items[p];
+          var rawHp = (pItem.no_hp || "").toString().trim();
+          var pPemohon = (pItem.pemohon || "").toString().trim() || mandatoryPemohon;
+          if (rawHp && rawHp !== "-" && rawHp !== "0") {
+            var targetHp = cleanPhoneNumber(rawHp);
+            if (targetHp && !sentPhoneMapCreate[targetHp]) {
+              sentPhoneMapCreate[targetHp] = true;
+              var citizenMsg = "Sdr. " + pPemohon + " saat ini dokumen anda sudah kami terima dan selanjutnya akan kami proses. Nomor token dokumen anda adalah : *" + sharedKey + "*. Anda dapat mengecek perjalanan dokumen anda dengan cara : dikolom chat nomor ini ketik nomor token anda yang disebutkan diatas.\n\nTerima Kasih";
+              sendWhatsAppMessage(targetHp, citizenMsg);
+            }
+          }
+        }
       } catch(waErr) {
         Logger.log("WA Error saat create: " + waErr.toString());
       }
@@ -455,7 +539,7 @@ function doPost(e) {
       var batchRows = [];
       var lastRowAll = sheet.getLastRow();
       if (lastRowAll > 1) {
-        var allVals = sheet.getRange(2, 1, lastRowAll - 1, 30).getValues();
+        var allVals = sheet.getRange(2, 1, lastRowAll - 1, 34).getValues();
         for (var r = 0; r < allVals.length; r++) {
           if (allVals[r][0].toString() === key) {
             batchRows.push({
@@ -463,6 +547,7 @@ function doPost(e) {
               fasilitasi: allVals[r][2].toString(),
               operator: allVals[r][3].toString(),
               pemohon: allVals[r][4].toString(),
+              no_hp: allVals[r][6] ? allVals[r][6].toString() : "",
               integrasi: allVals[r][8].toString(),
               jenis_layanan: allVals[r][9].toString(),
               sub_layanan: allVals[r][10].toString(),
@@ -477,6 +562,7 @@ function doPost(e) {
       var sampleItem = batchRows.length > 0 ? batchRows[0] : {
         fasilitasi: sheet.getRange(foundRow, 3).getValue().toString(),
         pemohon: sheet.getRange(foundRow, 5).getValue().toString(),
+        no_hp: sheet.getRange(foundRow, 7).getValue().toString(),
         integrasi: sheet.getRange(foundRow, 9).getValue().toString(),
         jenis_layanan: sheet.getRange(foundRow, 10).getValue().toString(),
         sub_layanan: sheet.getRange(foundRow, 11).getValue().toString()
@@ -1019,6 +1105,24 @@ function doPost(e) {
             waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + currentSubLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah di TTE.\n" +
                     "Silahkan petugas pencetakan mencetak dokumen tersebut.\n\n" +
                     "Terima Kasih.";
+            
+            // Kirim Notifikasi WA ke Masyarakat (Pemohon) saat dokumen selesai di-TTE dan terkirim ke meja kerja petugas cetak
+            var sentPhoneMapTte = {};
+            for (var t = 0; t < batchRows.length; t++) {
+              var bRow = batchRows[t];
+              var rawHp = (bRow.no_hp || "").toString().trim();
+              var bPemohon = (bRow.pemohon || "").toString().trim() || pemohonName;
+              if (rawHp && rawHp !== "-" && rawHp !== "0") {
+                var targetHp = cleanPhoneNumber(rawHp);
+                if (targetHp && !sentPhoneMapTte[targetHp]) {
+                  sentPhoneMapTte[targetHp] = true;
+                  var tteCitizenMsg = "Sdr. " + bPemohon + " saat ini dokumen anda sudah selesai kami proses. Silahkan menghubungi petugas kami diloket antrian mengambil nomor antrian anda.\n" +
+                                      "Kami akan semakin berbenah memperbaiki pelayanan kami jika anda turut berpartisipasi membarikan saran/masukan dalam pengisian Survei Kepuasan Masyarakat (SKM) yang dapat di akses pada link ini (klik link ini) https://skm.go.id/share/instansi/c3072e96-efc2-4335-b581-e03ff98f9795/1\n" +
+                                      "Terima Kasih";
+                  sendWhatsAppMessage(targetHp, tteCitizenMsg);
+                }
+              }
+            }
           }
         } 
         else if (role === 'petugas_pencetakan') {
@@ -1474,7 +1578,7 @@ function syncFonnteGroups() {
 }
 
 // FUNGSI UTAMA PENGIRIMAN WA VIA FONNTE API (Dengan Logging Respon Lengkap & Resolusi Otomatis ID Grup)
-function sendWhatsAppMessage(target, message) {
+function sendWhatsAppMessage(target, message, inboxid) {
   if (!FONNTE_TOKEN || !target) {
     Logger.log("Gagal WA: Token Fonnte atau Target kosong.");
     return "Token/Target Kosong";
@@ -1493,6 +1597,9 @@ function sendWhatsAppMessage(target, message) {
     message: message,
     countryCode: "62"
   };
+  if (inboxid) {
+    payload.inboxid = inboxid;
+  }
   
   var options = {
     method: "post",
@@ -1514,21 +1621,50 @@ function sendWhatsAppMessage(target, message) {
   }
 }
 
+// FUNGSI PEMBANTU UNTUK MEMBERSIHKAN & MEMFORMAT NOMOR HP KE FORMAT 628...
+function cleanPhoneNumber(target) {
+  if (!target) return "";
+  var str = target.toString().trim();
+  if (str.indexOf("@g.us") !== -1) return str;
+  if (str.indexOf("@s.whatsapp.net") !== -1) {
+    str = str.replace("@s.whatsapp.net", "").trim();
+  }
+  var digits = str.replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  if (digits.substr(0, 2) === "08") {
+    return "628" + digits.substr(2);
+  }
+  if (digits.substr(0, 3) === "628") {
+    return digits;
+  }
+  if (digits.substr(0, 1) === "8") {
+    return "628" + digits.substr(1);
+  }
+  return digits;
+}
+
 // FUNGSI PEMBANTU UNTUK MENGUBAH NAMA GRUP TEKS MENJADI GROUP ID WA OTOMATIS
 function resolveTargetGroupId(target) {
   if (!target) return "";
   var cleanTarget = target.toString().trim();
   
   if (cleanTarget.indexOf(",") !== -1) {
+    var parts = cleanTarget.split(",");
+    var resolved = [];
+    for (var i = 0; i < parts.length; i++) {
+      var r = resolveTargetGroupId(parts[i]);
+      if (r) resolved.push(r);
+    }
+    return resolved.join(",");
+  }
+
+  if (cleanTarget.indexOf("@g.us") !== -1) {
     return cleanTarget;
   }
 
-  if (cleanTarget.substr(0, 2) === "08") {
-    return "628" + cleanTarget.substr(2);
-  }
-  
-  if (cleanTarget.indexOf("@g.us") !== -1 || /^[0-9+]+$/.test(cleanTarget)) {
-    return cleanTarget;
+  var digitsOnly = cleanTarget.replace(/[^0-9]/g, "");
+  if (cleanTarget.indexOf("@s.whatsapp.net") !== -1 || cleanTarget.substr(0, 2) === "08" || cleanTarget.substr(0, 3) === "628" || cleanTarget.substr(0, 4) === "+628" || (digitsOnly.length >= 10 && (digitsOnly.substr(0, 2) === "08" || digitsOnly.substr(0, 3) === "628"))) {
+    return cleanPhoneNumber(cleanTarget);
   }
 
   if (cleanTarget.toUpperCase().indexOf("UPT") !== -1) {
@@ -1590,3 +1726,286 @@ function formatFasilitasiTag(fasVal, userName, ss) {
   
   return "Fasilitasi: *Dinas*";
 }
+
+// FUNGSI PEMBANTU: MENENTUKAN MEJA KERJA & EKSEKUTOR TERAKHIR UNTUK CHATBOT TRACKING
+function getDocumentTrackingDetail(row) {
+  var statusAlur = row[12] ? row[12].toString().trim() : "";
+  var operatorAwal = row[3] ? row[3].toString().trim() : "Operator";
+  var riwayat = row[21] ? row[21].toString().trim() : "";
+  var petugasMon = row[33] ? row[33].toString().trim() : "";
+  var tglScan = row[23] ? row[23].toString().trim() : "";
+  var tglKasie = row[24] ? row[24].toString().trim() : "";
+  var tglUpt = row[25] ? row[25].toString().trim() : "";
+  var tglKabid = row[26] ? row[26].toString().trim() : "";
+  var tglKadis = row[27] ? row[27].toString().trim() : "";
+  var tglTte = row[28] ? row[28].toString().trim() : "";
+  var tglPrint = row[29] ? row[29].toString().trim() : "";
+
+  var mejaKerja = getStatusDeskDisplayName(statusAlur);
+  var lastExecutor = operatorAwal;
+
+  if (riwayat) {
+    var lines = riwayat.split("\n");
+    var latestLog = lines[0] || "";
+    var matchBy = latestLog.match(/by\s+([^:\(\n]+)/i);
+    if (matchBy && matchBy[1]) {
+      lastExecutor = matchBy[1].trim();
+    } else if (latestLog.toLowerCase().indexOf("perbaikan operator") !== -1) {
+      lastExecutor = operatorAwal + " (Operator Perbaikan)";
+    }
+  } else {
+    if (tglPrint) lastExecutor = "Petugas Cetak";
+    else if (tglTte) lastExecutor = "Petugas TTE";
+    else if (tglKadis) lastExecutor = "Kepala Dinas";
+    else if (tglKabid) lastExecutor = "Kabid";
+    else if (tglKasie) lastExecutor = "Kasie";
+    else if (tglUpt) lastExecutor = "Kepala UPT";
+    else if (tglScan) lastExecutor = "Petugas Scan";
+    else lastExecutor = operatorAwal;
+  }
+
+  if (statusAlur === "PENDING_OPERATOR" && petugasMon) {
+    lastExecutor = petugasMon + " (Petugas Monitoring)";
+  }
+
+  return {
+    meja: mejaKerja,
+    eksekutor: lastExecutor,
+    status: statusAlur
+  };
+}
+
+// FUNGSI PEMBANTU: MENENTUKAN INFORMASI COUNTER & DESKRIPSI ALUR (PERSIS KONSEP NOTIFIKASI GRUP WA)
+function getCounterStatusInfo(status, subLayanan, pemohon, eksekutor, penerima, fasilitasi) {
+  var isUpt = (fasilitasi || "").toUpperCase().indexOf("UPT") !== -1;
+  var counterName = "";
+  var deskripsiAlur = "";
+  
+  switch(status) {
+    case "1_PETUGAS_SCAN":
+      counterName = isUpt ? "Counter Petugas Scan UPT" : "Counter Petugas Scan Dinas";
+      deskripsiAlur = "Berkas telah di-input operator dan saat ini berada di " + counterName + " untuk proses upload berkas & verifikasi scan persyaratan.";
+      break;
+      
+    case "2_VERIFIKASI_KASIE":
+      counterName = "Counter Kasie Pemeriksa";
+      deskripsiAlur = "Berkas saat ini berada di " + counterName + " untuk pemeriksaan dan verifikasi dokumen persyaratan.";
+      break;
+      
+    case "2_VERIFIKASI_UPT":
+      counterName = "Counter Kepala UPT";
+      deskripsiAlur = "Berkas saat ini berada di " + counterName + " untuk verifikasi berkas pelayanan wilayah UPT.";
+      break;
+      
+    case "3_VALIDASI_KABID":
+      counterName = "Counter Kabid (Kepala Bidang)";
+      deskripsiAlur = "Berkas telah diverifikasi dan saat ini berada di " + counterName + " untuk tahap validasi pimpinan bidang.";
+      break;
+      
+    case "4_SERTIFIKASI_KADIS":
+      counterName = "Counter Kepala Dinas (Kadis)";
+      deskripsiAlur = "Berkas telah divalidasi dan saat ini berada di " + counterName + " untuk sertifikasi pimpinan.";
+      break;
+      
+    case "5_TTE":
+      counterName = "Counter Petugas TTE";
+      deskripsiAlur = "Berkas saat ini berada di " + counterName + " untuk proses Tanda Tangan Elektronik (TTE SIAK).";
+      break;
+      
+    case "6_PENCETAKAN_DINAS":
+      counterName = "Counter Petugas Cetak Dinas";
+      deskripsiAlur = "Berkas telah selesai di-TTE dan saat ini berada di " + counterName + " untuk proses pencetakan fisik dokumen.";
+      break;
+      
+    case "6_PENCETAKAN_UPT":
+      counterName = "Counter Petugas Cetak UPT";
+      deskripsiAlur = "Berkas telah selesai di-TTE dan saat ini berada di " + counterName + " untuk proses pencetakan fisik dokumen di kantor UPT.";
+      break;
+      
+    case "7_SELESAI":
+      counterName = "Counter Loket Pengambilan (Selesai Cetak)";
+      deskripsiAlur = "✅ Dokumen Anda telah SELESAI diproses & dicetak. Silakan mengambil di loket pelayanan" + (penerima ? " (Tercatat telah diserahkan kepada: *" + penerima + "*)" : " dengan membawa nomor antrian Anda") + ".";
+      break;
+      
+    case "PENDING_OPERATOR":
+      counterName = "Counter User Monitoring / Operator Perbaikan";
+      deskripsiAlur = "⚠️ Berkas saat ini berstatus PENDING di Counter Monitoring/Operator untuk penyesuaian kelengkapan berkas.";
+      break;
+      
+    default:
+      counterName = getStatusDeskDisplayName(status);
+      deskripsiAlur = "Dokumen saat ini berada di " + counterName + " dalam proses alur pelayanan.";
+      break;
+  }
+  
+  return {
+    counter: counterName,
+    deskripsi: deskripsiAlur
+  };
+}
+
+// FUNGSI UTAMA: MENANGANI WEBHOOK MASUK DARI FONNTE & BALAS CHAT OTOMATIS BERDASARKAN NOMOR TOKEN
+function handleFonnteIncomingWebhook(sender, message, extraPayload) {
+  try {
+    var rawSender = (sender || "").toString().trim();
+    var cleanSender = cleanPhoneNumber(rawSender);
+    var rawMsg = (message || "").toString().trim();
+    
+    // Abaikan jika pesan kosong
+    if (!rawMsg) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "ignored", message: "Pesan kosong" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Abaikan jika pengirim adalah grup WA dan tidak mengandung kata kunci / token
+    var isGroup = rawSender.indexOf("@g.us") !== -1;
+    
+    // Bersihkan karakter formatting WhatsApp (*, _, ~, `, ') agar token tersaring bersih
+    var cleanMsg = rawMsg.replace(/[\*\_~`'"]/g, " ").trim();
+    
+    // Ekstrak kandidat Token / Kode Unik (misal: SM-20261017-A1B2 atau format serupa)
+    var tokenMatch = cleanMsg.match(/SM-[0-9]{8}-[A-Za-z0-9]+/i) || cleanMsg.match(/SM-[A-Za-z0-9-]+/i);
+    var candidateToken = "";
+    if (tokenMatch) {
+      candidateToken = tokenMatch[0].trim().toUpperCase();
+    } else {
+      var words = cleanMsg.split(/\s+/);
+      for (var w = 0; w < words.length; w++) {
+        var cw = words[w].trim().toUpperCase();
+        if (cw.indexOf("SM-") === 0) {
+          candidateToken = cw;
+          break;
+        }
+      }
+      if (!candidateToken && cleanMsg.length >= 6 && cleanMsg.length <= 30 && cleanMsg.indexOf(" ") === -1) {
+        candidateToken = cleanMsg.toUpperCase();
+      }
+    }
+    
+    var sheet = getDataSheet();
+    var lastRow = sheet.getLastRow();
+    var matchedDocs = [];
+    
+    if (lastRow > 1 && candidateToken) {
+      var allVals = sheet.getRange(2, 1, lastRow - 1, 34).getValues();
+      for (var r = 0; r < allVals.length; r++) {
+        var rowVal = allVals[r];
+        var rowKey = rowVal[0] ? rowVal[0].toString().replace(/[\*\_~`'"]/g, "").trim().toUpperCase() : "";
+        if (rowKey === candidateToken) {
+          var tracking = getDocumentTrackingDetail(rowVal);
+          matchedDocs.push({
+            key: rowVal[0].toString().trim(),
+            tanggal: rowVal[1] ? rowVal[1].toString() : "",
+            fasilitasi: rowVal[2] ? rowVal[2].toString() : "",
+            operator: rowVal[3] ? rowVal[3].toString() : "",
+            pemohon: rowVal[4] ? rowVal[4].toString() : "",
+            jenis_layanan: rowVal[9] ? rowVal[9].toString() : "",
+            sub_layanan: rowVal[10] ? rowVal[10].toString() : "",
+            status_alur: rowVal[12] ? rowVal[12].toString() : "",
+            status_tte: rowVal[13] ? rowVal[13].toString() : "",
+            penerima: rowVal[14] ? rowVal[14].toString() : "",
+            riwayat: rowVal[21] ? rowVal[21].toString() : "",
+            meja: tracking.meja,
+            eksekutor: tracking.eksekutor
+          });
+        }
+      }
+    }
+    
+    var replyMsg = "";
+    
+    if (matchedDocs.length > 0) {
+      var primaryPemohon = matchedDocs[0].pemohon || "Masyarakat";
+      var displayKey = matchedDocs[0].key || candidateToken;
+      
+      if (matchedDocs.length === 1) {
+        var doc = matchedDocs[0];
+        var cInfo = getCounterStatusInfo(doc.status_alur, doc.sub_layanan, primaryPemohon, doc.eksekutor, doc.penerima, doc.fasilitasi);
+        
+        replyMsg = "Halo Sdr. *" + primaryPemohon + "*,\n" +
+                   "Menanggapi pengecekan Nomor Token dokumen Anda: *" + displayKey + "*\n\n" +
+                   "📋 *STATUS POSISI DOKUMEN SAAT INI:*\n" +
+                   "• Dokumen: *" + doc.sub_layanan + "* (" + (doc.jenis_layanan || "Layanan Dukcapil") + ")\n" +
+                   "• Atas Nama: *" + (doc.pemohon || primaryPemohon) + "*\n" +
+                   "• Berada di: *" + cInfo.counter + "*\n" +
+                   "• Petugas Terakhir: *" + doc.eksekutor + "*\n" +
+                   "• Fasilitasi: *" + (doc.fasilitasi || "Dinas") + "*\n\n" +
+                   "📢 *Keterangan Alur:*\n" +
+                   cInfo.deskripsi + "\n\n" +
+                   "Terima Kasih.\n_Dinas Kependudukan dan Pencatatan Sipil_";
+      } else {
+        // Terintegrasi / Multi-dokumen (Persis Konsep Notifikasi Grup Terintegrasi)
+        replyMsg = "Halo Sdr. *" + primaryPemohon + "*,\n" +
+                   "Menanggapi pengecekan Nomor Token permohonan Terintegrasi Anda: *" + displayKey + "*\n\n" +
+                   "📋 *STATUS POSISI DOKUMEN TERINTEGRASI (" + matchedDocs.length + " Dokumen):*\n\n";
+                   
+        for (var m = 0; m < matchedDocs.length; m++) {
+          var mDoc = matchedDocs[m];
+          var mInfo = getCounterStatusInfo(mDoc.status_alur, mDoc.sub_layanan, mDoc.pemohon, mDoc.eksekutor, mDoc.penerima, mDoc.fasilitasi);
+          replyMsg += (m + 1) + ". *" + mDoc.sub_layanan + "* (a.n. *" + (mDoc.pemohon || primaryPemohon) + "*)\n" +
+                      "   • Berada di: *" + mInfo.counter + "*\n" +
+                      "   • Petugas Terakhir: *" + mDoc.eksekutor + "*\n" +
+                      "   • Keterangan: " + mInfo.deskripsi + "\n\n";
+        }
+        
+        replyMsg += "Terima Kasih.\n_Dinas Kependudukan dan Pencatatan Sipil_";
+      }
+    } else {
+      // Jika token tidak ditemukan
+      if (isGroup) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "ignored_group" }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      var isQueryToken = candidateToken.indexOf("SM-") !== -1 || /^[A-Z0-9-]{6,25}$/.test(candidateToken);
+      if (isQueryToken) {
+        replyMsg = "Mohon maaf Sdr., dokumen dengan Nomor Token *" + candidateToken + "* tidak ditemukan dalam database pelayanan kami.\n" +
+                   "Silakan pastikan kembali nomor token yang Anda ketik sudah sesuai dengan pesan tanda terima awal (Contoh: *SM-20261017-XXXX*).\n\n" +
+                   "Terima Kasih.\n_Dinas Kependudukan dan Pencatatan Sipil_";
+      } else {
+        replyMsg = "Halo! Selamat datang di Layanan Informasi Perjalanan Dokumen Dukcapil.\n\n" +
+                   "Untuk mengetahui dokumen Anda saat ini sudah berada di counter mana, silakan ketik *Nomor Token* Anda di kolom chat ini.\n" +
+                   "Contoh: *SM-20261017-A1B2*\n\n" +
+                   "Sistem kami akan otomatis menginformasikan counter posisi berkas saat ini dan petugas terakhir yang memproses dokumen Anda.\n\n" +
+                   "Terima Kasih.";
+      }
+    }
+    
+    // Kirim balasan ke nomor pengirim chat via Fonnte Send API
+    var inboxId = (extraPayload && extraPayload.inboxid) ? extraPayload.inboxid : "";
+    if (cleanSender && replyMsg) {
+      sendWhatsAppMessage(cleanSender, replyMsg, inboxId);
+    }
+    
+    // Kembalikan objek JSON dengan 'message' agar didukung oleh respons webhook Fonnte
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      message: replyMsg,
+      reply: replyMsg,
+      token: candidateToken,
+      matched: matchedDocs.length
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (err) {
+    Logger.log("Error handleFonnteIncomingWebhook: " + err.toString());
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// FUNGSI UJI COBA CHATBOT TRACKING TOKEN LANGSUNG DARI APPS SCRIPT EDITOR
+function testFonnteWebhookAutoReply() {
+  Logger.log("=== 🧪 UJI COBA CHATBOT TRACKING TOKEN VIA WEBHOOK FONNTE ===");
+  var testPhone = WA_ADMIN_NUMBER || "082397724667";
+  
+  var sheet = getDataSheet();
+  var sampleToken = "SM-20261017-TEST";
+  if (sheet.getLastRow() > 1) {
+    sampleToken = sheet.getRange(2, 1).getValue().toString().trim() || sampleToken;
+  }
+  
+  Logger.log("Menguji dengan Token: " + sampleToken + " ke Nomor: " + testPhone);
+  var res = handleFonnteIncomingWebhook(testPhone, sampleToken, {});
+  Logger.log("Respon Webhook: " + res.getContent());
+}
+
