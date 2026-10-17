@@ -3,12 +3,13 @@
  * 
  * PETUNJUK DEPLOYMENT:
  * 1. Buka Google Sheet baru atau yang sudah ada.
- * 2. Buat header pada baris pertama (Row 1) dari kolom A sampai AD:
+ * 2. Buat header pada baris pertama (Row 1) dari kolom A sampai AH:
  *    A: Key | B: Tanggal | C: Fasilitasi | D: Operator | E: Pemohon | F: Alamat | G: No HP | H: Email |
  *    I: Integrasi | J: Jenis Layanan | K: Sub Layanan | L: Link File | M: Status Alur | N: Status TTE |
  *    O: Penerima | P: Catatan Scan | Q: Catatan Kasie | R: Catatan Kabid | S: Catatan Kadis | T: Catatan UPT |
  *    U: Catatan Print | V: Riwayat Pending | W: Tgl Operator | X: Tgl Scan | Y: Tgl Kasie | Z: Tgl UPT |
- *    AA: Tgl Kabid | AB: Tgl Kadis | AC: Tgl TTE | AD: Tgl Print
+ *    AA: Tgl Kabid | AB: Tgl Kadis | AC: Tgl TTE | AD: Tgl Print | AE: Catatan Monitoring | AF: Info Monitoring |
+ *    AG: Target Operator / Detail Monitoring | AH: Petugas Monitoring
  * 3. Masuk ke menu "Extensions" > "Apps Script".
  * 4. Hapus seluruh isi kode bawaan, lalu tempelkan (paste) seluruh kode di bawah ini.
  * 5. Klik ikon Simpan (Save).
@@ -144,7 +145,7 @@ function doGet(e) {
     }
 
     var sheet = getSpreadsheet().getActiveSheet();
-    ensureColumns(sheet, 33); // Pastikan memiliki minimal 33 kolom
+    ensureColumns(sheet, 34); // Pastikan memiliki minimal 34 kolom (A sampai AH)
     var lastRow = sheet.getLastRow();
     
     // Jika sheet kosong (hanya ada header atau kosong sama sekali)
@@ -153,8 +154,8 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
     
-    // Baca 33 kolom dari A sampai AG
-    var dataRange = sheet.getRange(2, 1, lastRow - 1, 33);
+    // Baca 34 kolom dari A sampai AH
+    var dataRange = sheet.getRange(2, 1, lastRow - 1, 34);
     var values = dataRange.getValues();
     var records = [];
     
@@ -195,7 +196,8 @@ function doGet(e) {
           tgl_print: row[29] ? row[29].toString() : "",
           catatan_monitoring: row[30] ? row[30].toString() : "",
           info_monitoring: row[31] ? row[31].toString() : "",
-          target_operator: row[32] ? row[32].toString() : ""
+          target_operator: row[32] ? row[32].toString() : "",
+          petugas_monitoring: row[33] ? row[33].toString() : ""
         });
       }
     }
@@ -232,20 +234,22 @@ function doPost(e) {
     // 0.6 SIMPAN CATATAN & INFORMASI TIM MONITORING + NOTIFIKASI WA GRUP
     if (payload.action === 'monitoring_note') {
       var sheet = getSpreadsheet().getActiveSheet();
-      ensureColumns(sheet, 33);
+      ensureColumns(sheet, 34); // Pastikan memiliki minimal 34 kolom (A sampai AH)
       var key = payload.key;
       var subLayanan = payload.sub_layanan;
       var infoMon = payload.info_monitoring || "";
       var catMon = payload.catatan_monitoring || "";
       var metodeMon = payload.metode_monitoring || "";
       var targetOperator = payload.target_operator || "";
+      var userMonitoring = payload.user_name || payload.userName || "Monitoring";
       
       var foundRow = findRowByKeyAndSub(sheet, key, subLayanan);
       if (foundRow !== -1) {
         var detailInfo = (infoMon === "OPERATOR") ? targetOperator : (metodeMon ? ("Metode: " + metodeMon) : "");
-        sheet.getRange(foundRow, 31).setValue(catMon);     // Col AE (31)
-        sheet.getRange(foundRow, 32).setValue(infoMon);    // Col AF (32)
-        sheet.getRange(foundRow, 33).setValue(detailInfo); // Col AG (33)
+        sheet.getRange(foundRow, 31).setValue(catMon);         // Col AE (31)
+        sheet.getRange(foundRow, 32).setValue(infoMon);        // Col AF (32)
+        sheet.getRange(foundRow, 33).setValue(detailInfo);     // Col AG (33)
+        sheet.getRange(foundRow, 34).setValue(userMonitoring); // Col AH (34 - Petugas Monitoring)
 
         var pemohonName = sheet.getRange(foundRow, 5).getValue().toString(); // Col E
         var currentSubLayanan = sheet.getRange(foundRow, 11).getValue().toString() || subLayanan; // Col K
@@ -314,6 +318,25 @@ function doPost(e) {
         items[m].isMandatory = (m === 0);
       }
       
+      // Snapshot baris yang SUDAH ADA untuk Kode Unik ini sebelum batch diproses
+      var preExistingRows = [];
+      var insertedCount = 0;
+      var lastRSnap = sheet.getLastRow();
+      if (lastRSnap > 1) {
+        var snapVals = sheet.getRange(2, 1, lastRSnap - 1, 11).getValues();
+        for (var s = 0; s < snapVals.length; s++) {
+          if (snapVals[s][0].toString() === sharedKey) {
+            preExistingRows.push({
+              row: s + 2,
+              key: snapVals[s][0].toString(),
+              sub: snapVals[s][10].toString(),
+              pemohon: snapVals[s][4].toString().trim().toLowerCase(),
+              used: false
+            });
+          }
+        }
+      }
+
       // Insert in reverse order so item 0 (Capil / Mandatori Utama) ends up at row 2 (top)
       for (var k = items.length - 1; k >= 0; k--) {
         var itemData = items[k];
@@ -347,22 +370,25 @@ function doPost(e) {
           "", "", "", "", "", "", ""
         ];
         
-        // Cari jika baris dengan key & sub_layanan ini sudah ada (update perbaikan pending)
-        var lastR = sheet.getLastRow();
+        // Cari jika baris dengan key, sub_layanan & pemohon ini SUDAH ADA SEBELUM request ini (update perbaikan pending).
+        // Pencocokan memakai snapshot yang diambil sebelum loop, sehingga dokumen-dokumen dalam batch yang sama
+        // (mis. 2x BAKAK / 2x KTP Ganti) TIDAK PERNAH saling menimpa.
         var updatedExisting = false;
-        if (lastR > 1) {
-          var existingValues = sheet.getRange(2, 1, lastR - 1, 11).getValues();
-          for (var r = 0; r < existingValues.length; r++) {
-            if (existingValues[r][0].toString() === itemKey && existingValues[r][10].toString() === itemData.sub_layanan) {
-              sheet.getRange(r + 2, 1, 1, 30).setValues([values]);
-              updatedExisting = true;
-              break;
-            }
+        var pemohonNorm = (itemData.pemohon || "").toString().trim().toLowerCase();
+        for (var r = 0; r < preExistingRows.length; r++) {
+          var pr = preExistingRows[r];
+          if (!pr.used && pr.key === itemKey && pr.sub === (itemData.sub_layanan || "") && pr.pemohon === pemohonNorm) {
+            pr.used = true;
+            // Baris lama bergeser ke bawah sebanyak jumlah baris baru yang sudah disisipkan di atasnya
+            sheet.getRange(pr.row + insertedCount, 1, 1, 30).setValues([values]);
+            updatedExisting = true;
+            break;
           }
         }
         if (!updatedExisting) {
           sheet.insertRowBefore(2);
           sheet.getRange(2, 1, 1, 30).setValues([values]);
+          insertedCount++;
         }
       }
       
@@ -417,9 +443,10 @@ function doPost(e) {
       var executeAction = payload.executeAction; // 'approve' atau 'pending'
       var notes = payload.notes || "";
       var subLayananInput = payload.sub_layanan || "";
+      var pemohonInput = payload.pemohon || "";
       var timeStr = getLocalDateTimeString();
       
-      var foundRow = findRowByKeyAndSub(sheet, key, subLayananInput);
+      var foundRow = findRowByKeyAndSub(sheet, key, subLayananInput, pemohonInput);
       if (foundRow === -1) {
         throw new Error("Berkas dengan Key " + key + " tidak ditemukan.");
       }
@@ -471,8 +498,8 @@ function doPost(e) {
 
       if (executeAction === 'pending' && role !== 'petugas_tte' && role !== 'petugas_scan') {
         // ALUR PENDING (Kasie Capil, Kasie Dafduk, Kepala UPT, Kabid, Kadis):
-        // Kembalikan SELURUH dokumen dengan Kode Unik yang sama ke Operator (PENDING_OPERATOR)
-        var logMsg = "PENDING by " + role + " pada " + timeStr + ": " + notes;
+        var execUser = payload.userName || role;
+        var logMsg = "PENDING by " + execUser + " (" + role + ") pada " + timeStr + ": " + notes;
         
         for (var i = 0; i < batchRows.length; i++) {
           var rIdx = batchRows[i].rowIndex;
@@ -480,6 +507,8 @@ function doPost(e) {
           var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
 
           sheet.getRange(rIdx, 13).setValue("PENDING_OPERATOR"); // Col M (Status Alur)
+          // Pending baru diarahkan dulu ke counter Monitoring: reset info monitoring & eksekutor sebelumnya
+          sheet.getRange(rIdx, 31, 1, 4).setValues([["", "", "", ""]]); // Col AE, AF, AG, AH
           sheet.getRange(rIdx, 22).setValue(newRiwayat);        // Col V (Riwayat Pending)
 
           if (role === 'kasie_dafduk' || role === 'kasie_capil') {
@@ -503,44 +532,61 @@ function doPost(e) {
         if (role === 'petugas_scan') {
           var linkFile = payload.link_file || "";
           var nextStatusScan = (currentFasilitasi === "UPT" || currentFasilitasi.indexOf("UPT") !== -1) ? "2_VERIFIKASI_UPT" : "2_VERIFIKASI_KASIE";
+          var execUserName = payload.userName || "Petugas Scan";
+          var logMsg = "SCAN by " + execUserName + " pada " + timeStr + (notes ? ": " + notes : "");
           
           for (var i = 0; i < batchRows.length; i++) {
             var rIdx = batchRows[i].rowIndex;
+            var prevRiwayat = batchRows[i].riwayat_pending;
+            var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
             sheet.getRange(rIdx, 12).setValue(linkFile);       // Col L (Link File)
             sheet.getRange(rIdx, 16).setValue(notes);          // Col P (Catatan Scan)
             sheet.getRange(rIdx, 24).setValue(timeStr);        // Col X (tgl_scan)
             sheet.getRange(rIdx, 13).setValue(nextStatusScan); // Col M (Status Alur)
+            sheet.getRange(rIdx, 22).setValue(newRiwayat);     // Col V (Riwayat Pending)
           }
         } 
 
         else if (role === 'kasie_capil') {
           // C.1 Kasie Capil memverifikasi Capil -> Capil row ke 3_VALIDASI_KABID
+          var execUserName = payload.userName || "Kasie Capil";
+          var logMsg = "VERIFIKASI KASIE CAPIL by " + execUserName + " pada " + timeStr + (notes ? ": " + notes : "");
           for (var i = 0; i < batchRows.length; i++) {
             var isCapil = batchRows[i].jenis_layanan.toLowerCase().indexOf("capil") !== -1 || batchRows[i].jenis_layanan.toLowerCase().indexOf("pencatatan sipil") !== -1;
             if (isCapil) {
               var rIdx = batchRows[i].rowIndex;
+              var prevRiwayat = batchRows[i].riwayat_pending;
+              var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
               sheet.getRange(rIdx, 17).setValue(notes);   // Col Q (Catatan Kasie)
               sheet.getRange(rIdx, 25).setValue(timeStr); // Col Y (tgl_kasie)
               sheet.getRange(rIdx, 13).setValue("3_VALIDASI_KABID"); // Col M
+              sheet.getRange(rIdx, 22).setValue(newRiwayat); // Col V (Riwayat Pending)
             }
           }
         } 
 
         else if (role === 'kasie_dafduk') {
           // Update SELURUH dokumen Pendaftaran Penduduk (Dafduk) pada batch ini ke 3_VALIDASI_KABID
+          var execUserName = payload.userName || "Kasie Dafduk";
+          var logMsg = "VERIFIKASI KASIE DAFDUK by " + execUserName + " pada " + timeStr + (notes ? ": " + notes : "");
           for (var i = 0; i < batchRows.length; i++) {
             var jl = batchRows[i].jenis_layanan.toLowerCase();
             var isDafduk = jl.indexOf("dafduk") !== -1 || jl.indexOf("pendaftaran") !== -1;
             if (isDafduk) {
               var rIdx = batchRows[i].rowIndex;
+              var prevRiwayat = batchRows[i].riwayat_pending;
+              var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
               sheet.getRange(rIdx, 17).setValue(notes);   // Col Q (Catatan Kasie)
               sheet.getRange(rIdx, 25).setValue(timeStr); // Col Y (tgl_kasie)
               sheet.getRange(rIdx, 13).setValue("3_VALIDASI_KABID"); // Col M
+              sheet.getRange(rIdx, 22).setValue(newRiwayat); // Col V (Riwayat Pending)
             }
           }
         } 
 
         else if (role === 'kepala_upt') {
+          var execUserName = payload.userName || "Kepala UPT";
+          var logMsg = "VERIFIKASI UPT by " + execUserName + " pada " + timeStr + (notes ? ": " + notes : "");
           if (isDafdukCapil) {
             // C.1 Dafduk - Capil di UPT:
             // Capil row -> 6_PENCETAKAN_UPT
@@ -548,8 +594,11 @@ function doPost(e) {
             for (var i = 0; i < batchRows.length; i++) {
               var rIdx = batchRows[i].rowIndex;
               var isCapil = batchRows[i].jenis_layanan.toLowerCase().indexOf("capil") !== -1 || batchRows[i].jenis_layanan.toLowerCase().indexOf("pencatatan sipil") !== -1;
+              var prevRiwayat = batchRows[i].riwayat_pending;
+              var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
               sheet.getRange(rIdx, 20).setValue(notes);   // Col T (Catatan UPT)
               sheet.getRange(rIdx, 26).setValue(timeStr); // Col Z (tgl_upt)
+              sheet.getRange(rIdx, 22).setValue(newRiwayat); // Col V (Riwayat Pending)
               if (isCapil) {
                 sheet.getRange(rIdx, 13).setValue("6_PENCETAKAN_UPT");
               } else {
@@ -560,26 +609,37 @@ function doPost(e) {
             // C.2 Dafduk - Dafduk di UPT: Kirim SEMUA dokumen bersamaan ke Kabid Dafduk
             for (var i = 0; i < batchRows.length; i++) {
               var rIdx = batchRows[i].rowIndex;
+              var prevRiwayat = batchRows[i].riwayat_pending;
+              var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
               sheet.getRange(rIdx, 20).setValue(notes);   // Col T
               sheet.getRange(rIdx, 26).setValue(timeStr); // Col Z
               sheet.getRange(rIdx, 13).setValue("3_VALIDASI_KABID"); // Col M
+              sheet.getRange(rIdx, 22).setValue(newRiwayat); // Col V (Riwayat Pending)
             }
           } else {
             // C.3 Tunggal UPT: Capil -> 6_PENCETAKAN_UPT, Dafduk -> 3_VALIDASI_KABID
             var isCapil = currentLayanan.toLowerCase().indexOf("capil") !== -1 || currentLayanan.toLowerCase().indexOf("pencatatan sipil") !== -1;
+            var prevRiwayat = sheet.getRange(foundRow, 22).getValue().toString();
+            var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
             sheet.getRange(foundRow, 20).setValue(notes);   // Col T
             sheet.getRange(foundRow, 26).setValue(timeStr); // Col Z
             sheet.getRange(foundRow, 13).setValue(isCapil ? "6_PENCETAKAN_UPT" : "3_VALIDASI_KABID");
+            sheet.getRange(foundRow, 22).setValue(newRiwayat); // Col V (Riwayat Pending)
           }
         } 
 
         else if (role === 'kabid_capil') {
+          var execUserName = payload.userName || "Kabid Capil";
+          var logMsg = "VALIDASI KABID CAPIL by " + execUserName + " pada " + timeStr + (notes ? ": " + notes : "");
           for (var i = 0; i < batchRows.length; i++) {
             var isCapil = batchRows[i].jenis_layanan.toLowerCase().indexOf("capil") !== -1 || batchRows[i].jenis_layanan.toLowerCase().indexOf("pencatatan sipil") !== -1;
             if (isCapil) {
               var rIdx = batchRows[i].rowIndex;
+              var prevRiwayat = batchRows[i].riwayat_pending;
+              var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
               sheet.getRange(rIdx, 18).setValue(notes);   // Col R (Catatan Kabid)
               sheet.getRange(rIdx, 27).setValue(timeStr); // Col AA (tgl_kabid)
+              sheet.getRange(rIdx, 22).setValue(newRiwayat); // Col V (Riwayat Pending)
               
               var currentTteStatus = sheet.getRange(rIdx, 14).getValue().toString().trim().toLowerCase();
               if (currentTteStatus === "belum diajukan siak" || currentTteStatus === "belum verifikasi siak" || currentTteStatus.indexOf("belum") !== -1) {
@@ -592,13 +652,18 @@ function doPost(e) {
         } 
 
         else if (role === 'kabid_dafduk') {
+          var execUserName = payload.userName || "Kabid Dafduk";
+          var logMsg = "VALIDASI KABID DAFDUK by " + execUserName + " pada " + timeStr + (notes ? ": " + notes : "");
           for (var i = 0; i < batchRows.length; i++) {
             var jl = batchRows[i].jenis_layanan.toLowerCase();
             var isDafduk = jl.indexOf("dafduk") !== -1 || jl.indexOf("pendaftaran") !== -1;
             if (isDafduk) {
               var rIdx = batchRows[i].rowIndex;
+              var prevRiwayat = batchRows[i].riwayat_pending;
+              var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
               sheet.getRange(rIdx, 18).setValue(notes);   // Col R (Catatan Kabid)
               sheet.getRange(rIdx, 27).setValue(timeStr); // Col AA (tgl_kabid)
+              sheet.getRange(rIdx, 22).setValue(newRiwayat); // Col V (Riwayat Pending)
               
               var currentTteStatus = sheet.getRange(rIdx, 14).getValue().toString().trim().toLowerCase();
               if (currentTteStatus === "belum diajukan siak" || currentTteStatus === "belum verifikasi siak" || currentTteStatus.indexOf("belum") !== -1) {
@@ -611,37 +676,68 @@ function doPost(e) {
         } 
         
         else if (role === 'kadis') {
+          var execUserName = payload.userName || "Kadis";
+          var logMsg = "SERTIFIKASI KADIS by " + execUserName + " pada " + timeStr + (notes ? ": " + notes : "");
           for (var i = 0; i < batchRows.length; i++) {
             var rIdx = batchRows[i].rowIndex;
+            var prevRiwayat = batchRows[i].riwayat_pending;
+            var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
             sheet.getRange(rIdx, 19).setValue(notes);   // Col S (Catatan Kadis)
             sheet.getRange(rIdx, 28).setValue(timeStr); // Col AB (tgl_kadis)
             sheet.getRange(rIdx, 13).setValue("5_TTE");  // Col M (Status Alur)
+            sheet.getRange(rIdx, 22).setValue(newRiwayat); // Col V (Riwayat Pending)
           }
         } 
         
         else if (role === 'petugas_tte') {
           var statusTteVal = payload.status_tte;
-          sheet.getRange(foundRow, 14).setValue(statusTteVal); // Col N (Status TTE)
-          sheet.getRange(foundRow, 29).setValue(timeStr); // Col AC (tgl_tte)
-          
-          var isUptFas = (currentFasilitasi === "UPT" || currentFasilitasi.indexOf("UPT") !== -1);
-          var isPendaftaran = (currentLayanan.trim().toLowerCase() === "pendaftaran penduduk");
-          
+          var execUserName = payload.userName || "Petugas TTE";
           var nextStatusTte = "";
+          
+          var logMsg = "TTE by " + execUserName + " (" + statusTteVal + ") pada " + timeStr + (notes ? ": " + notes : "");
+
           if (statusTteVal === 'Belum diajukan SIAK') {
+            var isPendaftaran = (currentLayanan || "").trim().toLowerCase().indexOf("pendaftaran") !== -1;
+            var isUptFas = (currentFasilitasi || "").toUpperCase().indexOf("UPT") !== -1;
             nextStatusTte = (isUptFas && isPendaftaran) ? "2_VERIFIKASI_UPT" : "2_VERIFIKASI_KASIE";
-            var logMsg = "BELUM DIAJUKAN SIAK by TTE pada " + timeStr + ": " + (notes || "Belum diajukan SIAK");
-            var newRiwayat = batchRows[0].riwayat_pending ? logMsg + "\n---\n" + batchRows[0].riwayat_pending : logMsg;
-            sheet.getRange(foundRow, 22).setValue(newRiwayat); // Col V
+            
+            for (var i = 0; i < batchRows.length; i++) {
+              var rIdx = batchRows[i].rowIndex;
+              var prevRiwayat = batchRows[i].riwayat_pending;
+              var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
+              sheet.getRange(rIdx, 14).setValue(statusTteVal);  // Col N (Status TTE)
+              sheet.getRange(rIdx, 29).setValue(timeStr);       // Col AC (tgl_tte)
+              sheet.getRange(rIdx, 13).setValue(nextStatusTte); // Col M (Status Alur)
+              sheet.getRange(rIdx, 22).setValue(newRiwayat);    // Col V (Riwayat Pending)
+            }
           } else if (statusTteVal === 'Belum Verifikasi SIAK') {
             nextStatusTte = "3_VALIDASI_KABID";
-            var logMsg = "BELUM VERIFIKASI SIAK by TTE pada " + timeStr + ": " + (notes || "Belum Verifikasi SIAK");
-            var newRiwayat = batchRows[0].riwayat_pending ? logMsg + "\n---\n" + batchRows[0].riwayat_pending : logMsg;
-            sheet.getRange(foundRow, 22).setValue(newRiwayat); // Col V
+            
+            for (var i = 0; i < batchRows.length; i++) {
+              var rIdx = batchRows[i].rowIndex;
+              var prevRiwayat = batchRows[i].riwayat_pending;
+              var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
+              sheet.getRange(rIdx, 14).setValue(statusTteVal);  // Col N (Status TTE)
+              sheet.getRange(rIdx, 29).setValue(timeStr);       // Col AC (tgl_tte)
+              sheet.getRange(rIdx, 13).setValue(nextStatusTte); // Col M (Status Alur)
+              sheet.getRange(rIdx, 22).setValue(newRiwayat);    // Col V (Riwayat Pending)
+            }
           } else {
-            nextStatusTte = (isUptFas) ? "6_PENCETAKAN_UPT" : "6_PENCETAKAN_DINAS";
+            // Sudah di TTE / SIAK -> Kirim SELURUH dokumen terintegrasi (batch) ke Meja Pencetakan
+            for (var i = 0; i < batchRows.length; i++) {
+              var rIdx = batchRows[i].rowIndex;
+              var itemFas = batchRows[i].fasilitasi || currentFasilitasi || "";
+              var isUptFas = itemFas.toUpperCase().indexOf("UPT") !== -1;
+              var itemNextStatus = isUptFas ? "6_PENCETAKAN_UPT" : "6_PENCETAKAN_DINAS";
+              var prevRiwayat = batchRows[i].riwayat_pending;
+              var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
+              
+              sheet.getRange(rIdx, 14).setValue(statusTteVal);     // Col N (Status TTE)
+              sheet.getRange(rIdx, 29).setValue(timeStr);          // Col AC (tgl_tte)
+              sheet.getRange(rIdx, 13).setValue(itemNextStatus);   // Col M (Status Alur)
+              sheet.getRange(rIdx, 22).setValue(newRiwayat);        // Col V (Riwayat Pending)
+            }
           }
-          sheet.getRange(foundRow, 13).setValue(nextStatusTte);
         } 
         
         else if (role === 'operator') {
@@ -659,10 +755,15 @@ function doPost(e) {
         }
         
         else if (role === 'petugas_pencetakan') {
+          var execUserName = payload.userName || "Petugas Cetak";
           var penerimaVal = payload.penerima || "";
+          var logMsg = "PENCETAKAN by " + execUserName + " diserahkan ke " + (penerimaVal || "-") + " pada " + timeStr + (notes ? ": " + notes : "");
+          var prevRiwayat = sheet.getRange(foundRow, 22).getValue().toString();
+          var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
           sheet.getRange(foundRow, 15).setValue(penerimaVal); // Col O (Penerima)
           sheet.getRange(foundRow, 21).setValue(notes); // Col U (Catatan Print)
           sheet.getRange(foundRow, 30).setValue(timeStr); // Col AD (tgl_print)
+          sheet.getRange(foundRow, 22).setValue(newRiwayat); // Col V (Riwayat Pending)
           sheet.getRange(foundRow, 13).setValue("7_SELESAI");
         }
       }
@@ -1177,20 +1278,43 @@ function getUserDetailsFromPetugasSheet(ss, searchUser) {
   return result;
 }
 
-// Fungsi Pembantu: Cari nomor baris berdasarkan nilai Key & Sub Layanan Spesifik
-function findRowByKeyAndSub(sheet, key, subLayanan) {
+// Fungsi Pembantu: Cari nomor baris berdasarkan nilai Key, Sub Layanan, & Nama Pemohon Spesifik
+function findRowByKeyAndSub(sheet, key, subLayanan, pemohonName) {
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) return -1;
   
   var vals = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
-  if (subLayanan && subLayanan.toString().trim() !== "") {
-    var subClean = subLayanan.toString().trim().toLowerCase();
+  var pemohonClean = pemohonName ? pemohonName.toString().trim().toLowerCase() : "";
+  var subClean = subLayanan ? subLayanan.toString().trim().toLowerCase() : "";
+
+  // 1. Matched by Key + Pemohon + SubLayanan
+  if (pemohonClean && subClean) {
+    for (var i = 0; i < vals.length; i++) {
+      if (vals[i][0].toString() === key && vals[i][4].toString().trim().toLowerCase() === pemohonClean && vals[i][10].toString().trim().toLowerCase() === subClean) {
+        return i + 2;
+      }
+    }
+  }
+
+  // 2. Matched by Key + Pemohon
+  if (pemohonClean) {
+    for (var i = 0; i < vals.length; i++) {
+      if (vals[i][0].toString() === key && vals[i][4].toString().trim().toLowerCase() === pemohonClean) {
+        return i + 2;
+      }
+    }
+  }
+
+  // 3. Matched by Key + SubLayanan
+  if (subClean) {
     for (var i = 0; i < vals.length; i++) {
       if (vals[i][0].toString() === key && vals[i][10].toString().trim().toLowerCase() === subClean) {
         return i + 2;
       }
     }
   }
+
+  // 4. Fallback by Key
   for (var i = 0; i < vals.length; i++) {
     if (vals[i][0].toString() === key) {
       return i + 2;

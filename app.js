@@ -5,9 +5,14 @@
 // Ubah IS_OFFLINE_MODE = false jika perbaikan sudah selesai dan ingin meng-online-kan kembali.
 const IS_OFFLINE_MODE = false; 
 // Mode Keamanan: false = Mengizinkan login akun peran bawaan (operator_dinas, kasie_capil, dsb.) & akun sheet online
-const ENFORCE_STRICT_AUTH = true; 
+const ENFORCE_STRICT_AUTH = false; 
 
-let API_URL = IS_OFFLINE_MODE ? 'local' : 'https://script.google.com/macros/s/AKfycbxcYF0YeOTg106tFjE9rDWT9_hvUXN9Ai8fNzNKUYIJQGtBADqUi8DcAR1BVCGoROX5hg/exec';
+// VERSI ONLINE (GitHub): langsung terhubung ke Google Apps Script (tanpa api.php)
+let defaultApiUrl = 'https://script.google.com/macros/s/AKfycbxcYF0YeOTg106tFjE9rDWT9_hvUXN9Ai8fNzNKUYIJQGtBADqUi8DcAR1BVCGoROX5hg/exec';
+if (window.location.hostname.includes('github.io')) {
+  defaultApiUrl = 'https://script.google.com/macros/s/AKfycbxcYF0YeOTg106tFjE9rDWT9_hvUXN9Ai8fNzNKUYIJQGtBADqUi8DcAR1BVCGoROX5hg/exec';
+}
+let API_URL = IS_OFFLINE_MODE ? 'local' : defaultApiUrl;
 let currentUser = null;
 let allData = [];
 let currentDeskFilter = 'active'; // 'active', 'completed', 'all'
@@ -58,7 +63,21 @@ const appWrapper = document.getElementById('appWrapper');
 const loginForm = document.getElementById('loginForm');
 const loginUsername = document.getElementById('loginUsername');
 const loginPassword = document.getElementById('loginPassword');
+const btnTogglePassword = document.getElementById('btnTogglePassword');
+const loginEyeIcon = document.getElementById('loginEyeIcon');
 const logoutBtn = document.getElementById('logoutBtn');
+
+if (btnTogglePassword && loginPassword) {
+  btnTogglePassword.addEventListener('click', () => {
+    if (loginPassword.type === 'password') {
+      loginPassword.type = 'text';
+      if (loginEyeIcon) loginEyeIcon.textContent = '🙈';
+    } else {
+      loginPassword.type = 'password';
+      if (loginEyeIcon) loginEyeIcon.textContent = '👁️';
+    }
+  });
+}
 
 const navLinks = document.querySelectorAll('.nav-link');
 const menuDashboard = document.getElementById('menuDashboard');
@@ -397,6 +416,21 @@ if (loginForm) {
         } catch (fetchErr) {
           clearTimeout(timeoutId);
           console.warn('Koneksi online Apps Script gagal atau timeout:', fetchErr);
+          const user = findMockUser();
+          if (user) {
+            currentUser = {
+              username: user.username,
+              name: user.name,
+              role: user.role,
+              uptCode: user.uptCode,
+              fasilitasi: user.fasilitasi,
+              sessionToken: 'local_token'
+            };
+            localStorage.setItem('simpel_momen_user', JSON.stringify(currentUser));
+            setupLoggedInUI();
+            showToast(`Selamat datang, ${currentUser.name}! (Mode Sesi Lokal)`, 'warning');
+            return;
+          }
           if (fetchErr.name === 'AbortError' || (fetchErr.message && fetchErr.message.includes('aborted'))) {
             showToast('⏱️ Waktu respons server Apps Script habis (Timeout). Server sedang memproses, silakan coba klik "Masuk ke Sistem" sekali lagi!', 'error');
           } else {
@@ -824,7 +858,12 @@ function renderCounterDesk() {
     const itemJenis = String(item.jenis_layanan || "").trim().toLowerCase();
 
     if (role === 'operator') {
-      return statusAlur === 'PENDING_OPERATOR';
+      // Dokumen pending baru masuk ke counter Operator SETELAH dieksekusi petugas Monitoring
+      // (sudah disampaikan ke masyarakat / operator → info_monitoring terisi pada Kode Unik tersebut)
+      if (statusAlur !== 'PENDING_OPERATOR') return false;
+      return allData.some(d => String(d.key) === String(item.key) &&
+        d.status_alur === 'PENDING_OPERATOR' &&
+        d.info_monitoring && String(d.info_monitoring).trim() !== '');
     } else if (role === 'petugas_scan') {
       if (fasilitasi === 'UPT') return statusAlur === '1_PETUGAS_SCAN';
       return statusAlur === '1_PETUGAS_SCAN' && !itemFas.toLowerCase().includes('upt');
@@ -1518,14 +1557,37 @@ window.openMonitoringNoteModal = function(key, subLayanan) {
   }
 };
 
-// FUNGSI PEMBANTU POST payload KE APPS SCRIPT API (DENGAN DUAL FALLBACK GET BEBAS CORS 100%)
+// FUNGSI PEMBANTU POST payload KE APPS SCRIPT API (UTAMAKAN POST UNTUK PENULISAN GOOGLE SHEETS)
 async function postToApi(payload) {
-  if (!API_URL || useLocalSim) {
+  if (!API_URL || API_URL === 'local') {
     console.log('postToApi running in local simulation mode:', payload);
     return { status: 'success', local: true };
   }
 
-  // 1. Coba kirim via HTTP GET dengan QueryParams (Tembus CORS 100% Instan < 500ms pada GitHub Pages)
+  // 1. Utama: Kirim via HTTP POST (Wajib untuk penulisan/update data ke Google Sheets)
+  try {
+    const fetchPromise = fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    }).then(res => res.json());
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('TIMEOUT')), 15000);
+    });
+
+    const res = await Promise.race([fetchPromise, timeoutPromise]);
+    if (res && res.status === 'success') {
+      return res;
+    } else if (res) {
+      console.warn('postToApi POST returned response:', res);
+      return res;
+    }
+  } catch (err) {
+    console.warn('postToApi POST failed, attempting GET fallback:', err);
+  }
+
+  // 2. Cadangan: Kirim via HTTP GET dengan QueryParams jika POST diblokir CORS browser
   try {
     const queryParams = new URLSearchParams();
     for (const k in payload) {
@@ -1535,33 +1597,15 @@ async function postToApi(payload) {
     }
     const getUrl = `${API_URL}?${queryParams.toString()}`;
     const getRes = await fetch(getUrl, { cache: 'no-store' }).then(r => r.json());
-    if (getRes && (getRes.status === 'success' || getRes.status === 'error')) {
+    // Abaikan jika respon GET hanya mengembalikan data array pembacaan sheet
+    if (getRes && getRes.status === 'success' && !Array.isArray(getRes.data)) {
       return getRes;
     }
   } catch (getErr) {
-    console.warn('postToApi GET request via URL params failed, attempting POST fallback:', getErr);
+    console.error('postToApi GET fallback failed:', getErr);
   }
 
-  // 2. Coba kirim via HTTP POST sebagai cadangan
-  try {
-    const fetchPromise = fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    }).then(res => res.json());
-
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('TIMEOUT')), 2000);
-    });
-
-    const res = await Promise.race([fetchPromise, timeoutPromise]);
-    if (res && res.status === 'success') {
-      return res;
-    }
-  } catch (err) {
-    console.error('postToApi POST fallback failed:', err);
-    return { status: 'error', message: err.toString() };
-  }
+  return { status: 'error', message: 'Gagal memperbarui database Google Sheets' };
 }
 
 window.closeMonitoringNoteModal = function() {
@@ -1623,6 +1667,12 @@ window.saveMonitoringNote = async function() {
   }
 
   try {
+    const execUserTag = currentUser
+      ? (currentUser.name && currentUser.username && currentUser.name.toLowerCase() !== currentUser.username.toLowerCase()
+          ? `${currentUser.name} (@${currentUser.username})`
+          : (currentUser.name || currentUser.username))
+      : 'Monitoring';
+
     // 1. Wajib tunggu respon simpan dari Google Sheets backend lebih dulu agar 100% terekam
     const backendRes = await postToApi({
       action: 'monitoring_note',
@@ -1632,7 +1682,7 @@ window.saveMonitoringNote = async function() {
       catatan_monitoring: (infoTarget === 'PEMOHON') ? catatanPemohon : '',
       metode_monitoring: (infoTarget === 'PEMOHON') ? metodeVal : '',
       target_operator: (infoTarget === 'OPERATOR') ? targetOperatorVal : '',
-      user_name: currentUser ? (currentUser.name || currentUser.username) : 'Monitoring'
+      user_name: execUserTag
     });
 
     if (backendRes && backendRes.status === 'success') {
@@ -1651,6 +1701,8 @@ window.saveMonitoringNote = async function() {
       item.catatan_monitoring = (infoTarget === 'PEMOHON') ? catatanPemohon : '';
       item.metode_monitoring = (infoTarget === 'PEMOHON') ? metodeVal : '';
       item.target_operator = (infoTarget === 'OPERATOR') ? targetOperatorVal : '';
+      item.petugas_monitoring = execUserTag;
+      item.tgl_monitoring = getLocalDateTimeString();
     }
 
     // 3. Trigger pengiriman WA via Fonnte Client API
@@ -1999,21 +2051,151 @@ window.exportMonitoringToPDF = function() {
   }
 };
 
+// Helper mendeteksi apakah suatu nama hanyalah sebutan role umum (bukan nama personal spesifik)
+function isGenericTitle(str) {
+  if (!str) return true;
+  const s = String(str).toLowerCase().trim().replace(/[\s_-]+/g, ' ');
+  const generics = [
+    'operator', 'operator dinas', 'operator upt', 'operator upt 01', 'operator upt 1',
+    'petugas scan', 'petugas scan dinas', 'petugas scan upt', 'petugas scan upt 01', 'scan dinas',
+    'kasie', 'kasie dafduk', 'kasie capil', 'kepala seksi',
+    'kabid', 'kabid dafduk', 'kabid capil', 'kepala bidang',
+    'kadis', 'kepala dinas',
+    'kepala upt', 'kepala upt 01', 'kepala upt 1', 'ka upt', 'kaupt',
+    'petugas tte', 'tte', 'tte dinas',
+    'petugas cetak', 'petugas cetak dinas', 'petugas cetak upt', 'petugas cetak upt 01', 'petugas pencetakan', 'print dinas',
+    'monitoring', 'admin', 'pengawas', 'petugas'
+  ];
+  return generics.includes(s);
+}
+
 // Function Cek Apakah Berkas Pernah Dieksekusi / Dibuat Oleh Username / User Ini
 function isItemExecutedByUser(item, user) {
   if (!user || !item) return false;
   const nameStr = (user.name || "").toLowerCase().trim();
   const unameStr = (user.username || "").toLowerCase().trim();
+  const userRole = (user.role || "").toLowerCase().trim();
 
-  if (!nameStr && !unameStr) return false;
+  if (!nameStr && !unameStr && !userRole) return false;
 
   const isMatch = (val) => {
     if (!val) return false;
     const s = String(val).toLowerCase().trim();
-    return (nameStr && s.includes(nameStr)) || (unameStr && s.includes(unameStr));
+    // 1. Cocokkan username unik (paling presisi)
+    if (unameStr && s.includes(unameStr)) return true;
+    // 2. Cocokkan nama lengkap jika BUKAN sebutan role umum (contoh: "Davidson Djarang")
+    if (nameStr && !isGenericTitle(nameStr) && s.includes(nameStr)) return true;
+    return false;
   };
 
-  // Cek apakah user spesifik ini tercatat pada salah satu properti eksekusi/input/note
+  // Helper cek apakah suatu catatan memiliki tag eksekutor spesifik: [Eksekutor: ...]
+  const hasOtherExecutor = (val) => {
+    if (!val) return false;
+    const m = String(val).match(/\[Eksekutor:\s*([^\]]+)\]/i);
+    if (!m) return false;
+    const tag = m[1].toLowerCase().trim();
+    const isThisUser = (unameStr && tag.includes(unameStr)) ||
+                       (nameStr && !isGenericTitle(nameStr) && tag.includes(nameStr));
+    return !isThisUser;
+  };
+
+  // 1. OPERATOR:
+  if (userRole === 'operator') {
+    if (isMatch(item.operator) || isMatch(item.target_operator) || isMatch(item.riwayat_pending)) return true;
+    const opVal = String(item.operator || '').toLowerCase().trim();
+    if (opVal.includes('upt') && (unameStr === 'operator_upt1' || unameStr === 'operatorupt1')) return true;
+    if (!opVal.includes('upt') && (unameStr === 'operator_dinas' || unameStr === 'operatordinas')) return true;
+    return false;
+  }
+
+  // 2. PETUGAS TTE:
+  if (userRole === 'petugas_tte') {
+    if (isMatch(item.petugas_tte) || isMatch(item.eksekutor_tte) || isMatch(item.catatan_tte) || isMatch(item.riwayat_pending)) return true;
+    if (hasOtherExecutor(item.catatan_tte)) return false;
+    // Data legacy TTE (hanya diakui untuk akun tte utama/asli):
+    if (Boolean(item.tgl_tte) && (unameStr === 'tte_dinas' || unameStr === 'ttedinas' || unameStr === 'petugas_tte')) return true;
+    return false;
+  }
+
+  // 3. KEPALA DINAS (KADIS):
+  if (userRole === 'kadis') {
+    if (isMatch(item.catatan_kadis) || isMatch(item.eksekutor_kadis) || isMatch(item.kadis) || isMatch(item.riwayat_pending)) return true;
+    if (hasOtherExecutor(item.catatan_kadis)) return false;
+    // Data legacy (tanpa tag eksekutor user lain): diakui untuk Kadis aktif utama (dije / Davidson Djarang)
+    if (Boolean(item.tgl_kadis) && (unameStr === 'dije' || nameStr.includes('davidson'))) return true;
+    return false;
+  }
+
+  // 4. KEPALA BIDANG (KABID CAPIL & KABID DAFDUK):
+  if (userRole === 'kabid_capil') {
+    if (isMatch(item.catatan_kabid) || isMatch(item.eksekutor_kabid) || isMatch(item.riwayat_pending)) return true;
+    if (hasOtherExecutor(item.catatan_kabid)) return false;
+    const isCapil = String(item.jenis_layanan || '').toLowerCase().includes('capil') || String(item.jenis_layanan || '').toLowerCase().includes('pencatatan sipil');
+    if (isCapil && Boolean(item.tgl_kabid) && (unameStr === 'kabid_capil' || unameStr === 'kabidcapil')) return true;
+    return false;
+  }
+  if (userRole === 'kabid_dafduk') {
+    if (isMatch(item.catatan_kabid) || isMatch(item.eksekutor_kabid) || isMatch(item.riwayat_pending)) return true;
+    if (hasOtherExecutor(item.catatan_kabid)) return false;
+    const isDafduk = String(item.jenis_layanan || '').toLowerCase().includes('pendaftaran') || String(item.jenis_layanan || '').toLowerCase().includes('dafduk');
+    if (isDafduk && Boolean(item.tgl_kabid) && (unameStr === 'kabid_dafduk' || unameStr === 'kabiddafduk')) return true;
+    return false;
+  }
+
+  // 5. KEPALA SEKSI (KASIE CAPIL & KASIE DAFDUK):
+  if (userRole === 'kasie_capil') {
+    if (isMatch(item.catatan_kasie) || isMatch(item.eksekutor_kasie) || isMatch(item.riwayat_pending)) return true;
+    if (hasOtherExecutor(item.catatan_kasie)) return false;
+    const isCapil = String(item.jenis_layanan || '').toLowerCase().includes('capil') || String(item.jenis_layanan || '').toLowerCase().includes('pencatatan sipil');
+    if (isCapil && Boolean(item.tgl_kasie) && (unameStr === 'kasie_capil' || unameStr === 'kasiecapil')) return true;
+    return false;
+  }
+  if (userRole === 'kasie_dafduk') {
+    if (isMatch(item.catatan_kasie) || isMatch(item.eksekutor_kasie) || isMatch(item.riwayat_pending)) return true;
+    if (hasOtherExecutor(item.catatan_kasie)) return false;
+    const isDafduk = String(item.jenis_layanan || '').toLowerCase().includes('pendaftaran') || String(item.jenis_layanan || '').toLowerCase().includes('dafduk');
+    if (isDafduk && Boolean(item.tgl_kasie) && (unameStr === 'kasie_dafduk' || unameStr === 'kasiedafduk')) return true;
+    return false;
+  }
+
+  // 6. KEPALA UPT:
+  if (userRole === 'kepala_upt') {
+    if (isMatch(item.catatan_upt) || isMatch(item.eksekutor_upt) || isMatch(item.riwayat_pending)) return true;
+    if (hasOtherExecutor(item.catatan_upt)) return false;
+    if (Boolean(item.tgl_upt) && matchItemToUserUpt(item, user) && (unameStr === 'kepala_upt1' || unameStr === 'kepalaupt1' || unameStr === 'kepala_upt')) return true;
+    return false;
+  }
+
+  // 7. PETUGAS SCAN:
+  if (userRole === 'petugas_scan') {
+    if (isMatch(item.catatan_scan) || isMatch(item.petugas_scan) || isMatch(item.eksekutor_scan) || isMatch(item.riwayat_pending)) return true;
+    if (hasOtherExecutor(item.catatan_scan)) return false;
+    if (Boolean(item.tgl_scan)) {
+      if (isUserUpt(user) && (unameStr === 'scan_upt1' || unameStr === 'scanupt1') && matchItemToUserUpt(item, user)) return true;
+      if (!isUserUpt(user) && (unameStr === 'scan_dinas' || unameStr === 'scandinas')) return true;
+    }
+    return false;
+  }
+
+  // 8. PETUGAS PENCETAKAN:
+  if (userRole === 'petugas_pencetakan') {
+    if (isMatch(item.catatan_print) || isMatch(item.petugas_cetak) || isMatch(item.eksekutor_cetak) || isMatch(item.penerima) || isMatch(item.riwayat_pending)) return true;
+    if (hasOtherExecutor(item.catatan_print)) return false;
+    if (Boolean(item.tgl_print)) {
+      if (isUserUpt(user) && (unameStr === 'print_upt1' || unameStr === 'printupt1') && matchItemToUserUpt(item, user)) return true;
+      if (!isUserUpt(user) && (unameStr === 'print_dinas' || unameStr === 'printdinas')) return true;
+    }
+    return false;
+  }
+
+  // 9. PETUGAS MONITORING:
+  if (userRole === 'monitoring') {
+    if (isMatch(item.petugas_monitoring) || isMatch(item.catatan_monitoring)) return true;
+    if (hasOtherExecutor(item.petugas_monitoring) || hasOtherExecutor(item.catatan_monitoring)) return false;
+    return false;
+  }
+
+  // Default fallback:
   return isMatch(item.operator) ||
          isMatch(item.target_operator) ||
          isMatch(item.petugas_scan) ||
@@ -2077,6 +2259,7 @@ function getItemUserExecutionDate(item, user) {
   if (role === 'kadis') return item.tgl_kadis || item.tgl_kabid || item.tanggal;
   if (role === 'petugas_tte') return item.tgl_tte || item.tanggal;
   if (role === 'petugas_pencetakan') return item.tgl_print || item.tanggal;
+  if (role === 'monitoring') return item.tgl_monitoring || item.tanggal || item.tgl_operator;
   return item.tanggal || item.tgl_operator;
 }
 
@@ -2485,6 +2668,19 @@ const rekapDateEndEl = document.getElementById('rekapDateEnd');
 if (rekapDateStartEl) rekapDateStartEl.addEventListener('change', renderRekapitulasi);
 if (rekapDateEndEl) rekapDateEndEl.addEventListener('change', renderRekapitulasi);
 
+function formatNoteWithBadge(rawNote) {
+  if (!rawNote || String(rawNote).trim() === '' || String(rawNote).trim() === '-') return '-';
+  const str = String(rawNote).trim();
+  const match = str.match(/\[Eksekutor:\s*([^\]]+)\]/i);
+  if (match) {
+    const cleanNote = str.replace(/\[Eksekutor:\s*([^\]]+)\]/i, '').trim();
+    const executorName = match[1].trim();
+    const badgeHtml = `<span style="display:inline-block; margin-left:4px; font-size:0.75rem; color:#93c5fd; background:rgba(59,130,246,0.2); padding:1px 7px; border-radius:6px; font-weight:600; vertical-align:middle;">👤 ${escapeHTML(executorName)}</span>`;
+    return cleanNote ? `${escapeHTML(cleanNote)} ${badgeHtml}` : badgeHtml;
+  }
+  return escapeHTML(str);
+}
+
 // MODAL READ-ONLY DETAIL DOKUMEN (INFORMASI TANPA EKSEKUSI)
 window.openReadOnlyDetailModal = function(key) {
   const item = allData.find(d => String(d.key) === String(key));
@@ -2557,13 +2753,13 @@ window.openReadOnlyDetailModal = function(key) {
       <!-- BOX CATATAN JEJAK MEJA TIAP VERIFIKATOR -->
       <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 14px;">
         <div style="font-weight: 700; color: #34d399; font-size: 0.85rem; margin-bottom: 8px;">📋 CATATAN REKAM JEJAK MEJA</div>
-        <div>• <strong>Catatan Scan:</strong> ${escapeHTML(item.catatan_scan || '-')} <small style="color:var(--text-muted);">${item.tgl_scan ? `(${item.tgl_scan})` : ''}</small></div>
-        <div>• <strong>Catatan Kasie / Seksi:</strong> ${escapeHTML(item.catatan_kasie || '-')} <small style="color:var(--text-muted);">${item.tgl_kasie ? `(${item.tgl_kasie})` : ''}</small></div>
-        <div>• <strong>Catatan Kepala UPT:</strong> ${escapeHTML(item.catatan_upt || '-')} <small style="color:var(--text-muted);">${item.tgl_upt ? `(${item.tgl_upt})` : ''}</small></div>
-        <div>• <strong>Catatan Kabid:</strong> ${escapeHTML(item.catatan_kabid || '-')} <small style="color:var(--text-muted);">${item.tgl_kabid ? `(${item.tgl_kabid})` : ''}</small></div>
-        <div>• <strong>Catatan Kadis:</strong> ${escapeHTML(item.catatan_kadis || '-')} <small style="color:var(--text-muted);">${item.tgl_kadis ? `(${item.tgl_kadis})` : ''}</small></div>
+        <div>• <strong>Catatan Scan:</strong> ${formatNoteWithBadge(item.catatan_scan)} <small style="color:var(--text-muted);">${item.tgl_scan ? `(${item.tgl_scan})` : ''}</small></div>
+        <div>• <strong>Catatan Kasie / Seksi:</strong> ${formatNoteWithBadge(item.catatan_kasie)} <small style="color:var(--text-muted);">${item.tgl_kasie ? `(${item.tgl_kasie})` : ''}</small></div>
+        <div>• <strong>Catatan Kepala UPT:</strong> ${formatNoteWithBadge(item.catatan_upt)} <small style="color:var(--text-muted);">${item.tgl_upt ? `(${item.tgl_upt})` : ''}</small></div>
+        <div>• <strong>Catatan Kabid:</strong> ${formatNoteWithBadge(item.catatan_kabid)} <small style="color:var(--text-muted);">${item.tgl_kabid ? `(${item.tgl_kabid})` : ''}</small></div>
+        <div>• <strong>Catatan Kadis:</strong> ${formatNoteWithBadge(item.catatan_kadis)} <small style="color:var(--text-muted);">${item.tgl_kadis ? `(${item.tgl_kadis})` : ''}</small></div>
         <div>• <strong>Status TTE:</strong> ${escapeHTML(item.status_tte || '-')} <small style="color:var(--text-muted);">${item.tgl_tte ? `(${item.tgl_tte})` : ''}</small></div>
-        <div>• <strong>Penerima & Catatan Print:</strong> ${escapeHTML(item.penerima ? `${item.penerima} (${item.catatan_print || ''})` : '-')} <small style="color:var(--text-muted);">${item.tgl_print ? `(${item.tgl_print})` : ''}</small></div>
+        <div>• <strong>Penerima & Catatan Print:</strong> ${escapeHTML(item.penerima ? `${item.penerima} (${formatNoteWithBadge(item.catatan_print)})` : '-')} <small style="color:var(--text-muted);">${item.tgl_print ? `(${item.tgl_print})` : ''}</small></div>
       </div>
     `;
   }
@@ -2706,13 +2902,13 @@ window.openActionModal = function(key, subLayanan) {
 
       <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 14px;">
         <div style="font-weight: 700; color: #34d399; font-size: 0.85rem; margin-bottom: 8px;">📋 CATATAN REKAM JEJAK MEJA</div>
-        <div>• <strong>Catatan Scan:</strong> ${escapeHTML(item.catatan_scan || '-')} <small style="color:var(--text-muted);">${item.tgl_scan ? `(${item.tgl_scan})` : ''}</small></div>
-        <div>• <strong>Catatan Kasie / Seksi:</strong> ${escapeHTML(item.catatan_kasie || '-')} <small style="color:var(--text-muted);">${item.tgl_kasie ? `(${item.tgl_kasie})` : ''}</small></div>
-        <div>• <strong>Catatan Kepala UPT:</strong> ${escapeHTML(item.catatan_upt || '-')} <small style="color:var(--text-muted);">${item.tgl_upt ? `(${item.tgl_upt})` : ''}</small></div>
-        <div>• <strong>Catatan Kabid:</strong> ${escapeHTML(item.catatan_kabid || '-')} <small style="color:var(--text-muted);">${item.tgl_kabid ? `(${item.tgl_kabid})` : ''}</small></div>
-        <div>• <strong>Catatan Kadis:</strong> ${escapeHTML(item.catatan_kadis || '-')} <small style="color:var(--text-muted);">${item.tgl_kadis ? `(${item.tgl_kadis})` : ''}</small></div>
+        <div>• <strong>Catatan Scan:</strong> ${formatNoteWithBadge(item.catatan_scan)} <small style="color:var(--text-muted);">${item.tgl_scan ? `(${item.tgl_scan})` : ''}</small></div>
+        <div>• <strong>Catatan Kasie / Seksi:</strong> ${formatNoteWithBadge(item.catatan_kasie)} <small style="color:var(--text-muted);">${item.tgl_kasie ? `(${item.tgl_kasie})` : ''}</small></div>
+        <div>• <strong>Catatan Kepala UPT:</strong> ${formatNoteWithBadge(item.catatan_upt)} <small style="color:var(--text-muted);">${item.tgl_upt ? `(${item.tgl_upt})` : ''}</small></div>
+        <div>• <strong>Catatan Kabid:</strong> ${formatNoteWithBadge(item.catatan_kabid)} <small style="color:var(--text-muted);">${item.tgl_kabid ? `(${item.tgl_kabid})` : ''}</small></div>
+        <div>• <strong>Catatan Kadis:</strong> ${formatNoteWithBadge(item.catatan_kadis)} <small style="color:var(--text-muted);">${item.tgl_kadis ? `(${item.tgl_kadis})` : ''}</small></div>
         <div>• <strong>Status TTE:</strong> ${escapeHTML(item.status_tte || '-')} <small style="color:var(--text-muted);">${item.tgl_tte ? `(${item.tgl_tte})` : ''}</small></div>
-        <div>• <strong>Penerima & Catatan Print:</strong> ${escapeHTML(item.penerima ? `${item.penerima} (${item.catatan_print || ''})` : '-')} <small style="color:var(--text-muted);">${item.tgl_print ? `(${item.tgl_print})` : ''}</small></div>
+        <div>• <strong>Penerima & Catatan Print:</strong> ${escapeHTML(item.penerima ? `${item.penerima} (${formatNoteWithBadge(item.catatan_print)})` : '-')} <small style="color:var(--text-muted);">${item.tgl_print ? `(${item.tgl_print})` : ''}</small></div>
       </div>
     `;
   }
@@ -2856,6 +3052,21 @@ if (actionForm) {
     const submitBtn = actionForm.querySelector('button[type="submit"]');
     if (submitBtn) submitBtn.disabled = true;
 
+    // 🎯 Sematkan Identitas Eksekutor Resmi [Eksekutor: Nama (@username)] pada Catatan agar terekam ke Google Sheets
+    const execTag = currentUser
+      ? (currentUser.name && currentUser.name.toLowerCase() !== currentUser.username.toLowerCase()
+          ? `${currentUser.name} (@${currentUser.username})`
+          : (currentUser.name || currentUser.username))
+      : 'Petugas';
+    const execUserName = currentUser ? (currentUser.username || currentUser.name) : 'Petugas';
+    let signedNotes = notes;
+    const signatureTag = `[Eksekutor: ${execTag}]`;
+    if (!signedNotes) {
+      signedNotes = signatureTag;
+    } else if (!signedNotes.includes(currentUser.username) && !signedNotes.includes(signatureTag)) {
+      signedNotes = `${signedNotes} ${signatureTag}`;
+    }
+
     try {
       if (API_URL === 'local') {
         const timeStr = getLocalDateTimeString();
@@ -2874,7 +3085,8 @@ if (actionForm) {
           allData.forEach(item => {
             if (String(item.key) === String(key)) {
               item.link_file = linkFileVal;
-              item.catatan_scan = notes;
+              item.catatan_scan = signedNotes;
+              item.eksekutor_scan = execUserName;
               item.tgl_scan = timeStr;
               item.status_alur = targetNextStatus;
               updatedCount++;
@@ -2884,40 +3096,61 @@ if (actionForm) {
           const detailStr = updatedCount > 1 ? `${updatedCount} dokumen terintegrasi (1 Mandatori + ${followerCount} Dokumen Pengikut)` : 'dokumen';
           showToast(`🎉 Berhasil! Link PDF scan pada dokumen mandatori telah mewakili & terisi untuk ${detailStr} (Kode Unik: ${key}) & seluruhnya terkirim ke Meja ${targetDestName}. Tugas scan Anda selesai dengan baik!`, 'success');
         } else if (currentUser.role === 'petugas_tte') {
-          let targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal));
-          if (!targetItem) targetItem = sampleItem;
-          if (targetItem) {
-            targetItem.status_tte = statusTteVal;
-            targetItem.tgl_tte = timeStr;
-            const isUptTarget = String(targetItem.fasilitasi || '').toLowerCase().includes('upt');
-            const isPendaftaran = String(targetItem.jenis_layanan || '').toLowerCase().includes('pendaftaran');
-            let nextStatusTte = isUptTarget ? '6_PENCETAKAN_UPT' : '6_PENCETAKAN_DINAS';
-            if (statusTteVal === 'Belum diajukan SIAK') {
-              nextStatusTte = (isUptTarget && isPendaftaran) ? '2_VERIFIKASI_UPT' : '2_VERIFIKASI_KASIE';
-            } else if (statusTteVal === 'Belum Verifikasi SIAK') {
-              nextStatusTte = '3_VALIDASI_KABID';
+          let updatedCount = 0;
+          allData.forEach(item => {
+            if (String(item.key) === String(key)) {
+              item.status_tte = statusTteVal;
+              item.tgl_tte = timeStr;
+              item.petugas_tte = execUserName;
+              item.eksekutor_tte = execUserName;
+              item.catatan_tte = signedNotes;
+              const isUptTarget = String(item.fasilitasi || '').toLowerCase().includes('upt');
+              const isPendaftaran = String(item.jenis_layanan || '').toLowerCase().includes('pendaftaran');
+              let nextStatusTte = isUptTarget ? '6_PENCETAKAN_UPT' : '6_PENCETAKAN_DINAS';
+              if (statusTteVal === 'Belum diajukan SIAK') {
+                nextStatusTte = (isUptTarget && isPendaftaran) ? '2_VERIFIKASI_UPT' : '2_VERIFIKASI_KASIE';
+                const logMsg = `BELUM DIAJUKAN SIAK by ${execUserName} pada ${timeStr}: ${signedNotes || 'Belum diajukan SIAK'}`;
+                item.riwayat_pending = item.riwayat_pending ? `${logMsg}\n---\n${item.riwayat_pending}` : logMsg;
+              } else if (statusTteVal === 'Belum Verifikasi SIAK') {
+                nextStatusTte = '3_VALIDASI_KABID';
+                const logMsg = `BELUM VERIFIKASI SIAK by ${execUserName} pada ${timeStr}: ${signedNotes || 'Belum Verifikasi SIAK'}`;
+                item.riwayat_pending = item.riwayat_pending ? `${logMsg}\n---\n${item.riwayat_pending}` : logMsg;
+              } else {
+                const logMsg = `TTE STATUS (${statusTteVal}) by ${execUserName} pada ${timeStr}: ${signedNotes}`;
+                item.riwayat_pending = item.riwayat_pending ? `${logMsg}\n---\n${item.riwayat_pending}` : logMsg;
+              }
+              item.status_alur = nextStatusTte;
+              updatedCount++;
             }
-            targetItem.status_alur = nextStatusTte;
-          }
-          showToast(`🎉 Berhasil! Status TTE dokumen ${escapeHTML(targetItem.sub_layanan)} (${escapeHTML(targetItem.pemohon || '-')}) telah diperbarui!`, 'success');
+          });
+          const detailStr = updatedCount > 1 ? `${updatedCount} dokumen terintegrasi (Kode Unik: ${key})` : `dokumen (Kode Unik: ${key})`;
+          showToast(`🎉 Berhasil! Status TTE untuk ${detailStr} telah diperbarui & terkirim ke meja selanjutnya!`, 'success');
         } else if (executeAction === 'pending') {
           // PENDING ALL
           let updatedCount = 0;
           allData.forEach(item => {
             if (String(item.key) === String(key)) {
               item.status_alur = 'PENDING_OPERATOR';
-              item.riwayat_pending = `PENDING by ${currentUser.role} pada ${timeStr}: ${notes}\n${item.riwayat_pending || ''}`;
+              // Pending baru diarahkan dulu ke counter Monitoring (reset status info monitoring sebelumnya)
+              item.info_monitoring = '';
+              item.catatan_monitoring = '';
+              item.target_operator = '';
+              item.riwayat_pending = `PENDING by ${execUserName} (${currentUser.role}) pada ${timeStr}: ${notes}\n${item.riwayat_pending || ''}`;
               if (currentUser.role === 'kasie_capil' || currentUser.role === 'kasie_dafduk') {
-                item.catatan_kasie = notes;
+                item.catatan_kasie = signedNotes;
+                item.eksekutor_kasie = execUserName;
                 item.tgl_kasie = timeStr;
               } else if (currentUser.role === 'kepala_upt') {
-                item.catatan_upt = notes;
+                item.catatan_upt = signedNotes;
+                item.eksekutor_upt = execUserName;
                 item.tgl_upt = timeStr;
               } else if (currentUser.role === 'kabid_capil' || currentUser.role === 'kabid_dafduk') {
-                item.catatan_kabid = notes;
+                item.catatan_kabid = signedNotes;
+                item.eksekutor_kabid = execUserName;
                 item.tgl_kabid = timeStr;
               } else if (currentUser.role === 'kadis') {
-                item.catatan_kadis = notes;
+                item.catatan_kadis = signedNotes;
+                item.eksekutor_kadis = execUserName;
                 item.tgl_kadis = timeStr;
               }
               updatedCount++;
@@ -2929,7 +3162,8 @@ if (actionForm) {
           if (currentUser.role === 'kasie_capil') {
             if (sampleItem) {
               sampleItem.status_alur = '3_VALIDASI_KABID';
-              sampleItem.catatan_kasie = notes;
+              sampleItem.catatan_kasie = signedNotes;
+              sampleItem.eksekutor_kasie = execUserName;
               sampleItem.tgl_kasie = timeStr;
             }
             showToast(`🎉 Berhasil! Dokumen Pencatatan Sipil (Kode Unik: ${key}) diverifikasi & diteruskan ke Kabid Capil. Dokumen Pendaftaran Penduduk sekarang aktif di Meja Kasie Dafduk untuk diproses selanjutnya!`, 'success');
@@ -2940,7 +3174,8 @@ if (actionForm) {
                 const jl = String(item.jenis_layanan || '').toLowerCase();
                 if (jl.includes('dafduk') || jl.includes('pendaftaran')) {
                   item.status_alur = '3_VALIDASI_KABID';
-                  item.catatan_kasie = notes;
+                  item.catatan_kasie = signedNotes;
+                  item.eksekutor_kasie = execUserName;
                   item.tgl_kasie = timeStr;
                   updatedDafdukCount++;
                 }
@@ -2957,7 +3192,8 @@ if (actionForm) {
                     targetNextStatus = '5_TTE';
                   }
                   item.status_alur = targetNextStatus;
-                  item.catatan_kabid = notes;
+                  item.catatan_kabid = signedNotes;
+                  item.eksekutor_kabid = execUserName;
                   item.tgl_kabid = timeStr;
                 }
               }
@@ -2974,7 +3210,8 @@ if (actionForm) {
                     targetNextStatus = '5_TTE';
                   }
                   item.status_alur = targetNextStatus;
-                  item.catatan_kabid = notes;
+                  item.catatan_kabid = signedNotes;
+                  item.eksekutor_kabid = execUserName;
                   item.tgl_kabid = timeStr;
                   updatedDafdukCount++;
                 }
@@ -2987,7 +3224,8 @@ if (actionForm) {
             allData.forEach(item => {
               if (String(item.key) === String(key)) {
                 item.status_alur = '5_TTE';
-                item.catatan_kadis = notes;
+                item.catatan_kadis = signedNotes;
+                item.eksekutor_kadis = execUserName;
                 item.tgl_kadis = timeStr;
                 updatedCount++;
               }
@@ -2998,7 +3236,8 @@ if (actionForm) {
             if (isDafdukCapil) {
               allData.forEach(item => {
                 if (String(item.key) === String(key)) {
-                  item.catatan_upt = notes;
+                  item.catatan_upt = signedNotes;
+                  item.eksekutor_upt = execUserName;
                   item.tgl_upt = timeStr;
                   const isCapil = String(item.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(item.jenis_layanan).toLowerCase().includes('capil');
                   if (isCapil) {
@@ -3013,7 +3252,8 @@ if (actionForm) {
               allData.forEach(item => {
                 if (String(item.key) === String(key)) {
                   item.status_alur = '3_VALIDASI_KABID';
-                  item.catatan_upt = notes;
+                  item.catatan_upt = signedNotes;
+                  item.eksekutor_upt = execUserName;
                   item.tgl_upt = timeStr;
                 }
               });
@@ -3022,7 +3262,8 @@ if (actionForm) {
               if (sampleItem) {
                 const isCapil = String(sampleItem.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(sampleItem.jenis_layanan).toLowerCase().includes('capil');
                 sampleItem.status_alur = isCapil ? '6_PENCETAKAN_UPT' : '3_VALIDASI_KABID';
-                sampleItem.catatan_upt = notes;
+                sampleItem.catatan_upt = signedNotes;
+                sampleItem.eksekutor_upt = execUserName;
                 sampleItem.tgl_upt = timeStr;
               }
               showToast(`🎉 Berhasil! Dokumen (Kode Unik: ${key}) diverifikasi & diteruskan!`, 'success');
@@ -3033,6 +3274,7 @@ if (actionForm) {
               if (String(item.key) === String(key)) {
                 item.status_alur = '1_PETUGAS_SCAN';
                 item.tgl_operator = timeStr;
+                item.operator = execUserName;
                 if (notes) {
                   item.riwayat_pending = `PERBAIKAN OPERATOR pada ${timeStr}: ${notes}\n${item.riwayat_pending || ''}`;
                 }
@@ -3045,7 +3287,8 @@ if (actionForm) {
             if (!targetItem) targetItem = sampleItem;
             if (targetItem) {
               targetItem.penerima = penerimaVal;
-              targetItem.catatan_print = notes;
+              targetItem.catatan_print = signedNotes;
+              targetItem.eksekutor_cetak = execUserName;
               targetItem.tgl_print = timeStr;
               targetItem.status_alur = '7_SELESAI';
             }
@@ -3068,10 +3311,11 @@ if (actionForm) {
             action: 'update',
             key: key,
             sub_layanan: subLayananVal,
+            pemohon: modalPemohonText ? modalPemohonText.textContent.trim() : '',
             role: currentUser.role,
-            userName: currentUser.name,
+            userName: execTag,
             executeAction: executeAction,
-            notes: notes,
+            notes: signedNotes,
             status_tte: statusTteVal,
             penerima: penerimaVal,
             link_file: linkFileVal
@@ -3401,8 +3645,12 @@ async function handleOperatorFormSubmit(e) {
     key: sharedKey,
     tanggal: currentSystemTime.slice(0, 10),
     fasilitasi: currentUser ? (isUserUpt(currentUser) ? (currentUser.uptCode || currentUser.fasilitasi || 'UPT') : 'Dinas') : 'Dinas',
-    operator: currentUser ? currentUser.name || currentUser.username : 'Operator',
-    userName: currentUser ? currentUser.name || currentUser.username : 'Operator',
+    operator: currentUser
+      ? (currentUser.name && currentUser.name.toLowerCase() !== currentUser.username.toLowerCase()
+          ? `${currentUser.name} (@${currentUser.username})`
+          : (currentUser.name || currentUser.username))
+      : 'Operator',
+    userName: currentUser ? (currentUser.username || currentUser.name) : 'Operator',
     pemohon: item.pemohon.trim(),
     alamat: item.alamat ? item.alamat.trim() : '',
     no_hp: item.no_hp.trim(),

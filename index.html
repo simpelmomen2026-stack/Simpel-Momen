@@ -10,37 +10,63 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=20260915_0945">
+  <link rel="stylesheet" href="style.css?v=20261017_v3">
 </head>
 <body>
 
-  <!-- ================= LAYOUT 1: HALAMAN LOGIN ================= -->
+  <!-- ================= LAYOUT 1: HALAMAN LOGIN PRO BLUE ================= -->
   <div class="login-wrapper" id="loginWrapper">
+    <!-- Ambient Blue Glow Orbs -->
+    <div class="login-bg-glow-1"></div>
+    <div class="login-bg-glow-2"></div>
+    <div class="login-bg-grid"></div>
+
     <div class="login-card">
       <div class="login-brand">
         <div class="brand-logo-container">
-          <img src="logo.png" class="brand-logo-img login-logo" alt="Logo Dukcapil">
+          <img src="logo-transparent.png" class="brand-logo-img login-logo" alt="Logo Dukcapil Sangihe">
         </div>
         <h2>Simpel Momen</h2>
-        <p>Sistem Informasi Pelayanan & Monitoring Dokumen Dukcapil</p>
+        <p>Sistem Informasi Pelayanan & Monitoring Dokumen Terintegrasi Berjenjang</p>
       </div>
       
       <form id="loginForm">
         <div class="form-group">
-          <label for="loginUsername">Nama Pengguna (Username) *</label>
-          <input type="text" id="loginUsername" placeholder="Masukkan username Anda..." required style="width:100%; padding:12px; background:var(--bg-input); border:1px solid var(--border-color); border-radius:var(--radius-md); color:#fff; font-size:0.9rem;">
+          <label for="loginUsername">
+            <span>Nama Pengguna (Username) *</span>
+          </label>
+          <div class="login-input-wrapper">
+            <span class="login-input-icon">👤</span>
+            <input type="text" id="loginUsername" placeholder="Masukkan username Anda..." required autocomplete="username">
+          </div>
         </div>
         
         <div class="form-group">
-          <label for="loginPassword">Kata Sandi (Password) *</label>
-          <input type="password" id="loginPassword" placeholder="Masukkan kata sandi..." required style="width:100%; padding:12px; background:var(--bg-input); border:1px solid var(--border-color); border-radius:var(--radius-md); color:#fff; font-size:0.9rem;">
+          <label for="loginPassword">
+            <span>Kata Sandi (Password) *</span>
+          </label>
+          <div class="login-input-wrapper">
+            <span class="login-input-icon">🔒</span>
+            <input type="password" id="loginPassword" placeholder="Masukkan kata sandi..." required autocomplete="current-password">
+            <button type="button" class="btn-toggle-password" id="btnTogglePassword" title="Tampilkan / Sembunyikan Kata Sandi">
+              <span id="loginEyeIcon">👁️</span>
+            </button>
+          </div>
         </div>
         
-        <button type="submit" class="btn btn-primary btn-block" style="margin-top: 15px;">Masuk ke Sistem</button>
+        <button type="submit" class="btn btn-primary btn-block btn-login-submit" style="margin-top: 18px;">
+          <span>Masuk ke Sistem</span>
+          <span>➜</span>
+        </button>
       </form>
       
-      <div class="login-footer" style="text-align: center; margin-top: 15px; font-size: 0.8rem; color: #94a3b8;">
-        copyright @ DiJe 2026 v.2.0.1
+      <div class="login-footer">
+        <div class="login-footer-badge">
+          <span>🛡️</span> Dukcapil Kabupaten Kepulauan Sangihe
+        </div>
+        <div class="login-footer-copy">
+          copyright @DiJe 2026 versi 3.0
+        </div>
       </div>
     </div>
   </div>
@@ -631,6 +657,6 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="app.js?v=20261002_0750"></script>
+  <script src="app.js?v=20261017_v3"></script>
 </body>
 </html>
