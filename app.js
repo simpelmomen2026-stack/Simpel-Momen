@@ -7,8 +7,7 @@ const IS_OFFLINE_MODE = false;
 // Mode Keamanan: false = Mengizinkan login akun peran bawaan (operator_dinas, kasie_capil, dsb.) & akun sheet online
 const ENFORCE_STRICT_AUTH = false; 
 
-// VERSI ONLINE (GitHub): langsung terhubung ke Google Apps Script (tanpa api.php)
-let defaultApiUrl = 'https://script.google.com/macros/s/AKfycbxcYF0YeOTg106tFjE9rDWT9_hvUXN9Ai8fNzNKUYIJQGtBADqUi8DcAR1BVCGoROX5hg/exec';
+let defaultApiUrl = 'api.php';
 if (window.location.hostname.includes('github.io')) {
   defaultApiUrl = 'https://script.google.com/macros/s/AKfycbxcYF0YeOTg106tFjE9rDWT9_hvUXN9Ai8fNzNKUYIJQGtBADqUi8DcAR1BVCGoROX5hg/exec';
 }
@@ -951,41 +950,61 @@ function renderCounterDesk() {
     const fullBatch = allDataKeyMap[String(item.key)] || [];
     if (fullBatch.length <= 1) return true; // Berkas tunggal tetap ditampilkan
 
+    // 1. Petugas TTE & Petugas Cetak: Tampilkan SEMUA dokumen se-Kode Unik (Aturan mandatori diabaikan & dieksekusi 1 per 1)
+    if (role === 'petugas_tte' || role === 'petugas_pencetakan') {
+      return true;
+    }
+
+    // 2. Petugas Scan, Kasie, Kepala UPT, Kabid, Kadis, & Operator:
+    // Dokumen yang memiliki kode unik yang sama HANYA MENAMPILKAN SATU DOKUMEN YANG DIMANDATORIKAN
     const isDafdukCapil = fullBatch.some(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil')) &&
                           fullBatch.some(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk'));
-    const isDafdukDafduk = fullBatch.every(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk'));
 
     if (role === 'petugas_scan') {
       const mandatoryItem = getMandatoryItemForBatch(fullBatch);
       return item === mandatoryItem;
     }
 
-    if (role === 'kasie_capil' || role === 'kabid_capil') {
-      // Kasie Capil / Kabid Capil melihat dokumen Pencatatan Sipil Dinas secara langsung
-      return true;
+    if (role === 'kasie_capil') {
+      const capilItems = fullBatch.filter(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
+      const mandatoryCapil = getMandatoryItemForBatch(capilItems);
+      return item === mandatoryCapil;
     }
 
-    if (role === 'kasie_dafduk' || role === 'kabid_dafduk') {
+    if (role === 'kabid_capil') {
+      const capilItems = fullBatch.filter(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
+      const mandatoryCapil = getMandatoryItemForBatch(capilItems);
+      return item === mandatoryCapil;
+    }
+
+    if (role === 'kasie_dafduk') {
       if (isDafdukCapil) {
         const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
         if (capilItem) {
           const capilStatus = String(capilItem.status_alur || '');
-          if (role === 'kasie_dafduk' && capilStatus === '2_VERIFIKASI_KASIE') {
-            return false;
-          }
-          if (role === 'kabid_dafduk' && (capilStatus === '2_VERIFIKASI_KASIE' || capilStatus === '3_VALIDASI_KABID')) {
+          if (capilStatus === '2_VERIFIKASI_KASIE') {
             return false;
           }
         }
-        return true;
       }
+      const dafdukItems = fullBatch.filter(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk') || String(b.jenis_layanan).toLowerCase().includes('dafduk'));
+      const mandatoryDafduk = getMandatoryItemForBatch(dafdukItems);
+      return item === mandatoryDafduk;
+    }
 
-      if (isDafdukDafduk) {
-        const mandatoryItem = getMandatoryItemForBatch(fullBatch);
-        return item === mandatoryItem;
+    if (role === 'kabid_dafduk') {
+      if (isDafdukCapil) {
+        const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
+        if (capilItem) {
+          const capilStatus = String(capilItem.status_alur || '');
+          if (capilStatus === '2_VERIFIKASI_KASIE' || capilStatus === '3_VALIDASI_KABID') {
+            return false;
+          }
+        }
       }
-
-      return true;
+      const dafdukItems = fullBatch.filter(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk') || String(b.jenis_layanan).toLowerCase().includes('dafduk'));
+      const mandatoryDafduk = getMandatoryItemForBatch(dafdukItems);
+      return item === mandatoryDafduk;
     }
 
     if (role === 'kepala_upt') {
@@ -995,13 +1014,8 @@ function renderCounterDesk() {
           return item === capilItem;
         }
       }
-
-      if (isDafdukDafduk) {
-        const mandatoryItem = getMandatoryItemForBatch(fullBatch);
-        return item === mandatoryItem;
-      }
-
-      return true;
+      const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+      return item === mandatoryItem;
     }
 
     if (role === 'operator') {
@@ -1009,30 +1023,17 @@ function renderCounterDesk() {
         const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
         if (capilItem) return item === capilItem;
       }
-      if (isDafdukDafduk) {
-        const mandatoryItem = getMandatoryItemForBatch(fullBatch);
-        return item === mandatoryItem;
-      }
-      return true;
+      const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+      return item === mandatoryItem;
     }
 
     if (role === 'kadis') {
-      if (isDafdukCapil) {
-        const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
-        if (capilItem) {
-          return item === capilItem;
-        }
-      }
-
-      if (isDafdukDafduk) {
-        const mandatoryItem = getMandatoryItemForBatch(fullBatch);
-        return item === mandatoryItem;
-      }
-
-      return true;
+      const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+      return item === mandatoryItem;
     }
 
-    return true;
+    const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+    return item === mandatoryItem;
   });
 
   // 🕒 Pengurutan FIFO (Oldest at Top, Newest at Bottom) untuk SEMUA Counter User
@@ -1121,7 +1122,7 @@ function renderCounterDesk() {
             <button class="btn btn-warning btn-xs" onclick="openMonitoringNoteModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')" style="font-weight:700; white-space:nowrap; padding: 4px 8px;">
               💡 Informasikan / Catat
             </button>
-            <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')" style="margin-left:4px; padding: 4px 8px;">
+            <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')" style="margin-left:4px; padding: 4px 8px;">
               👁️ Detail
             </button>
           </td>
@@ -1137,36 +1138,36 @@ function renderCounterDesk() {
     let actionBtnHtml = '';
     if (role === 'monitoring') {
       actionBtnHtml = `
-        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')">
+        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')">
           👁️ Detail & Riwayat
         </button>
       `;
     } else if (isSelesai) {
       actionBtnHtml = `
         <span class="badge selesai" style="margin-right:4px;">✅ Selesai</span>
-        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')">👁️ Detail</button>
+        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')">👁️ Detail</button>
       `;
     } else if (role === 'petugas_pencetakan') {
       actionBtnHtml = `
-        <button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')">
+        <button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')">
           🎉 Cetak & Selesaikan
         </button>
       `;
     } else if (role === 'operator' && isPending) {
       actionBtnHtml = `
-        <button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')">
+        <button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')">
           🛠️ Perbaiki & Kirim Ulang
         </button>
       `;
     } else if (role === 'petugas_scan') {
       actionBtnHtml = `
-        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')">
+        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')">
           📄 Scan & Kirim Berkas
         </button>
       `;
     } else {
       actionBtnHtml = `
-        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')">
+        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')">
           ⚡ Setujui / Lanjutkan
         </button>
       `;
@@ -1179,9 +1180,13 @@ function renderCounterDesk() {
     let integrasiBadgeHtml = '';
     if (isIntegrated) {
       if (batchCount > 1) {
-        const followerItems = batchItems.filter(it => it !== row);
-        const followerNames = followerItems.map(f => `${escapeHTML(f.sub_layanan)} (${escapeHTML(f.pemohon || 'Warga')})`).join(', ');
-        integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:3px 8px; border-radius:6px; display:inline-block; margin-top:4px; line-height:1.4;">⚡ Terintegrasi (${batchCount} Dokumen)<br><small style="color:#d8b4fe; font-weight:700;">📌 Ditampilkan: ${escapeHTML(row.sub_layanan)}<br>👁️ Pengikut Tersembunyi: ${followerNames}</small></span>`;
+        if (role === 'petugas_tte' || role === 'petugas_pencetakan') {
+          integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:3px 8px; border-radius:6px; display:inline-block; margin-top:4px; line-height:1.4;">⚡ Terintegrasi (${batchCount} Dokumen)<br><small style="color:#38bdf8; font-weight:700;">📄 Eksekusi mandiri: ${escapeHTML(row.sub_layanan)}</small></span>`;
+        } else {
+          const followerItems = batchItems.filter(it => it !== row);
+          const followerNames = followerItems.map(f => `${escapeHTML(f.sub_layanan)} (${escapeHTML(f.pemohon || 'Warga')})`).join(', ');
+          integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:3px 8px; border-radius:6px; display:inline-block; margin-top:4px; line-height:1.4;">⚡ Terintegrasi (${batchCount} Dokumen)<br><small style="color:#d8b4fe; font-weight:700;">📌 Ditampilkan: ${escapeHTML(row.sub_layanan)}<br>👁️ Pengikut Tersembunyi: ${followerNames}</small></span>`;
+        }
       } else {
         integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:2px 6px; border-radius:6px; display:inline-block; margin-top:4px;">⚡ Terintegrasi</span>`;
       }
@@ -2785,9 +2790,12 @@ window.openReadOnlyDetailModal = function(key) {
 };
 
 // MODAL ACTION & TINDAK LANJUT
-window.openActionModal = function(key, subLayanan) {
+window.openActionModal = function(key, subLayanan, pemohon) {
   let item = null;
-  if (subLayanan) {
+  if (subLayanan && pemohon) {
+    item = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayanan) && String(d.pemohon) === String(pemohon));
+  }
+  if (!item && subLayanan) {
     item = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayanan));
   }
   if (!item) {
@@ -2798,6 +2806,8 @@ window.openActionModal = function(key, subLayanan) {
   modalKey.value = item.key;
   const modalSubLayanan = document.getElementById('modalSubLayanan');
   if (modalSubLayanan) modalSubLayanan.value = item.sub_layanan || '';
+  const modalPemohon = document.getElementById('modalPemohon');
+  if (modalPemohon) modalPemohon.value = item.pemohon || '';
   if (modalKodeText) modalKodeText.textContent = item.key;
   if (modalPemohonText) modalPemohonText.textContent = item.pemohon || '-';
   if (modalLayananText) modalLayananText.textContent = `${item.jenis_layanan || ''} (${item.sub_layanan || ''})`;
@@ -3019,6 +3029,8 @@ if (actionForm) {
     const key = modalKey.value;
     const modalSubLayanan = document.getElementById('modalSubLayanan');
     const subLayananVal = modalSubLayanan ? modalSubLayanan.value : '';
+    const modalPemohon = document.getElementById('modalPemohon');
+    const pemohonVal = modalPemohon ? modalPemohon.value : (modalPemohonText ? modalPemohonText.textContent.trim() : '');
     let executeAction = modalExecuteAction ? modalExecuteAction.value : 'approve';
     let notes = modalNotes ? modalNotes.value.trim() : '';
     const statusTteVal = tteStatus ? tteStatus.value : '';
@@ -3096,35 +3108,37 @@ if (actionForm) {
           const detailStr = updatedCount > 1 ? `${updatedCount} dokumen terintegrasi (1 Mandatori + ${followerCount} Dokumen Pengikut)` : 'dokumen';
           showToast(`🎉 Berhasil! Link PDF scan pada dokumen mandatori telah mewakili & terisi untuk ${detailStr} (Kode Unik: ${key}) & seluruhnya terkirim ke Meja ${targetDestName}. Tugas scan Anda selesai dengan baik!`, 'success');
         } else if (currentUser.role === 'petugas_tte') {
-          let updatedCount = 0;
-          allData.forEach(item => {
-            if (String(item.key) === String(key)) {
-              item.status_tte = statusTteVal;
-              item.tgl_tte = timeStr;
-              item.petugas_tte = execUserName;
-              item.eksekutor_tte = execUserName;
-              item.catatan_tte = signedNotes;
-              const isUptTarget = String(item.fasilitasi || '').toLowerCase().includes('upt');
-              const isPendaftaran = String(item.jenis_layanan || '').toLowerCase().includes('pendaftaran');
-              let nextStatusTte = isUptTarget ? '6_PENCETAKAN_UPT' : '6_PENCETAKAN_DINAS';
-              if (statusTteVal === 'Belum diajukan SIAK') {
-                nextStatusTte = (isUptTarget && isPendaftaran) ? '2_VERIFIKASI_UPT' : '2_VERIFIKASI_KASIE';
-                const logMsg = `BELUM DIAJUKAN SIAK by ${execUserName} pada ${timeStr}: ${signedNotes || 'Belum diajukan SIAK'}`;
-                item.riwayat_pending = item.riwayat_pending ? `${logMsg}\n---\n${item.riwayat_pending}` : logMsg;
-              } else if (statusTteVal === 'Belum Verifikasi SIAK') {
-                nextStatusTte = '3_VALIDASI_KABID';
-                const logMsg = `BELUM VERIFIKASI SIAK by ${execUserName} pada ${timeStr}: ${signedNotes || 'Belum Verifikasi SIAK'}`;
-                item.riwayat_pending = item.riwayat_pending ? `${logMsg}\n---\n${item.riwayat_pending}` : logMsg;
-              } else {
-                const logMsg = `TTE STATUS (${statusTteVal}) by ${execUserName} pada ${timeStr}: ${signedNotes}`;
-                item.riwayat_pending = item.riwayat_pending ? `${logMsg}\n---\n${item.riwayat_pending}` : logMsg;
-              }
-              item.status_alur = nextStatusTte;
-              updatedCount++;
+          let targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal) && (!pemohonVal || String(d.pemohon) === String(pemohonVal)));
+          if (!targetItem) {
+            targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal));
+          }
+          if (!targetItem) {
+            targetItem = allData.find(d => String(d.key) === String(key));
+          }
+          if (targetItem) {
+            targetItem.status_tte = statusTteVal;
+            targetItem.tgl_tte = timeStr;
+            targetItem.petugas_tte = execUserName;
+            targetItem.eksekutor_tte = execUserName;
+            targetItem.catatan_tte = signedNotes;
+            const isUptTarget = String(targetItem.fasilitasi || '').toLowerCase().includes('upt');
+            const isPendaftaran = String(targetItem.jenis_layanan || '').toLowerCase().includes('pendaftaran');
+            let nextStatusTte = isUptTarget ? '6_PENCETAKAN_UPT' : '6_PENCETAKAN_DINAS';
+            if (statusTteVal === 'Belum diajukan SIAK') {
+              nextStatusTte = (isUptTarget && isPendaftaran) ? '2_VERIFIKASI_UPT' : '2_VERIFIKASI_KASIE';
+              const logMsg = `BELUM DIAJUKAN SIAK by ${execUserName} pada ${timeStr}: ${signedNotes || 'Belum diajukan SIAK'}`;
+              targetItem.riwayat_pending = targetItem.riwayat_pending ? `${logMsg}\n---\n${targetItem.riwayat_pending}` : logMsg;
+            } else if (statusTteVal === 'Belum Verifikasi SIAK') {
+              nextStatusTte = '3_VALIDASI_KABID';
+              const logMsg = `BELUM VERIFIKASI SIAK by ${execUserName} pada ${timeStr}: ${signedNotes || 'Belum Verifikasi SIAK'}`;
+              targetItem.riwayat_pending = targetItem.riwayat_pending ? `${logMsg}\n---\n${targetItem.riwayat_pending}` : logMsg;
+            } else {
+              const logMsg = `TTE STATUS (${statusTteVal}) by ${execUserName} pada ${timeStr}: ${signedNotes}`;
+              targetItem.riwayat_pending = targetItem.riwayat_pending ? `${logMsg}\n---\n${targetItem.riwayat_pending}` : logMsg;
             }
-          });
-          const detailStr = updatedCount > 1 ? `${updatedCount} dokumen terintegrasi (Kode Unik: ${key})` : `dokumen (Kode Unik: ${key})`;
-          showToast(`🎉 Berhasil! Status TTE untuk ${detailStr} telah diperbarui & terkirim ke meja selanjutnya!`, 'success');
+            targetItem.status_alur = nextStatusTte;
+            showToast(`🎉 Berhasil! Status TTE untuk dokumen ${escapeHTML(targetItem.sub_layanan)} (${escapeHTML(targetItem.pemohon || '-')}) telah diperbarui & terkirim ke meja selanjutnya!`, 'success');
+          }
         } else if (executeAction === 'pending') {
           // PENDING ALL
           let updatedCount = 0;
@@ -3311,7 +3325,7 @@ if (actionForm) {
             action: 'update',
             key: key,
             sub_layanan: subLayananVal,
-            pemohon: modalPemohonText ? modalPemohonText.textContent.trim() : '',
+            pemohon: pemohonVal,
             role: currentUser.role,
             userName: execTag,
             executeAction: executeAction,

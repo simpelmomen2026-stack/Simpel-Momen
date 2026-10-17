@@ -782,48 +782,26 @@ function doPost(e) {
           
           var logMsg = "TTE by " + execUserName + " (" + statusTteVal + ") pada " + timeStr + (notes ? ": " + notes : "");
 
+          var targetFas = targetItem.fasilitasi || currentFasilitasi || "";
+          var targetLayanan = targetItem.jenis_layanan || currentLayanan || "";
+          var isPendaftaran = targetLayanan.trim().toLowerCase().indexOf("pendaftaran") !== -1;
+          var isUptFas = targetFas.toUpperCase().indexOf("UPT") !== -1;
+
           if (statusTteVal === 'Belum diajukan SIAK') {
-            var isPendaftaran = (currentLayanan || "").trim().toLowerCase().indexOf("pendaftaran") !== -1;
-            var isUptFas = (currentFasilitasi || "").toUpperCase().indexOf("UPT") !== -1;
             nextStatusTte = (isUptFas && isPendaftaran) ? "2_VERIFIKASI_UPT" : "2_VERIFIKASI_KASIE";
-            
-            for (var i = 0; i < batchRows.length; i++) {
-              var rIdx = batchRows[i].rowIndex;
-              var prevRiwayat = batchRows[i].riwayat_pending;
-              var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
-              sheet.getRange(rIdx, 14).setValue(statusTteVal);  // Col N (Status TTE)
-              sheet.getRange(rIdx, 29).setValue(timeStr);       // Col AC (tgl_tte)
-              sheet.getRange(rIdx, 13).setValue(nextStatusTte); // Col M (Status Alur)
-              sheet.getRange(rIdx, 22).setValue(newRiwayat);    // Col V (Riwayat Pending)
-            }
           } else if (statusTteVal === 'Belum Verifikasi SIAK') {
             nextStatusTte = "3_VALIDASI_KABID";
-            
-            for (var i = 0; i < batchRows.length; i++) {
-              var rIdx = batchRows[i].rowIndex;
-              var prevRiwayat = batchRows[i].riwayat_pending;
-              var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
-              sheet.getRange(rIdx, 14).setValue(statusTteVal);  // Col N (Status TTE)
-              sheet.getRange(rIdx, 29).setValue(timeStr);       // Col AC (tgl_tte)
-              sheet.getRange(rIdx, 13).setValue(nextStatusTte); // Col M (Status Alur)
-              sheet.getRange(rIdx, 22).setValue(newRiwayat);    // Col V (Riwayat Pending)
-            }
           } else {
-            // Sudah di TTE / SIAK -> Kirim SELURUH dokumen terintegrasi (batch) ke Meja Pencetakan
-            for (var i = 0; i < batchRows.length; i++) {
-              var rIdx = batchRows[i].rowIndex;
-              var itemFas = batchRows[i].fasilitasi || currentFasilitasi || "";
-              var isUptFas = itemFas.toUpperCase().indexOf("UPT") !== -1;
-              var itemNextStatus = isUptFas ? "6_PENCETAKAN_UPT" : "6_PENCETAKAN_DINAS";
-              var prevRiwayat = batchRows[i].riwayat_pending;
-              var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
-              
-              sheet.getRange(rIdx, 14).setValue(statusTteVal);     // Col N (Status TTE)
-              sheet.getRange(rIdx, 29).setValue(timeStr);          // Col AC (tgl_tte)
-              sheet.getRange(rIdx, 13).setValue(itemNextStatus);   // Col M (Status Alur)
-              sheet.getRange(rIdx, 22).setValue(newRiwayat);        // Col V (Riwayat Pending)
-            }
+            nextStatusTte = isUptFas ? "6_PENCETAKAN_UPT" : "6_PENCETAKAN_DINAS";
           }
+
+          var prevRiwayat = sheet.getRange(foundRow, 22).getValue().toString();
+          var newRiwayat = prevRiwayat ? logMsg + "\n---\n" + prevRiwayat : logMsg;
+
+          sheet.getRange(foundRow, 14).setValue(statusTteVal);  // Col N (Status TTE)
+          sheet.getRange(foundRow, 29).setValue(timeStr);       // Col AC (tgl_tte)
+          sheet.getRange(foundRow, 13).setValue(nextStatusTte); // Col M (Status Alur)
+          sheet.getRange(foundRow, 22).setValue(newRiwayat);    // Col V (Riwayat Pending)
         } 
         
         else if (role === 'operator') {
@@ -1095,32 +1073,31 @@ function doPost(e) {
         } 
         else if (role === 'petugas_tte') {
           var statusTteVal = payload.status_tte;
+          var docSub = targetItem.sub_layanan || currentSubLayanan;
+          var docPemohon = targetItem.pemohon || pemohonName;
+          var targetFas = targetItem.fasilitasi || currentFasilitasi || "Dinas";
+          var itemFasTag = (targetFas.toUpperCase().indexOf("UPT") !== -1) ? "Fasilitasi: UPT" : "Fasilitasi: Dinas";
+
           if (statusTteVal === 'Belum diajukan SIAK') {
-            waMsg = "dokumen *" + currentSubLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* BELUM DIAJUKAN SIAK.\n\n" +
+            waMsg = "dokumen *" + docSub + "* (" + itemFasTag + ") atas nama *" + docPemohon + "* BELUM DIAJUKAN SIAK.\n\n" +
                     "Terima Kasih";
           } else if (statusTteVal === 'Belum Verifikasi SIAK') {
-            waMsg = "Mohon izin pimpinan, dokumen *" + currentSubLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* BELUM DIAJUKAN SIAK.\n\n" +
+            waMsg = "Mohon izin pimpinan, dokumen *" + docSub + "* (" + itemFasTag + ") atas nama *" + docPemohon + "* BELUM DIAJUKAN SIAK.\n\n" +
                     "Terima Kasih";
           } else {
-            waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + currentSubLayanan + "* (" + fasTag + ") atas nama *" + pemohonName + "* telah di TTE.\n" +
+            waMsg = "Saya *" + namaLengkap + "* selaku *" + roleTitle + "* menyampaikan bahwa dokumen *" + docSub + "* (" + itemFasTag + ") atas nama *" + docPemohon + "* telah di TTE.\n" +
                     "Silahkan petugas pencetakan mencetak dokumen tersebut.\n\n" +
                     "Terima Kasih.";
             
             // Kirim Notifikasi WA ke Masyarakat (Pemohon) saat dokumen selesai di-TTE dan terkirim ke meja kerja petugas cetak
-            var sentPhoneMapTte = {};
-            for (var t = 0; t < batchRows.length; t++) {
-              var bRow = batchRows[t];
-              var rawHp = (bRow.no_hp || "").toString().trim();
-              var bPemohon = (bRow.pemohon || "").toString().trim() || pemohonName;
-              if (rawHp && rawHp !== "-" && rawHp !== "0") {
-                var targetHp = cleanPhoneNumber(rawHp);
-                if (targetHp && !sentPhoneMapTte[targetHp]) {
-                  sentPhoneMapTte[targetHp] = true;
-                  var tteCitizenMsg = "Sdr. " + bPemohon + " saat ini dokumen anda sudah selesai kami proses. Silahkan menghubungi petugas kami diloket antrian mengambil nomor antrian anda.\n" +
-                                      "Kami akan semakin berbenah memperbaiki pelayanan kami jika anda turut berpartisipasi membarikan saran/masukan dalam pengisian Survei Kepuasan Masyarakat (SKM) yang dapat di akses pada link ini (klik link ini) https://skm.go.id/share/instansi/c3072e96-efc2-4335-b581-e03ff98f9795/1\n" +
-                                      "Terima Kasih";
-                  sendWhatsAppMessage(targetHp, tteCitizenMsg);
-                }
+            var rawHp = (targetItem.no_hp || sampleItem.no_hp || sheet.getRange(foundRow, 7).getValue().toString()).trim();
+            if (rawHp && rawHp !== "-" && rawHp !== "0") {
+              var targetHp = cleanPhoneNumber(rawHp);
+              if (targetHp) {
+                var tteCitizenMsg = "Sdr. " + docPemohon + " saat ini dokumen *" + docSub + "* anda sudah selesai kami proses. Silahkan menghubungi petugas kami diloket antrian mengambil nomor antrian anda.\n" +
+                                    "Kami akan semakin berbenah memperbaiki pelayanan kami jika anda turut berpartisipasi membarikan saran/masukan dalam pengisian Survei Kepuasan Masyarakat (SKM) yang dapat di akses pada link ini (klik link ini) https://skm.go.id/share/instansi/c3072e96-efc2-4335-b581-e03ff98f9795/1\n" +
+                                    "Terima Kasih";
+                sendWhatsAppMessage(targetHp, tteCitizenMsg);
               }
             }
           }
@@ -1141,7 +1118,10 @@ function doPost(e) {
         Logger.log("WA Error saat update: " + waErr.toString());
       }
       
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Berkas & seluruh dokumen terintegrasi berhasil diperbarui" }))
+      var successMsg = (role === 'petugas_tte' || role === 'petugas_pencetakan') ?
+        ("Dokumen " + (targetItem.sub_layanan || currentSubLayanan) + " (" + (targetItem.pemohon || pemohonName) + ") berhasil diperbarui") :
+        ("Berkas & seluruh dokumen terintegrasi berhasil diperbarui");
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: successMsg }))
         .setMimeType(ContentService.MimeType.JSON);
     }
     
