@@ -175,9 +175,9 @@ function doGet(e) {
     }
     
     // Pengecekan Token / Tracking Dokumen via GET URL
-    if (action === 'track_token') {
-      var tokenQuery = params.token || params.key || "";
-      var senderQuery = params.sender || params.phone || "";
+    if (action === 'track_token' || (!action && (params.sender || params.from) && (params.message || params.text))) {
+      var tokenQuery = params.token || params.key || params.message || params.text || "";
+      var senderQuery = params.sender || params.from || params.phone || "";
       return handleFonnteIncomingWebhook(senderQuery, tokenQuery, params);
     }
 
@@ -530,7 +530,7 @@ function doPost(e) {
       var pemohonInput = payload.pemohon || "";
       var timeStr = getLocalDateTimeString();
       
-      var foundRow = findRowByKeyAndSub(sheet, key, subLayananInput, pemohonInput);
+      var foundRow = findRowByKeyAndSub(sheet, key, subLayananInput, pemohonInput, role);
       if (foundRow === -1) {
         throw new Error("Berkas dengan Key " + key + " tidak ditemukan.");
       }
@@ -1362,17 +1362,37 @@ function getUserDetailsFromPetugasSheet(ss, searchUser) {
   return result;
 }
 
-// Fungsi Pembantu: Cari nomor baris berdasarkan nilai Key, Sub Layanan, & Nama Pemohon Spesifik
-function findRowByKeyAndSub(sheet, key, subLayanan, pemohonName) {
+// Fungsi Pembantu: Cari nomor baris berdasarkan nilai Key, Sub Layanan, & Nama Pemohon Spesifik (serta memprioritaskan baris aktif sesuai role antrean)
+function findRowByKeyAndSub(sheet, key, subLayanan, pemohonName, role) {
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) return -1;
   
-  var vals = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
+  var vals = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
   var pemohonClean = pemohonName ? pemohonName.toString().trim().toLowerCase() : "";
   var subClean = subLayanan ? subLayanan.toString().trim().toLowerCase() : "";
+  var roleClean = role ? role.toString().trim().toLowerCase() : "";
 
-  // 1. Matched by Key + Pemohon + SubLayanan
+  var matchRoleStatus = function(statusStr) {
+    if (!roleClean) return true;
+    var st = (statusStr || "").toString().trim().toLowerCase();
+    if (roleClean === 'petugas_tte') {
+      return st === '5_tte';
+    }
+    if (roleClean === 'petugas_pencetakan') {
+      return st.indexOf('6_pencetakan') !== -1;
+    }
+    return true;
+  };
+
+  // 1. Matched by Key + Pemohon + SubLayanan + Role Status
   if (pemohonClean && subClean) {
+    for (var i = 0; i < vals.length; i++) {
+      if (vals[i][0].toString() === key && vals[i][4].toString().trim().toLowerCase() === pemohonClean && vals[i][10].toString().trim().toLowerCase() === subClean) {
+        if (matchRoleStatus(vals[i][12])) {
+          return i + 2;
+        }
+      }
+    }
     for (var i = 0; i < vals.length; i++) {
       if (vals[i][0].toString() === key && vals[i][4].toString().trim().toLowerCase() === pemohonClean && vals[i][10].toString().trim().toLowerCase() === subClean) {
         return i + 2;
@@ -1380,8 +1400,15 @@ function findRowByKeyAndSub(sheet, key, subLayanan, pemohonName) {
     }
   }
 
-  // 2. Matched by Key + Pemohon
+  // 2. Matched by Key + Pemohon + Role Status
   if (pemohonClean) {
+    for (var i = 0; i < vals.length; i++) {
+      if (vals[i][0].toString() === key && vals[i][4].toString().trim().toLowerCase() === pemohonClean) {
+        if (matchRoleStatus(vals[i][12])) {
+          return i + 2;
+        }
+      }
+    }
     for (var i = 0; i < vals.length; i++) {
       if (vals[i][0].toString() === key && vals[i][4].toString().trim().toLowerCase() === pemohonClean) {
         return i + 2;
@@ -1389,8 +1416,15 @@ function findRowByKeyAndSub(sheet, key, subLayanan, pemohonName) {
     }
   }
 
-  // 3. Matched by Key + SubLayanan
+  // 3. Matched by Key + SubLayanan + Role Status
   if (subClean) {
+    for (var i = 0; i < vals.length; i++) {
+      if (vals[i][0].toString() === key && vals[i][10].toString().trim().toLowerCase() === subClean) {
+        if (matchRoleStatus(vals[i][12])) {
+          return i + 2;
+        }
+      }
+    }
     for (var i = 0; i < vals.length; i++) {
       if (vals[i][0].toString() === key && vals[i][10].toString().trim().toLowerCase() === subClean) {
         return i + 2;
@@ -1399,6 +1433,13 @@ function findRowByKeyAndSub(sheet, key, subLayanan, pemohonName) {
   }
 
   // 4. Fallback by Key
+  for (var i = 0; i < vals.length; i++) {
+    if (vals[i][0].toString() === key) {
+      if (matchRoleStatus(vals[i][12])) {
+        return i + 2;
+      }
+    }
+  }
   for (var i = 0; i < vals.length; i++) {
     if (vals[i][0].toString() === key) {
       return i + 2;
@@ -1577,9 +1618,6 @@ function sendWhatsAppMessage(target, message, inboxid) {
     message: message,
     countryCode: "62"
   };
-  if (inboxid) {
-    payload.inboxid = inboxid;
-  }
   
   var options = {
     method: "post",
@@ -1608,6 +1646,9 @@ function cleanPhoneNumber(target) {
   if (str.indexOf("@g.us") !== -1) return str;
   if (str.indexOf("@s.whatsapp.net") !== -1) {
     str = str.replace("@s.whatsapp.net", "").trim();
+  }
+  if (str.indexOf("@c.us") !== -1) {
+    str = str.replace("@c.us", "").trim();
   }
   var digits = str.replace(/[^0-9]/g, "");
   if (!digits) return "";
@@ -1843,8 +1884,10 @@ function handleFonnteIncomingWebhook(sender, message, extraPayload) {
     // Bersihkan karakter formatting WhatsApp (*, _, ~, `, ') agar token tersaring bersih
     var cleanMsg = rawMsg.replace(/[\*\_~`'"]/g, " ").trim();
     
-    // Ekstrak kandidat Token / Kode Unik (misal: SM-20261017-A1B2 atau format serupa)
-    var tokenMatch = cleanMsg.match(/SM-[0-9]{8}-[A-Za-z0-9]+/i) || cleanMsg.match(/SM-[A-Za-z0-9-]+/i);
+    // Ekstrak kandidat Token / Kode Unik (misal: SM-20261017-OWL3, 20261017-OWL3, dll)
+    var tokenMatch = cleanMsg.match(/SM-[0-9]{8}-[A-Za-z0-9]+/i) || 
+                     cleanMsg.match(/SM-[A-Za-z0-9-]+/i) ||
+                     cleanMsg.match(/[0-9]{8}-[A-Za-z0-9]+/i);
     var candidateToken = "";
     if (tokenMatch) {
       candidateToken = tokenMatch[0].trim().toUpperCase();
@@ -1852,7 +1895,7 @@ function handleFonnteIncomingWebhook(sender, message, extraPayload) {
       var words = cleanMsg.split(/\s+/);
       for (var w = 0; w < words.length; w++) {
         var cw = words[w].trim().toUpperCase();
-        if (cw.indexOf("SM-") === 0) {
+        if (cw.indexOf("SM-") === 0 || /^[0-9]{8}-[A-Za-z0-9]+$/i.test(cw)) {
           candidateToken = cw;
           break;
         }
@@ -1871,7 +1914,10 @@ function handleFonnteIncomingWebhook(sender, message, extraPayload) {
       for (var r = 0; r < allVals.length; r++) {
         var rowVal = allVals[r];
         var rowKey = rowVal[0] ? rowVal[0].toString().replace(/[\*\_~`'"]/g, "").trim().toUpperCase() : "";
-        if (rowKey === candidateToken) {
+        var isMatchKey = (rowKey === candidateToken) ||
+                         (candidateToken.indexOf("SM-") === -1 && rowKey === ("SM-" + candidateToken)) ||
+                         (rowKey.indexOf("SM-") === -1 && ("SM-" + rowKey) === candidateToken);
+        if (isMatchKey) {
           var tracking = getDocumentTrackingDetail(rowVal);
           matchedDocs.push({
             key: rowVal[0].toString().trim(),
@@ -1908,7 +1954,6 @@ function handleFonnteIncomingWebhook(sender, message, extraPayload) {
                    "• Dokumen: *" + doc.sub_layanan + "* (" + (doc.jenis_layanan || "Layanan Dukcapil") + ")\n" +
                    "• Atas Nama: *" + (doc.pemohon || primaryPemohon) + "*\n" +
                    "• Berada di: *" + cInfo.counter + "*\n" +
-                   "• Petugas Terakhir: *" + doc.eksekutor + "*\n" +
                    "• Fasilitasi: *" + (doc.fasilitasi || "Dinas") + "*\n\n" +
                    "📢 *Keterangan Alur:*\n" +
                    cInfo.deskripsi + "\n\n" +
@@ -1924,7 +1969,6 @@ function handleFonnteIncomingWebhook(sender, message, extraPayload) {
           var mInfo = getCounterStatusInfo(mDoc.status_alur, mDoc.sub_layanan, mDoc.pemohon, mDoc.eksekutor, mDoc.penerima, mDoc.fasilitasi);
           replyMsg += (m + 1) + ". *" + mDoc.sub_layanan + "* (a.n. *" + (mDoc.pemohon || primaryPemohon) + "*)\n" +
                       "   • Berada di: *" + mInfo.counter + "*\n" +
-                      "   • Petugas Terakhir: *" + mDoc.eksekutor + "*\n" +
                       "   • Keterangan: " + mInfo.deskripsi + "\n\n";
         }
         
@@ -1946,15 +1990,14 @@ function handleFonnteIncomingWebhook(sender, message, extraPayload) {
         replyMsg = "Halo! Selamat datang di Layanan Informasi Perjalanan Dokumen Dukcapil.\n\n" +
                    "Untuk mengetahui dokumen Anda saat ini sudah berada di counter mana, silakan ketik *Nomor Token* Anda di kolom chat ini.\n" +
                    "Contoh: *SM-20261017-A1B2*\n\n" +
-                   "Sistem kami akan otomatis menginformasikan counter posisi berkas saat ini dan petugas terakhir yang memproses dokumen Anda.\n\n" +
+                   "Sistem kami akan otomatis menginformasikan counter posisi berkas Anda saat ini.\n\n" +
                    "Terima Kasih.";
       }
     }
     
-    // Kirim balasan ke nomor pengirim chat via Fonnte Send API
-    var inboxId = (extraPayload && extraPayload.inboxid) ? extraPayload.inboxid : "";
+    // Kirim balasan langsung ke nomor pengirim chat via Fonnte Send API
     if (cleanSender && replyMsg) {
-      sendWhatsAppMessage(cleanSender, replyMsg, inboxId);
+      sendWhatsAppMessage(cleanSender, replyMsg);
     }
     
     // Kembalikan objek JSON dengan 'message' agar didukung oleh respons webhook Fonnte

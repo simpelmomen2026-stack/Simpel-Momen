@@ -1086,6 +1086,7 @@ function renderCounterDesk() {
   }
 
   counterTableBody.innerHTML = displayList.map(row => {
+    const allDataIdx = allData.indexOf(row);
     const isPending = row.status_alur === 'PENDING_OPERATOR';
     const isSelesai = row.status_alur === '7_SELESAI';
     const rowStyle = isPending ? 'background: rgba(239, 68, 68, 0.08);' : (isSelesai ? 'background: rgba(16, 185, 129, 0.04);' : '');
@@ -1122,7 +1123,7 @@ function renderCounterDesk() {
             <button class="btn btn-warning btn-xs" onclick="openMonitoringNoteModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')" style="font-weight:700; white-space:nowrap; padding: 4px 8px;">
               💡 Informasikan / Catat
             </button>
-            <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')" style="margin-left:4px; padding: 4px 8px;">
+            <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}', ${allDataIdx})" style="margin-left:4px; padding: 4px 8px;">
               👁️ Detail
             </button>
           </td>
@@ -1138,36 +1139,36 @@ function renderCounterDesk() {
     let actionBtnHtml = '';
     if (role === 'monitoring') {
       actionBtnHtml = `
-        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')">
+        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}', ${allDataIdx})">
           👁️ Detail & Riwayat
         </button>
       `;
     } else if (isSelesai) {
       actionBtnHtml = `
         <span class="badge selesai" style="margin-right:4px;">✅ Selesai</span>
-        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')">👁️ Detail</button>
+        <button class="btn btn-secondary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}', ${allDataIdx})">👁️ Detail</button>
       `;
     } else if (role === 'petugas_pencetakan') {
       actionBtnHtml = `
-        <button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')">
+        <button class="btn btn-success btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}', ${allDataIdx})">
           🎉 Cetak & Selesaikan
         </button>
       `;
     } else if (role === 'operator' && isPending) {
       actionBtnHtml = `
-        <button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')">
+        <button class="btn btn-danger btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}', ${allDataIdx})">
           🛠️ Perbaiki & Kirim Ulang
         </button>
       `;
     } else if (role === 'petugas_scan') {
       actionBtnHtml = `
-        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')">
+        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}', ${allDataIdx})">
           📄 Scan & Kirim Berkas
         </button>
       `;
     } else {
       actionBtnHtml = `
-        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}')">
+        <button class="btn btn-primary btn-xs" onclick="openActionModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}', '${escapeHTML(row.pemohon || '')}', ${allDataIdx})">
           ⚡ Setujui / Lanjutkan
         </button>
       `;
@@ -2686,6 +2687,76 @@ function formatNoteWithBadge(rawNote) {
   return escapeHTML(str);
 }
 
+// FORMAT & FILTER STATUS WORKFLOW REKAM JEJAK MEJA:
+// Hanya menampilkan tahapan/meja yang memiliki catatan saja, yang tidak memiliki catatan tampilannya dihilangkan.
+function buildWorkflowNotesHtml(item) {
+  if (!item) return '';
+
+  const notesList = [];
+
+  const getCleanNote = (raw) => {
+    if (!raw) return '';
+    const str = String(raw).trim();
+    if (str === '' || str === '-') return '';
+    return str.replace(/\[Eksekutor:\s*([^\]]+)\]/i, '').trim();
+  };
+
+  const hasNote = (raw) => {
+    return getCleanNote(raw).length > 0;
+  };
+
+  if (hasNote(item.catatan_scan)) {
+    notesList.push(`<div>• <strong>Catatan Scan:</strong> ${formatNoteWithBadge(item.catatan_scan)} <small style="color:var(--text-muted);">${item.tgl_scan ? `(${item.tgl_scan})` : ''}</small></div>`);
+  }
+
+  if (hasNote(item.catatan_kasie)) {
+    notesList.push(`<div>• <strong>Catatan Kasie / Seksi:</strong> ${formatNoteWithBadge(item.catatan_kasie)} <small style="color:var(--text-muted);">${item.tgl_kasie ? `(${item.tgl_kasie})` : ''}</small></div>`);
+  }
+
+  if (hasNote(item.catatan_upt)) {
+    notesList.push(`<div>• <strong>Catatan Kepala UPT:</strong> ${formatNoteWithBadge(item.catatan_upt)} <small style="color:var(--text-muted);">${item.tgl_upt ? `(${item.tgl_upt})` : ''}</small></div>`);
+  }
+
+  if (hasNote(item.catatan_kabid)) {
+    notesList.push(`<div>• <strong>Catatan Kabid:</strong> ${formatNoteWithBadge(item.catatan_kabid)} <small style="color:var(--text-muted);">${item.tgl_kabid ? `(${item.tgl_kabid})` : ''}</small></div>`);
+  }
+
+  if (hasNote(item.catatan_kadis)) {
+    notesList.push(`<div>• <strong>Catatan Kadis:</strong> ${formatNoteWithBadge(item.catatan_kadis)} <small style="color:var(--text-muted);">${item.tgl_kadis ? `(${item.tgl_kadis})` : ''}</small></div>`);
+  }
+
+  const tteNote = item.catatan_tte || item.notes_tte || '';
+  if (hasNote(tteNote) || (item.status_tte && item.status_tte !== 'SIAK' && item.status_tte !== '-' && item.status_tte.trim() !== '')) {
+    const tteDetail = hasNote(tteNote) ? `${escapeHTML(item.status_tte || '')} - ${formatNoteWithBadge(tteNote)}` : escapeHTML(item.status_tte);
+    notesList.push(`<div>• <strong>Status / Catatan TTE:</strong> ${tteDetail} <small style="color:var(--text-muted);">${item.tgl_tte ? `(${item.tgl_tte})` : ''}</small></div>`);
+  }
+
+  if (hasNote(item.catatan_print)) {
+    const penerimaStr = item.penerima ? `(Penerima: ${escapeHTML(item.penerima)}) ` : '';
+    notesList.push(`<div>• <strong>Catatan Print:</strong> ${penerimaStr}${formatNoteWithBadge(item.catatan_print)} <small style="color:var(--text-muted);">${item.tgl_print ? `(${item.tgl_print})` : ''}</small></div>`);
+  }
+
+  if (hasNote(item.catatan_monitoring)) {
+    notesList.push(`<div>• <strong>Catatan Monitoring:</strong> ${escapeHTML(item.catatan_monitoring)}</div>`);
+  }
+
+  if (notesList.length === 0) {
+    return `
+      <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 14px;">
+        <div style="font-weight: 700; color: #34d399; font-size: 0.85rem; margin-bottom: 4px;">📋 CATATAN REKAM JEJAK MEJA</div>
+        <div style="color: var(--text-muted); font-size: 0.82rem; font-style: italic;">Tidak ada catatan khusus pada alur berkas ini.</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 14px;">
+      <div style="font-weight: 700; color: #34d399; font-size: 0.85rem; margin-bottom: 8px;">📋 CATATAN REKAM JEJAK MEJA</div>
+      ${notesList.join('\n')}
+    </div>
+  `;
+}
+
 // MODAL READ-ONLY DETAIL DOKUMEN (INFORMASI TANPA EKSEKUSI)
 window.openReadOnlyDetailModal = function(key) {
   const item = allData.find(d => String(d.key) === String(key));
@@ -2755,17 +2826,8 @@ window.openReadOnlyDetailModal = function(key) {
         <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.85rem; color: #fca5a5; margin: 0; line-height: 1.5;">${escapeHTML(item.riwayat_pending || item.catatan_pending)}</pre>
       </div>` : ''}
 
-      <!-- BOX CATATAN JEJAK MEJA TIAP VERIFIKATOR -->
-      <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 14px;">
-        <div style="font-weight: 700; color: #34d399; font-size: 0.85rem; margin-bottom: 8px;">📋 CATATAN REKAM JEJAK MEJA</div>
-        <div>• <strong>Catatan Scan:</strong> ${formatNoteWithBadge(item.catatan_scan)} <small style="color:var(--text-muted);">${item.tgl_scan ? `(${item.tgl_scan})` : ''}</small></div>
-        <div>• <strong>Catatan Kasie / Seksi:</strong> ${formatNoteWithBadge(item.catatan_kasie)} <small style="color:var(--text-muted);">${item.tgl_kasie ? `(${item.tgl_kasie})` : ''}</small></div>
-        <div>• <strong>Catatan Kepala UPT:</strong> ${formatNoteWithBadge(item.catatan_upt)} <small style="color:var(--text-muted);">${item.tgl_upt ? `(${item.tgl_upt})` : ''}</small></div>
-        <div>• <strong>Catatan Kabid:</strong> ${formatNoteWithBadge(item.catatan_kabid)} <small style="color:var(--text-muted);">${item.tgl_kabid ? `(${item.tgl_kabid})` : ''}</small></div>
-        <div>• <strong>Catatan Kadis:</strong> ${formatNoteWithBadge(item.catatan_kadis)} <small style="color:var(--text-muted);">${item.tgl_kadis ? `(${item.tgl_kadis})` : ''}</small></div>
-        <div>• <strong>Status TTE:</strong> ${escapeHTML(item.status_tte || '-')} <small style="color:var(--text-muted);">${item.tgl_tte ? `(${item.tgl_tte})` : ''}</small></div>
-        <div>• <strong>Penerima & Catatan Print:</strong> ${escapeHTML(item.penerima ? `${item.penerima} (${formatNoteWithBadge(item.catatan_print)})` : '-')} <small style="color:var(--text-muted);">${item.tgl_print ? `(${item.tgl_print})` : ''}</small></div>
-      </div>
+      <!-- BOX CATATAN JEJAK MEJA TIAP VERIFIKATOR (Hanya yang ber-catatan ditampilkan) -->
+      ${buildWorkflowNotesHtml(item)}
     `;
   }
 
@@ -2790,9 +2852,12 @@ window.openReadOnlyDetailModal = function(key) {
 };
 
 // MODAL ACTION & TINDAK LANJUT
-window.openActionModal = function(key, subLayanan, pemohon) {
+window.openActionModal = function(key, subLayanan, pemohon, dataIndex) {
   let item = null;
-  if (subLayanan && pemohon) {
+  if (typeof dataIndex === 'number' && allData[dataIndex] && String(allData[dataIndex].key) === String(key)) {
+    item = allData[dataIndex];
+  }
+  if (!item && subLayanan && pemohon) {
     item = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayanan) && String(d.pemohon) === String(pemohon));
   }
   if (!item && subLayanan) {
@@ -2808,6 +2873,8 @@ window.openActionModal = function(key, subLayanan, pemohon) {
   if (modalSubLayanan) modalSubLayanan.value = item.sub_layanan || '';
   const modalPemohon = document.getElementById('modalPemohon');
   if (modalPemohon) modalPemohon.value = item.pemohon || '';
+  const modalDataIndex = document.getElementById('modalDataIndex');
+  if (modalDataIndex) modalDataIndex.value = (typeof dataIndex === 'number') ? dataIndex : (allData.indexOf(item) !== -1 ? allData.indexOf(item) : '');
   if (modalKodeText) modalKodeText.textContent = item.key;
   if (modalPemohonText) modalPemohonText.textContent = item.pemohon || '-';
   if (modalLayananText) modalLayananText.textContent = `${item.jenis_layanan || ''} (${item.sub_layanan || ''})`;
@@ -2854,7 +2921,7 @@ window.openActionModal = function(key, subLayanan, pemohon) {
     let batchBannerHtml = '';
     if (allBatchItems.length > 1) {
       const followerListHtml = allBatchItems.map((it, idx) => {
-        const isCurrentActive = (String(it.sub_layanan) === String(item.sub_layanan));
+        const isCurrentActive = (it === item);
         const isMandatory = (idx === 0);
         let tag = isCurrentActive ? '📍 DOKUMEN SAAT INI' : (isMandatory ? '📌 MANDATORI UTAMA' : `📄 PENGIKUT #${idx}`);
         let tagBg = isCurrentActive ? 'background:#10b981; color:#fff;' : (isMandatory ? 'background:#3b82f6; color:#fff;' : 'background:rgba(139,92,246,0.3); color:#c084fc;');
@@ -2910,16 +2977,8 @@ window.openActionModal = function(key, subLayanan, pemohon) {
         <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.85rem; color: #fca5a5; margin: 0; line-height: 1.5;">${escapeHTML(item.riwayat_pending || item.catatan_pending)}</pre>
       </div>` : ''}
 
-      <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 14px;">
-        <div style="font-weight: 700; color: #34d399; font-size: 0.85rem; margin-bottom: 8px;">📋 CATATAN REKAM JEJAK MEJA</div>
-        <div>• <strong>Catatan Scan:</strong> ${formatNoteWithBadge(item.catatan_scan)} <small style="color:var(--text-muted);">${item.tgl_scan ? `(${item.tgl_scan})` : ''}</small></div>
-        <div>• <strong>Catatan Kasie / Seksi:</strong> ${formatNoteWithBadge(item.catatan_kasie)} <small style="color:var(--text-muted);">${item.tgl_kasie ? `(${item.tgl_kasie})` : ''}</small></div>
-        <div>• <strong>Catatan Kepala UPT:</strong> ${formatNoteWithBadge(item.catatan_upt)} <small style="color:var(--text-muted);">${item.tgl_upt ? `(${item.tgl_upt})` : ''}</small></div>
-        <div>• <strong>Catatan Kabid:</strong> ${formatNoteWithBadge(item.catatan_kabid)} <small style="color:var(--text-muted);">${item.tgl_kabid ? `(${item.tgl_kabid})` : ''}</small></div>
-        <div>• <strong>Catatan Kadis:</strong> ${formatNoteWithBadge(item.catatan_kadis)} <small style="color:var(--text-muted);">${item.tgl_kadis ? `(${item.tgl_kadis})` : ''}</small></div>
-        <div>• <strong>Status TTE:</strong> ${escapeHTML(item.status_tte || '-')} <small style="color:var(--text-muted);">${item.tgl_tte ? `(${item.tgl_tte})` : ''}</small></div>
-        <div>• <strong>Penerima & Catatan Print:</strong> ${escapeHTML(item.penerima ? `${item.penerima} (${formatNoteWithBadge(item.catatan_print)})` : '-')} <small style="color:var(--text-muted);">${item.tgl_print ? `(${item.tgl_print})` : ''}</small></div>
-      </div>
+      <!-- BOX CATATAN JEJAK MEJA TIAP VERIFIKATOR (Hanya yang ber-catatan ditampilkan) -->
+      ${buildWorkflowNotesHtml(item)}
     `;
   }
 
@@ -3031,6 +3090,9 @@ if (actionForm) {
     const subLayananVal = modalSubLayanan ? modalSubLayanan.value : '';
     const modalPemohon = document.getElementById('modalPemohon');
     const pemohonVal = modalPemohon ? modalPemohon.value : (modalPemohonText ? modalPemohonText.textContent.trim() : '');
+    const modalDataIndex = document.getElementById('modalDataIndex');
+    const modalDataIndexVal = modalDataIndex ? modalDataIndex.value : '';
+    const targetDataIdx = modalDataIndexVal !== '' ? parseInt(modalDataIndexVal) : -1;
     let executeAction = modalExecuteAction ? modalExecuteAction.value : 'approve';
     let notes = modalNotes ? modalNotes.value.trim() : '';
     const statusTteVal = tteStatus ? tteStatus.value : '';
@@ -3108,7 +3170,16 @@ if (actionForm) {
           const detailStr = updatedCount > 1 ? `${updatedCount} dokumen terintegrasi (1 Mandatori + ${followerCount} Dokumen Pengikut)` : 'dokumen';
           showToast(`🎉 Berhasil! Link PDF scan pada dokumen mandatori telah mewakili & terisi untuk ${detailStr} (Kode Unik: ${key}) & seluruhnya terkirim ke Meja ${targetDestName}. Tugas scan Anda selesai dengan baik!`, 'success');
         } else if (currentUser.role === 'petugas_tte') {
-          let targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal) && (!pemohonVal || String(d.pemohon) === String(pemohonVal)));
+          let targetItem = null;
+          if (targetDataIdx >= 0 && allData[targetDataIdx] && String(allData[targetDataIdx].key) === String(key)) {
+            targetItem = allData[targetDataIdx];
+          }
+          if (!targetItem) {
+            targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal) && (!pemohonVal || String(d.pemohon) === String(pemohonVal)) && d.status_alur === '5_TTE');
+          }
+          if (!targetItem) {
+            targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal) && (!pemohonVal || String(d.pemohon) === String(pemohonVal)));
+          }
           if (!targetItem) {
             targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal));
           }
@@ -3297,7 +3368,19 @@ if (actionForm) {
             });
             showToast(`🎉 Berhasil! Dokumen perbaikan (Kode Unik: ${key}) beserta ${updatedCount > 1 ? updatedCount + ' dokumen terintegrasi' : 'berkas'} telah dikirim ulang ke Petugas Scan!`, 'success');
           } else if (currentUser.role === 'petugas_pencetakan') {
-            let targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal));
+            let targetItem = null;
+            if (targetDataIdx >= 0 && allData[targetDataIdx] && String(allData[targetDataIdx].key) === String(key)) {
+              targetItem = allData[targetDataIdx];
+            }
+            if (!targetItem) {
+              targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal) && (!pemohonVal || String(d.pemohon) === String(pemohonVal)) && String(d.status_alur).includes('6_PENCETAKAN'));
+            }
+            if (!targetItem) {
+              targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal) && (!pemohonVal || String(d.pemohon) === String(pemohonVal)));
+            }
+            if (!targetItem) {
+              targetItem = allData.find(d => String(d.key) === String(key) && String(d.sub_layanan) === String(subLayananVal));
+            }
             if (!targetItem) targetItem = sampleItem;
             if (targetItem) {
               targetItem.penerima = penerimaVal;
@@ -3427,12 +3510,8 @@ function renderOperatorItemsCards() {
       }
     } else if (integrasiMode === 'Dafduk - Dafduk') {
       jenisOptionsHtml = `<option value="Pendaftaran Penduduk" selected>Pendaftaran Penduduk (Dafduk)</option>`;
-      if (isFirstItem) {
-        subOptionsHtml = DAFDUK_MANDATORY_BASE_OPTIONS.map(opt => `<option value="${opt}" ${item.sub_layanan === opt ? 'selected' : ''}>${opt}</option>`).join('');
-      } else {
-        const dafdukOpts = SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"] || [];
-        subOptionsHtml = dafdukOpts.map(opt => `<option value="${opt}" ${item.sub_layanan === opt ? 'selected' : ''}>${opt}</option>`).join('');
-      }
+      const dafdukOpts = SUB_LAYANAN_OPTIONS["Pendaftaran Penduduk"] || [];
+      subOptionsHtml = dafdukOpts.map(opt => `<option value="${opt}" ${item.sub_layanan === opt ? 'selected' : ''}>${opt}</option>`).join('');
     } else { // 'tunggal'
       jenisOptionsHtml = `
         <option value="Pendaftaran Penduduk" ${item.jenis_layanan === 'Pendaftaran Penduduk' ? 'selected' : ''}>Pendaftaran Penduduk (Dafduk)</option>
@@ -3559,10 +3638,12 @@ const btnAddItemBtn = document.getElementById('btnAddItemBtn');
 if (btnAddItemBtn) {
   btnAddItemBtn.addEventListener('click', () => {
     const item1 = currentDraftItems[0] || {};
+    const integrasiMode = formIntegrasi ? formIntegrasi.value : 'tunggal';
+    const defaultSub = (integrasiMode === 'Dafduk - Dafduk') ? (item1.sub_layanan || 'KK Baru') : 'KK Baru';
     currentDraftItems.push({
       id: currentDraftItems.length + 1,
       jenis_layanan: 'Pendaftaran Penduduk',
-      sub_layanan: 'KK Baru',
+      sub_layanan: defaultSub,
       pemohon: '', // Kosongkan nama pemohon agar diisi manual sesuai nama dokumen pengikut
       no_hp: item1.no_hp || '',
       email: item1.email || '',
