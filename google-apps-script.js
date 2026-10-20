@@ -311,21 +311,51 @@ function doPost(e) {
       var targetOperator = payload.target_operator || "";
       var userMonitoring = payload.user_name || payload.userName || "Monitoring";
       
-      var foundRow = findRowByKeyAndSub(sheet, key, subLayanan);
-      if (foundRow !== -1) {
-        var detailInfo = (infoMon === "OPERATOR") ? targetOperator : (metodeMon ? ("Metode: " + metodeMon) : "");
-        sheet.getRange(foundRow, 31).setValue(catMon);         // Col AE (31)
-        sheet.getRange(foundRow, 32).setValue(infoMon);        // Col AF (32)
-        sheet.getRange(foundRow, 33).setValue(detailInfo);     // Col AG (33)
-        sheet.getRange(foundRow, 34).setValue(userMonitoring); // Col AH (34 - Petugas Monitoring)
+      var lastRow = sheet.getLastRow();
+      if (lastRow <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Dokumen tidak ditemukan." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
 
-        var pemohonName = sheet.getRange(foundRow, 5).getValue().toString(); // Col E
-        var currentSubLayanan = sheet.getRange(foundRow, 11).getValue().toString() || subLayanan; // Col K
-        var riwayatPending = sheet.getRange(foundRow, 22).getValue().toString(); // Col V
-        var catatanKasie = sheet.getRange(foundRow, 17).getValue().toString();   // Col Q
-        var catatanUpt = sheet.getRange(foundRow, 20).getValue().toString();     // Col T
-        var catatanKabid = sheet.getRange(foundRow, 18).getValue().toString();   // Col R
-        var catatanKadis = sheet.getRange(foundRow, 19).getValue().toString();   // Col S
+      var vals = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
+      var detailInfo = (infoMon === "OPERATOR") ? targetOperator : (metodeMon ? ("Metode: " + metodeMon) : "");
+      var matchingRows = [];
+
+      for (var i = 0; i < vals.length; i++) {
+        if (vals[i][0].toString() === key) {
+          matchingRows.push(i + 2);
+        }
+      }
+
+      if (matchingRows.length > 0) {
+        // Perbarui SELURUH baris dokumen se-Kode Unik terintegrasi agar info_monitoring konsisten di seluruh sub-layanan
+        for (var m = 0; m < matchingRows.length; m++) {
+          var rIdx = matchingRows[m];
+          sheet.getRange(rIdx, 31).setValue(catMon);         // Col AE (31)
+          sheet.getRange(rIdx, 32).setValue(infoMon);        // Col AF (32)
+          sheet.getRange(rIdx, 33).setValue(detailInfo);     // Col AG (33)
+          sheet.getRange(rIdx, 34).setValue(userMonitoring); // Col AH (34 - Petugas Monitoring)
+        }
+
+        var repRow = matchingRows[0];
+        if (subLayanan) {
+          for (var m = 0; m < matchingRows.length; m++) {
+            var r = matchingRows[m];
+            var s = sheet.getRange(r, 11).getValue().toString();
+            if (s.trim().toLowerCase() === subLayanan.trim().toLowerCase()) {
+              repRow = r;
+              break;
+            }
+          }
+        }
+
+        var pemohonName = sheet.getRange(repRow, 5).getValue().toString(); // Col E
+        var currentSubLayanan = sheet.getRange(repRow, 11).getValue().toString() || subLayanan; // Col K
+        var riwayatPending = sheet.getRange(repRow, 22).getValue().toString(); // Col V
+        var catatanKasie = sheet.getRange(repRow, 17).getValue().toString();   // Col Q
+        var catatanUpt = sheet.getRange(repRow, 20).getValue().toString();     // Col T
+        var catatanKabid = sheet.getRange(repRow, 18).getValue().toString();   // Col R
+        var catatanKadis = sheet.getRange(repRow, 19).getValue().toString();   // Col S
 
         var rawReason = riwayatPending || catatanKadis || catatanKabid || catatanKasie || catatanUpt || "Persyaratan belum lengkap";
         var lines = rawReason.split("\n");
@@ -339,7 +369,7 @@ function doPost(e) {
         }
 
         if (waMsg) {
-          var fasilitasi = sheet.getRange(foundRow, 3).getValue().toString(); // Col C
+          var fasilitasi = sheet.getRange(repRow, 3).getValue().toString(); // Col C
           var isUpt = fasilitasi ? (fasilitasi.toUpperCase().indexOf("UPT") !== -1) : false;
           var targetGroup = isUpt ? WA_GROUP_UPT : WA_GROUP_DINAS;
           

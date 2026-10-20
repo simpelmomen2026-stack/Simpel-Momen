@@ -885,6 +885,11 @@ function renderCounterDesk() {
     } else if (role === 'petugas_pencetakan') {
       if (fasilitasi === 'UPT') return statusAlur === '6_PENCETAKAN_UPT';
       return statusAlur === '6_PENCETAKAN_DINAS';
+    } else if (role === 'monitoring') {
+      // Counter Monitoring: Seluruh dokumen pending yang BELUM dieksekusi oleh Monitoring
+      const isPending = statusAlur === 'PENDING_OPERATOR' || statusAlur.includes('PENDING');
+      const isAlreadyMonitored = item.info_monitoring && String(item.info_monitoring).trim() !== '';
+      return isPending && !isAlreadyMonitored;
     }
     return true;
   });
@@ -899,6 +904,14 @@ function renderCounterDesk() {
   if (valMetric2) valMetric2.textContent = countPendingAll;
   if (valMetric3) valMetric3.textContent = countCompletedAll;
 
+  // Peta Kode Unik Seluruh Database untuk identifikasi berkas terintegrasi & relasi antar sub-layanan
+  const allDataKeyMap = {};
+  allData.forEach(it => {
+    const k = String(it.key);
+    if (!allDataKeyMap[k]) allDataKeyMap[k] = [];
+    allDataKeyMap[k].push(it);
+  });
+
   // Filter tampilan tabel berdasarkan Fasilitasi (Dinas / UPT) & Pencarian
   const fasilitasiSelect = document.getElementById('fasilitasiFilter');
   const selectedFas = fasilitasiSelect ? fasilitasiSelect.value : 'ALL';
@@ -908,15 +921,6 @@ function renderCounterDesk() {
     if (isUserUpt(currentUser) && !matchItemToUserUpt(item, currentUser)) {
       return false;
     }
-
-    const keyMatch = String(item.key || "").toLowerCase().includes(query);
-    const pemohonMatch = String(item.pemohon || "").toLowerCase().includes(query);
-    const jenisMatch = String(item.jenis_layanan || "").toLowerCase().includes(query);
-    const subMatch = String(item.sub_layanan || "").toLowerCase().includes(query);
-    const operatorMatch = String(item.operator || "").toLowerCase().includes(query);
-    
-    const matchesSearch = !query || keyMatch || pemohonMatch || jenisMatch || subMatch || operatorMatch;
-    if (!matchesSearch) return false;
 
     if (selectedFas === 'Dinas') {
       const isDinas = String(item.fasilitasi || item.integrasi || "Dinas").toLowerCase().includes('dinas');
@@ -929,66 +933,70 @@ function renderCounterDesk() {
     if (role === 'monitoring') {
       const isPending = item.status_alur === 'PENDING_OPERATOR' || String(item.status_alur).includes('PENDING');
       const isAlreadyMonitored = item.info_monitoring && String(item.info_monitoring).trim() !== '';
-      return isPending && !isAlreadyMonitored;
+      if (!isPending || isAlreadyMonitored) return false;
+    } else {
+      if (!userActiveDeskItems.includes(item)) return false;
     }
-    return userActiveDeskItems.includes(item);
+
+    // Pencarian: Cocokkan dengan item saat ini ATAU salah satu anggota batch berkas terintegrasi
+    const fullBatch = allDataKeyMap[String(item.key)] || [item];
+    const matchesSearch = !query || fullBatch.some(b => {
+      const kMatch = String(b.key || "").toLowerCase().includes(query);
+      const pMatch = String(b.pemohon || "").toLowerCase().includes(query);
+      const jMatch = String(b.jenis_layanan || "").toLowerCase().includes(query);
+      const sMatch = String(b.sub_layanan || "").toLowerCase().includes(query);
+      const oMatch = String(b.operator || "").toLowerCase().includes(query);
+      return kMatch || pMatch || jMatch || sMatch || oMatch;
+    });
+
+    return matchesSearch;
   });
 
-  // 🕒 Pengurutan & Filter Khusus Counter User (Petugas Scan, Kasie Capil, Kasie Dafduk, Kepala UPT, Operator):
+  // 🕒 Pengurutan & Filter Khusus Counter User (Petugas Scan, Kasie Capil, Kasie Dafduk, Kepala UPT, Operator, Monitoring):
   // 1. Filter Stay Mode: Sembunyikan Dokumen Pengikut / Dokumen Belum Waktunya dari Tabel Counter (Hanya tampilkan 1 Dokumen Mandatori per Kode Unik)
   // 2. Pengurutan FIFO: Urutkan dari Dokumen Paling Lama (Paling Atas) ke Terbaru (Terbawah)
-  let displayList = filtered;
-
-  const allDataKeyMap = {};
-  allData.forEach(it => {
+  const filteredKeyMap = {};
+  filtered.forEach(it => {
     const k = String(it.key);
-    if (!allDataKeyMap[k]) allDataKeyMap[k] = [];
-    allDataKeyMap[k].push(it);
+    if (!filteredKeyMap[k]) filteredKeyMap[k] = [];
+    filteredKeyMap[k].push(it);
   });
 
-  displayList = filtered.filter(item => {
-    const fullBatch = allDataKeyMap[String(item.key)] || [];
-    if (fullBatch.length <= 1) return true; // Berkas tunggal tetap ditampilkan
+  let displayList = filtered.filter(item => {
+    const batchAtDesk = filteredKeyMap[String(item.key)] || [];
+    if (batchAtDesk.length <= 1) return true; // Berkas tunggal tetap ditampilkan
 
     // 1. Petugas TTE & Petugas Cetak: Tampilkan SEMUA dokumen se-Kode Unik (Aturan mandatori diabaikan & dieksekusi 1 per 1)
     if (role === 'petugas_tte' || role === 'petugas_pencetakan') {
       return true;
     }
 
-    // 2. Petugas Scan, Kasie, Kepala UPT, Kabid, Kadis, & Operator:
+    // 2. Petugas Scan, Kasie, Kepala UPT, Kabid, Kadis, Operator, & Monitoring:
     // Dokumen yang memiliki kode unik yang sama HANYA MENAMPILKAN SATU DOKUMEN YANG DIMANDATORIKAN
+    const fullBatch = allDataKeyMap[String(item.key)] || batchAtDesk;
     const isDafdukCapil = fullBatch.some(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil')) &&
                           fullBatch.some(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk'));
 
     if (role === 'petugas_scan') {
-      const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+      const mandatoryItem = getMandatoryItemForBatch(batchAtDesk);
       return item === mandatoryItem;
     }
 
-    if (role === 'kasie_capil') {
-      const capilItems = fullBatch.filter(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
-      const mandatoryCapil = getMandatoryItemForBatch(capilItems);
-      return item === mandatoryCapil;
-    }
-
-    if (role === 'kabid_capil') {
-      const capilItems = fullBatch.filter(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
-      const mandatoryCapil = getMandatoryItemForBatch(capilItems);
+    if (role === 'kasie_capil' || role === 'kabid_capil') {
+      const capilItems = batchAtDesk.filter(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
+      const mandatoryCapil = getMandatoryItemForBatch(capilItems.length > 0 ? capilItems : batchAtDesk);
       return item === mandatoryCapil;
     }
 
     if (role === 'kasie_dafduk') {
       if (isDafdukCapil) {
         const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
-        if (capilItem) {
-          const capilStatus = String(capilItem.status_alur || '');
-          if (capilStatus === '2_VERIFIKASI_KASIE') {
-            return false;
-          }
+        if (capilItem && String(capilItem.status_alur || '') === '2_VERIFIKASI_KASIE') {
+          return false;
         }
       }
-      const dafdukItems = fullBatch.filter(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk') || String(b.jenis_layanan).toLowerCase().includes('dafduk'));
-      const mandatoryDafduk = getMandatoryItemForBatch(dafdukItems);
+      const dafdukItems = batchAtDesk.filter(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk') || String(b.jenis_layanan).toLowerCase().includes('dafduk'));
+      const mandatoryDafduk = getMandatoryItemForBatch(dafdukItems.length > 0 ? dafdukItems : batchAtDesk);
       return item === mandatoryDafduk;
     }
 
@@ -1002,47 +1010,49 @@ function renderCounterDesk() {
           }
         }
       }
-      const dafdukItems = fullBatch.filter(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk') || String(b.jenis_layanan).toLowerCase().includes('dafduk'));
-      const mandatoryDafduk = getMandatoryItemForBatch(dafdukItems);
+      const dafdukItems = batchAtDesk.filter(b => String(b.jenis_layanan).toLowerCase().includes('pendaftaran penduduk') || String(b.jenis_layanan).toLowerCase().includes('dafduk'));
+      const mandatoryDafduk = getMandatoryItemForBatch(dafdukItems.length > 0 ? dafdukItems : batchAtDesk);
       return item === mandatoryDafduk;
     }
 
     if (role === 'kepala_upt') {
       if (isDafdukCapil) {
-        const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
-        if (capilItem) {
-          return item === capilItem;
-        }
+        const capilItem = batchAtDesk.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
+        if (capilItem) return item === capilItem;
       }
-      const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+      const mandatoryItem = getMandatoryItemForBatch(batchAtDesk);
       return item === mandatoryItem;
     }
 
     if (role === 'operator') {
       if (isDafdukCapil) {
-        const capilItem = fullBatch.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
+        const capilItem = batchAtDesk.find(b => String(b.jenis_layanan).toLowerCase().includes('pencatatan sipil') || String(b.jenis_layanan).toLowerCase().includes('capil'));
         if (capilItem) return item === capilItem;
       }
-      const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+      const mandatoryItem = getMandatoryItemForBatch(batchAtDesk);
       return item === mandatoryItem;
     }
 
-    if (role === 'kadis') {
-      const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+    if (role === 'kadis' || role === 'monitoring') {
+      const mandatoryItem = getMandatoryItemForBatch(batchAtDesk);
       return item === mandatoryItem;
     }
 
-    const mandatoryItem = getMandatoryItemForBatch(fullBatch);
+    const mandatoryItem = getMandatoryItemForBatch(batchAtDesk);
     return item === mandatoryItem;
   });
 
   // 🕒 Pengurutan FIFO (Oldest at Top, Newest at Bottom) untuk SEMUA Counter User
   displayList.sort((a, b) => {
-    const timeA = String(a.tgl_operator || a.tanggal || '');
-    const timeB = String(b.tgl_operator || b.tanggal || '');
+    const rawA = a.tgl_operator || a.tanggal || '';
+    const rawB = b.tgl_operator || b.tanggal || '';
+    const timeA = rawA ? new Date(rawA).getTime() : 0;
+    const timeB = rawB ? new Date(rawB).getTime() : 0;
     if (timeA && timeB) {
-      return timeA.localeCompare(timeB);
+      return timeA - timeB;
     }
+    if (timeA) return -1;
+    if (timeB) return 1;
     return 0;
   });
 
@@ -1096,6 +1106,31 @@ function renderCounterDesk() {
     const linkBtnHtml = hasLink ? 
       `<br><a href="${escapeHTML(row.link_file.trim())}" target="_blank" class="btn btn-secondary btn-xs" style="color:#60a5fa; margin-top:4px; font-size:0.75rem; padding:2px 8px;">📄 Buka Scan PDF</a>` : '';
 
+    const batchItems = allData.filter(d => String(d.key) === String(row.key));
+    const batchCount = batchItems.length;
+    const isIntegrated = batchCount > 1 || (row.integrasi && row.integrasi !== 'tunggal');
+    
+    let integrasiBadgeHtml = '';
+    if (isIntegrated) {
+      if (batchCount > 1) {
+        if (role === 'petugas_tte' || role === 'petugas_pencetakan') {
+          integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:3px 8px; border-radius:6px; display:inline-block; margin-top:4px; line-height:1.4;">⚡ Terintegrasi (${batchCount} Dokumen)<br><small style="color:#38bdf8; font-weight:700;">📄 Eksekusi mandiri: ${escapeHTML(row.sub_layanan)}</small></span>`;
+        } else {
+          const followerItems = batchItems.filter(it => it !== row);
+          const followerNames = followerItems.map(f => `${escapeHTML(f.sub_layanan)} (${escapeHTML(f.pemohon || 'Warga')})`).join(', ');
+          integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:3px 8px; border-radius:6px; display:inline-block; margin-top:4px; line-height:1.4;">⚡ Terintegrasi (${batchCount} Dokumen)<br><small style="color:#d8b4fe; font-weight:700;">📌 Ditampilkan: ${escapeHTML(row.sub_layanan)}<br>👁️ Pengikut Tersembunyi: ${followerNames}</small></span>`;
+        }
+      } else {
+        integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:2px 6px; border-radius:6px; display:inline-block; margin-top:4px;">⚡ Terintegrasi</span>`;
+      }
+    }
+
+    // Catatan Pending jika ada
+    const pendingText = row.riwayat_pending || row.catatan_pending;
+    const pendingBadgeHtml = pendingText ? `<div style="font-size:0.75rem; color:#f87171; font-weight:600; margin-top:4px; line-height:1.3;">⚠️ Pending: ${escapeHTML(pendingText)}</div>` : '';
+
+    const otherPemohons = Array.from(new Set(batchItems.map(b => b.pemohon).filter(p => p && p !== row.pemohon)));
+
     if (role === 'monitoring') {
       const hasMonInfo = row.info_monitoring && row.info_monitoring.trim() !== "";
       const infoText = row.info_monitoring === 'PEMOHON' ? 
@@ -1109,15 +1144,16 @@ function renderCounterDesk() {
 
       return `
         <tr style="background: rgba(239, 68, 68, 0.08);">
-          <td><span class="code-key-badge">${escapeHTML(row.key)}</span></td>
+          <td><span class="code-key-badge">${escapeHTML(row.key)}</span>${integrasiBadgeHtml}</td>
           <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
-          <td><strong>${escapeHTML(row.pemohon)}</strong></td>
+          <td><strong>${escapeHTML(row.pemohon)}</strong>${otherPemohons.length ? `<br><small style="color:#93c5fd; font-weight:600;">+ ${otherPemohons.map(escapeHTML).join(', ')}</small>` : ''}</td>
           <td>${escapeHTML(row.jenis_layanan)}</td>
           <td><strong style="color:#60a5fa;">${escapeHTML(row.sub_layanan)}</strong>${linkBtnHtml}</td>
           <td>
             <span class="badge danger">pending</span>
             ${infoBadge}
             ${monNoteText}
+            ${pendingBadgeHtml}
           </td>
           <td class="text-center">
             <button class="btn btn-warning btn-xs" onclick="openMonitoringNoteModal('${escapeHTML(row.key)}', '${escapeHTML(row.sub_layanan)}')" style="font-weight:700; white-space:nowrap; padding: 4px 8px;">
@@ -1516,10 +1552,18 @@ window.openMonitoringNoteModal = function(key, subLayanan) {
     return;
   }
 
+  const batchItems = allData.filter(d => String(d.key || '').trim() === keyStr);
+
   if (monModalKey) monModalKey.value = item.key;
   if (monModalSubLayanan) monModalSubLayanan.value = item.sub_layanan || '';
-  if (monModalDocTitle) monModalDocTitle.textContent = `${item.sub_layanan || item.jenis_layanan} (Kode: ${item.key})`;
-  if (monModalPemohonInfo) monModalPemohonInfo.textContent = `Pemohon: ${item.pemohon} | No HP: ${item.no_hp || '-'}`;
+  if (batchItems.length > 1) {
+    if (monModalDocTitle) monModalDocTitle.textContent = `${item.sub_layanan || item.jenis_layanan} (Kode: ${item.key}) - Terintegrasi (${batchItems.length} Dokumen)`;
+    const batchSummary = batchItems.map(b => `${b.sub_layanan} [${b.pemohon}]`).join(', ');
+    if (monModalPemohonInfo) monModalPemohonInfo.innerHTML = `<strong>Daftar Dokumen:</strong> ${escapeHTML(batchSummary)}<br><small>No HP: ${escapeHTML(item.no_hp || '-')}</small>`;
+  } else {
+    if (monModalDocTitle) monModalDocTitle.textContent = `${item.sub_layanan || item.jenis_layanan} (Kode: ${item.key})`;
+    if (monModalPemohonInfo) monModalPemohonInfo.textContent = `Pemohon: ${item.pemohon} | No HP: ${item.no_hp || '-'}`;
+  }
   if (monModalPendingReason) monModalPendingReason.textContent = `⚠️ Catatan Pending: ${item.riwayat_pending || item.catatan_pending || 'Tidak ada catatan'}`;
   
   const monMetodeSelect = document.getElementById('monMetodeSelect');
@@ -1697,19 +1741,21 @@ window.saveMonitoringNote = async function() {
       console.warn('Respon backend Apps Script:', backendRes);
     }
 
-    // 2. Update data lokal secara presisi
+    // 2. Update data lokal secara presisi untuk SELURUH item dalam batch kode unik ini
     let item = allData.find(d => String(d.key || '').trim() === keyStr && (!subStr || String(d.sub_layanan || '').trim() === subStr));
     if (!item) {
       item = allData.find(d => String(d.key || '').trim() === keyStr);
     }
-    if (item) {
-      item.info_monitoring = infoTarget;
-      item.catatan_monitoring = (infoTarget === 'PEMOHON') ? catatanPemohon : '';
-      item.metode_monitoring = (infoTarget === 'PEMOHON') ? metodeVal : '';
-      item.target_operator = (infoTarget === 'OPERATOR') ? targetOperatorVal : '';
-      item.petugas_monitoring = execUserTag;
-      item.tgl_monitoring = getLocalDateTimeString();
-    }
+    allData.forEach(d => {
+      if (String(d.key || '').trim() === keyStr) {
+        d.info_monitoring = infoTarget;
+        d.catatan_monitoring = (infoTarget === 'PEMOHON') ? catatanPemohon : '';
+        d.metode_monitoring = (infoTarget === 'PEMOHON') ? metodeVal : '';
+        d.target_operator = (infoTarget === 'OPERATOR') ? targetOperatorVal : '';
+        d.petugas_monitoring = execUserTag;
+        d.tgl_monitoring = getLocalDateTimeString();
+      }
+    });
 
     // 3. Trigger pengiriman WA via Fonnte Client API
     const docSub = item ? (item.sub_layanan || item.jenis_layanan || subStr) : subStr;
