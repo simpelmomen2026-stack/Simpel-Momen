@@ -1167,10 +1167,6 @@ function renderCounterDesk() {
       `;
     }
 
-    // Catatan Pending jika ada
-    const pendingText = row.riwayat_pending || row.catatan_pending;
-    const pendingBadgeHtml = pendingText ? `<div style="font-size:0.75rem; color:#f87171; font-weight:600; margin-top:4px; line-height:1.3;">⚠️ Pending: ${escapeHTML(pendingText)}</div>` : '';
-
     // Tombol Akses Tindakan
     let actionBtnHtml = '';
     if (role === 'monitoring') {
@@ -1208,25 +1204,6 @@ function renderCounterDesk() {
           ⚡ Setujui / Lanjutkan
         </button>
       `;
-    }
-
-    const batchItems = allData.filter(d => String(d.key) === String(row.key));
-    const batchCount = batchItems.length;
-    const isIntegrated = batchCount > 1 || (row.integrasi && row.integrasi !== 'tunggal');
-    
-    let integrasiBadgeHtml = '';
-    if (isIntegrated) {
-      if (batchCount > 1) {
-        if (role === 'petugas_tte' || role === 'petugas_pencetakan') {
-          integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:3px 8px; border-radius:6px; display:inline-block; margin-top:4px; line-height:1.4;">⚡ Terintegrasi (${batchCount} Dokumen)<br><small style="color:#38bdf8; font-weight:700;">📄 Eksekusi mandiri: ${escapeHTML(row.sub_layanan)}</small></span>`;
-        } else {
-          const followerItems = batchItems.filter(it => it !== row);
-          const followerNames = followerItems.map(f => `${escapeHTML(f.sub_layanan)} (${escapeHTML(f.pemohon || 'Warga')})`).join(', ');
-          integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:3px 8px; border-radius:6px; display:inline-block; margin-top:4px; line-height:1.4;">⚡ Terintegrasi (${batchCount} Dokumen)<br><small style="color:#d8b4fe; font-weight:700;">📌 Ditampilkan: ${escapeHTML(row.sub_layanan)}<br>👁️ Pengikut Tersembunyi: ${followerNames}</small></span>`;
-        }
-      } else {
-        integrasiBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#c084fc; background:rgba(139,92,246,0.18); border:1px solid rgba(139,92,246,0.4); padding:2px 6px; border-radius:6px; display:inline-block; margin-top:4px;">⚡ Terintegrasi</span>`;
-      }
     }
 
     return `
