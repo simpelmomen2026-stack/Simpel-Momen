@@ -16,6 +16,173 @@ let currentUser = null;
 let allData = [];
 let currentDeskFilter = 'active'; // 'active', 'completed', 'all'
 
+// ================= INTEGRASI PRIORITAS ANTRIAN DUKCAPIL =================
+// Membaca nomor token / kode unik antrian B dan C dari Database Antrian Dukcapil (sheet antrian)
+// Kode unik yang cocok dengan Simpel Momen Sheet1 akan diprioritaskan di meja kerja semua tingkatan user.
+const ANTRIAN_SHEET_ID = '169cLHhc22o4az0BfJY_OLRmMZDVOtaJ0eaD2y1chQfU';
+const ANTRIAN_SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${ANTRIAN_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=antrian`;
+let antrianPriorityMap = new Map(); // key: normalized token -> ticket info
+
+function parseCsvAntrianTokens(csvText) {
+  if (!csvText) return [];
+  const lines = csvText.split(/\r?\n/);
+  const tickets = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const cols = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let c = 0; c < line.length; c++) {
+      const char = line[c];
+      if (char === '"') {
+        if (inQuotes && line[c + 1] === '"') {
+          cur += '"';
+          c++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        cols.push(cur.trim());
+        cur = '';
+      } else {
+        cur += char;
+      }
+    }
+    cols.push(cur.trim());
+
+    if (cols.length >= 4) {
+      const ticketId = cols[0].replace(/^"|"$/g, '');
+      const ticketNumber = (cols[1] || '').replace(/^"|"$/g, '').trim().toUpperCase();
+      const catCode = (cols[2] || ticketNumber.charAt(0) || '').replace(/^"|"$/g, '').trim().toUpperCase();
+      const token = (cols[3] || '').replace(/^"|"$/g, '').trim();
+      const status = (cols[4] || 'WAITING').replace(/^"|"$/g, '').trim().toUpperCase();
+      const timestamp = (cols[5] || '').replace(/^"|"$/g, '').trim();
+
+      tickets.push({
+        id: ticketId,
+        number: ticketNumber,
+        category: catCode,
+        token: token,
+        status: status,
+        timestamp: timestamp
+      });
+    }
+  }
+  return tickets;
+}
+
+async function fetchAntrianPriorityTokens() {
+  const newMap = new Map();
+  try {
+    let rawCsv = null;
+
+    // 1. Coba ambil langsung dari Google Spreadsheet Antrian Dukcapil (sheet=antrian)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const url = `${ANTRIAN_SHEET_CSV_URL}&_nocache=${Date.now()}`;
+      const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (response.ok) {
+        const text = await response.text();
+        if (text && !text.includes('google.visualization.Query.setResponse({"status":"error"') && text.length > 20) {
+          rawCsv = text;
+        }
+      }
+    } catch (e) {
+      // Skip jika ada timeout/CORS, lanjut ke fallback proxy / local
+    }
+
+    // 2. Jika fetch langsung tidak berhasil, coba via proxy api.php?action=get_antrian_priority
+    if (!rawCsv) {
+      try {
+        const proxyResp = await fetch(`api.php?action=get_antrian_priority&_t=${Date.now()}`);
+        if (proxyResp.ok) {
+          const json = await proxyResp.json();
+          if (json.csv) {
+            rawCsv = json.csv;
+          } else if (Array.isArray(json.tickets)) {
+            // Didapat dari queue_state.json lokal
+            for (const t of json.tickets) {
+              const num = (t.number || '').trim().toUpperCase();
+              const cat = (t.categoryCode || num.charAt(0) || '').toUpperCase();
+              const tok = (t.token || '').trim();
+              if ((cat === 'B' || cat === 'C' || num.startsWith('B') || num.startsWith('C')) && tok && tok !== '-' && tok.toLowerCase() !== 'null') {
+                const norm = tok.toUpperCase();
+                const tTime = t.timestamp ? (new Date(t.timestamp).getTime() || 0) : 0;
+                newMap.set(norm, {
+                  ticketNumber: num,
+                  category: cat,
+                  token: tok,
+                  status: (t.status || 'WAITING').toUpperCase(),
+                  timestamp: t.timestamp || '',
+                  timeMs: tTime
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // Fallback coba akses langsung file lokal ../antrian/data/queue_state.json
+        try {
+          const localResp = await fetch(`../antrian/data/queue_state.json?_t=${Date.now()}`);
+          if (localResp.ok) {
+            const localData = await localResp.json();
+            if (Array.isArray(localData.tickets)) {
+              for (const t of localData.tickets) {
+                const num = (t.number || '').trim().toUpperCase();
+                const cat = (t.categoryCode || num.charAt(0) || '').toUpperCase();
+                const tok = (t.token || '').trim();
+                if ((cat === 'B' || cat === 'C' || num.startsWith('B') || num.startsWith('C')) && tok && tok !== '-' && tok.toLowerCase() !== 'null') {
+                  const norm = tok.toUpperCase();
+                  const tTime = t.timestamp ? (new Date(t.timestamp).getTime() || 0) : 0;
+                  newMap.set(norm, {
+                    ticketNumber: num,
+                    category: cat,
+                    token: tok,
+                    status: (t.status || 'WAITING').toUpperCase(),
+                    timestamp: t.timestamp || '',
+                    timeMs: tTime
+                  });
+                }
+              }
+            }
+          }
+        } catch (e2) {}
+      }
+    }
+
+    if (rawCsv) {
+      const parsedTickets = parseCsvAntrianTokens(rawCsv);
+      for (const t of parsedTickets) {
+        const num = t.number;
+        const cat = t.category;
+        const tok = t.token;
+        if ((cat === 'B' || cat === 'C' || num.startsWith('B') || num.startsWith('C')) && tok && tok !== '-' && tok.toLowerCase() !== 'null') {
+          const norm = tok.toUpperCase();
+          const tTime = t.timestamp ? (new Date(t.timestamp).getTime() || 0) : 0;
+          const existing = newMap.get(norm);
+          if (!existing || (existing.status === 'FINISHED' && t.status !== 'FINISHED') || tTime > existing.timeMs) {
+            newMap.set(norm, {
+              ticketNumber: num,
+              category: cat,
+              token: tok,
+              status: t.status,
+              timestamp: t.timestamp,
+              timeMs: tTime
+            });
+          }
+        }
+      }
+    }
+
+    antrianPriorityMap = newMap;
+  } catch (error) {
+    console.warn('Gagal memuat token prioritas Antrian Dukcapil:', error);
+  }
+}
+
 function getLocalDateTimeString() {
   const d = new Date();
   const pad = n => n.toString().padStart(2, '0');
@@ -739,6 +906,7 @@ async function loadData(skipSessionCheck = false) {
   
   if (API_URL === 'local') {
     allData = getLocalDB();
+    await fetchAntrianPriorityTokens();
     updateDbConnectionIndicator(false, 'Terputus DB');
     populateFasilitasiFilterOptions();
     renderCounterDesk();
@@ -749,7 +917,10 @@ async function loadData(skipSessionCheck = false) {
   
   try {
     const freshApiUrl = API_URL.includes('?') ? `${API_URL}&_t=${Date.now()}` : `${API_URL}?_t=${Date.now()}`;
-    const response = await fetch(freshApiUrl, { cache: 'no-store' });
+    const [response] = await Promise.all([
+      fetch(freshApiUrl, { cache: 'no-store' }),
+      fetchAntrianPriorityTokens()
+    ]);
     if (!response.ok) throw new Error('Gagal memuat data');
     const resJson = await response.json();
     
@@ -769,6 +940,7 @@ async function loadData(skipSessionCheck = false) {
     renderRekapitulasi();
   } catch (error) {
     console.error('Gagal mengambil data dari Google Sheets:', error);
+    await fetchAntrianPriorityTokens();
     updateDbConnectionIndicator(false, 'Terputus DB');
     showToast('Koneksi ke Google Sheets terganggu. Menampilkan data cadangan sementara.', 'warning');
     allData = getLocalDB();
@@ -1042,8 +1214,29 @@ function renderCounterDesk() {
     return item === mandatoryItem;
   });
 
-  // 🕒 Pengurutan FIFO (Oldest at Top, Newest at Bottom) untuk SEMUA Counter User
+  // 🕒 Pengurutan Meja Kerja:
+  // 1. Dokumen Prioritas Antrian: Token / Kode Unik antrian B dan C dari Database Antrian Dukcapil (sheet antrian)
+  //    yang cocok secara presisi dengan Simpel Momen Sheet1 ditempatkan diurutan PALING ATAS.
+  // 2. Sesudah prioritas dokumen, barulah diurutkan FIFO (dokumen dengan tanggal lebih lama diurutkan di atas, tanggal terbaru paling bawah).
   displayList.sort((a, b) => {
+    const keyA = String(a.key || '').trim().toUpperCase();
+    const keyB = String(b.key || '').trim().toUpperCase();
+    const prioA = antrianPriorityMap.has(keyA);
+    const prioB = antrianPriorityMap.has(keyB);
+
+    if (prioA && !prioB) return -1;
+    if (!prioA && prioB) return 1;
+
+    if (prioA && prioB) {
+      const infoA = antrianPriorityMap.get(keyA);
+      const infoB = antrianPriorityMap.get(keyB);
+      const timeTicketA = infoA && infoA.timeMs ? infoA.timeMs : 0;
+      const timeTicketB = infoB && infoB.timeMs ? infoB.timeMs : 0;
+      if (timeTicketA && timeTicketB && timeTicketA !== timeTicketB) {
+        return timeTicketA - timeTicketB;
+      }
+    }
+
     const rawA = a.tgl_operator || a.tanggal || '';
     const rawB = b.tgl_operator || b.tanggal || '';
     const timeA = rawA ? new Date(rawA).getTime() : 0;
@@ -1099,8 +1292,22 @@ function renderCounterDesk() {
     const allDataIdx = allData.indexOf(row);
     const isPending = row.status_alur === 'PENDING_OPERATOR';
     const isSelesai = row.status_alur === '7_SELESAI';
-    const rowStyle = isPending ? 'background: rgba(239, 68, 68, 0.08);' : (isSelesai ? 'background: rgba(16, 185, 129, 0.04);' : '');
+    const normKey = String(row.key || '').trim().toUpperCase();
+    const prioData = antrianPriorityMap.get(normKey);
+
+    let rowStyle = isPending ? 'background: rgba(239, 68, 68, 0.08);' : (isSelesai ? 'background: rgba(16, 185, 129, 0.04);' : '');
+    if (prioData) {
+      rowStyle = isPending ? 
+        'background: rgba(239, 68, 68, 0.12); border-left: 4px solid #ef4444;' : 
+        (isSelesai ? 'background: rgba(16, 185, 129, 0.06); border-left: 4px solid #f97316;' : 'background: rgba(249, 115, 22, 0.08); border-left: 4px solid #f97316;');
+    }
     
+    // Badge Prioritas Antrian jika nomor token / kode unik cocok dengan antrian B atau C Dukcapil
+    let priorityBadgeHtml = '';
+    if (prioData) {
+      priorityBadgeHtml = `<br><span style="font-size:0.68rem; font-weight:800; color:#fff; background:linear-gradient(135deg, #ef4444, #f97316); border:1px solid rgba(239,68,68,0.6); padding:2px 7px; border-radius:6px; display:inline-block; margin-top:3px; box-shadow:0 0 10px rgba(239,68,68,0.35);">⚡ Prioritas Antrian ${escapeHTML(prioData.ticketNumber || prioData.category)}</span>`;
+    }
+
     // Link file scan jika ada
     const hasLink = row.link_file && row.link_file.trim().startsWith('http');
     const linkBtnHtml = hasLink ? 
@@ -1143,8 +1350,8 @@ function renderCounterDesk() {
       const monNoteText = row.catatan_monitoring ? `<br><small style="color: #94a3b8; font-style: italic;">Note: ${escapeHTML(row.catatan_monitoring)}</small>` : '';
 
       return `
-        <tr style="background: rgba(239, 68, 68, 0.08);">
-          <td><span class="code-key-badge">${escapeHTML(row.key)}</span>${integrasiBadgeHtml}</td>
+        <tr style="background: rgba(239, 68, 68, 0.08); ${prioData ? 'border-left: 4px solid #ef4444;' : ''}">
+          <td><span class="code-key-badge">${escapeHTML(row.key)}</span>${priorityBadgeHtml}${integrasiBadgeHtml}</td>
           <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
           <td><strong>${escapeHTML(row.pemohon)}</strong>${otherPemohons.length ? `<br><small style="color:#93c5fd; font-weight:600;">+ ${otherPemohons.map(escapeHTML).join(', ')}</small>` : ''}</td>
           <td>${escapeHTML(row.jenis_layanan)}</td>
@@ -1208,7 +1415,7 @@ function renderCounterDesk() {
 
     return `
       <tr style="${rowStyle}">
-        <td><span class="code-key-badge">${escapeHTML(row.key)}</span>${integrasiBadgeHtml}</td>
+        <td><span class="code-key-badge">${escapeHTML(row.key)}</span>${priorityBadgeHtml}${integrasiBadgeHtml}</td>
         <td>${formatDate(row.tanggal || row.tgl_operator)}</td>
         <td><strong>${escapeHTML(row.pemohon)}</strong><br><small style="color:var(--text-muted);">${escapeHTML(row.no_hp || '-')}</small></td>
         <td>${escapeHTML(row.jenis_layanan)}<br><small style="color:var(--text-muted);">${escapeHTML(row.sub_layanan)}</small>${linkBtnHtml}</td>
